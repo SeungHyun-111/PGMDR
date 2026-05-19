@@ -1,0 +1,41 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f1117;
+  --bg2: #161820;
+  --bg3: #1e2028;
+  --bg4: #252730;
+  --border: #2e3040;
+  --border2: #3a3d52;
+  --text: #e8eaf2;
+  --text2: #9095b0;
+  --text3: #565a75;
+  --accent: #4a6cf7;
+  --accent2: #6a8cf9;
+  --ca: #2a3a5c;
+  --ca2: #3d5a8a;
+  --ca-t: #7eb3f5;
+  --ip: #3a2a4a;
+  --ip2: #6a3d8a;
+  --ip-t: #c47ef5;
+  --all: #2a3d2a;
+  --all2: #3d7a3d;
+  --all-t: #7fd47f;
+  --green: #42d4a0;
+  --yellow: #f5c842;
+  --red: #f56b6b;
+  --orange: #f5934a;
+}
+
+body {
+  font-family: 'IBM Plex Sans', 'Noto Sans KR', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  overflow: hidden;
+  height: 100vh;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
