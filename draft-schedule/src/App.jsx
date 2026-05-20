@@ -4,6 +4,7 @@ import PerformanceForecast from './pages/PerformanceForecast'
 import ScheduleRatio from './pages/ScheduleRatio'
 import ScheduleStatus from './pages/ScheduleStatus'
 import useScheduleStore from './store/useScheduleStore'
+import { applyTheme, getStoredTheme } from './styles/theme'
 
 const TABS = [
   { id: 'draft',    label: '초안 편성' },
@@ -16,32 +17,58 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('draft')
   const [menuOpen, setMenuOpen] = useState(false)
   const [setupPopup, setSetupPopup] = useState(false)
+  const [toast, setToast] = useState(null)
+  const [theme, setTheme] = useState(getStoredTheme())
   const menuRef = useRef(null)
 
-  const { isLoaded, startDate, endDate, poolType, refreshPerformance } = useScheduleStore()
+  const {
+    isLoaded, startDate, endDate, poolType,
+    isLoadingProposals, isLoadingPerformance,
+    refreshPerformance, refreshProposals, refreshPreSchedule,
+    lastUpdated
+  } = useScheduleStore()
 
-  // 외부 클릭 시 메뉴 닫기
   useEffect(() => {
     const handler = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setMenuOpen(false)
-      }
+      if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false)
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
-  const handleMenuAction = (action) => {
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : 'light'
+    applyTheme(next)
+    setTheme(next)
+  }
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  const handleMenuAction = async (action) => {
     setMenuOpen(false)
     if (action === 'newSetup') {
       setSetupPopup(true)
     } else if (action === 'refreshPerformance') {
-      refreshPerformance()
+      await refreshPerformance()
+      showToast('실적DB 갱신 완료')
     } else if (action === 'refreshPreSchedule') {
-      alert('선편성정보 갱신 (준비 중)')
+      await refreshPreSchedule()
+      showToast('선편성정보 갱신 완료')
     } else if (action === 'refreshProposal') {
-      alert('제안상품 갱신 (준비 중)')
+      await refreshProposals()
+      showToast('제안상품 갱신 완료')
     }
+  }
+
+  const isRefreshing = isLoadingProposals || isLoadingPerformance
+
+  const formatUpdated = (ts) => {
+    if (!ts) return '-'
+    const d = new Date(ts)
+    return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
   }
 
   return (
@@ -50,79 +77,77 @@ export default function App() {
         display: 'flex', alignItems: 'center',
         borderBottom: '1px solid var(--border)',
         background: 'var(--bg2)', height: 44, padding: '0 16px',
-        flexShrink: 0, position: 'relative', zIndex: 100
+        flexShrink: 0, position: 'relative', zIndex: 100,
+        boxShadow: '0 1px 4px rgba(0,0,0,.06)'
       }}>
 
-        {/* 로고 + 드롭다운 */}
         <div ref={menuRef} style={{ position: 'relative', marginRight: 24 }}>
           <button
             onClick={() => setMenuOpen(v => !v)}
-            style={{
-              background: 'transparent', border: 'none',
-              fontSize: 15, fontWeight: 700, color: 'var(--accent2)',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5
-            }}
+            style={{ background: 'transparent', border: 'none', fontSize: 15, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
           >
             편성 작업판
             <span style={{ fontSize: 10, color: 'var(--text3)' }}>▼</span>
           </button>
 
           {menuOpen && (
-            <div style={{
-              position: 'absolute', top: '100%', left: 0, marginTop: 4,
-              background: 'var(--bg3)', border: '1px solid var(--border2)',
-              borderRadius: 8, padding: '6px 0', minWidth: 200,
-              boxShadow: '0 8px 24px rgba(0,0,0,.4)'
-            }}>
-              <div style={{ padding: '4px 12px 6px', fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '.5px' }}>
-                초기 설정
-              </div>
-              <MenuItem onClick={() => handleMenuAction('newSetup')} danger>
-                새 편성 시작
-              </MenuItem>
-
+            <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 0', minWidth: 200, boxShadow: '0 8px 24px rgba(0,0,0,.12)' }}>
+              <div style={{ padding: '4px 12px 6px', fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '.5px' }}>초기 설정</div>
+              <MenuItem onClick={() => handleMenuAction('newSetup')} danger>새 편성 시작</MenuItem>
               <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
-
-              <div style={{ padding: '4px 12px 6px', fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '.5px' }}>
-                개별 업데이트
-              </div>
-              <MenuItem onClick={() => handleMenuAction('refreshPreSchedule')}>
-                선편성정보 갱신
-              </MenuItem>
-              <MenuItem onClick={() => handleMenuAction('refreshProposal')}>
-                제안상품 갱신
-              </MenuItem>
-              <MenuItem onClick={() => handleMenuAction('refreshPerformance')}>
-                실적DB 갱신
-              </MenuItem>
+              <div style={{ padding: '4px 12px 6px', fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '.5px' }}>개별 업데이트</div>
+              <MenuItem onClick={() => handleMenuAction('refreshPreSchedule')}>선편성정보 갱신</MenuItem>
+              <MenuItem onClick={() => handleMenuAction('refreshProposal')}>제안상품 갱신</MenuItem>
+              <MenuItem onClick={() => handleMenuAction('refreshPerformance')}>실적DB 갱신</MenuItem>
             </div>
           )}
         </div>
 
-        {/* 탭 */}
         <div style={{ display: 'flex', height: '100%' }}>
           {TABS.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                padding: '0 16px', height: '100%', background: 'transparent',
-                border: 'none', borderBottom: activeTab === tab.id ? '2px solid var(--accent2)' : '2px solid transparent',
-                color: activeTab === tab.id ? 'var(--accent2)' : 'var(--text2)',
-                cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap'
-              }}
-            >
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+              padding: '0 16px', height: '100%', background: 'transparent', border: 'none',
+              borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
+              color: activeTab === tab.id ? 'var(--accent)' : 'var(--text2)',
+              cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap', fontWeight: activeTab === tab.id ? 600 : 400
+            }}>
               {tab.label}
             </button>
           ))}
         </div>
 
-        {/* 현재 편성 주차 표시 */}
-        {isLoaded && (
-          <div style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text3)' }}>
-            {startDate} ~ {endDate} · 풀 {poolType}
-          </div>
-        )}
+        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
+          {isRefreshing && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--accent)' }}>
+              <div style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid var(--border)', borderTop: '2px solid var(--accent)', animation: 'spin 0.8s linear infinite' }} />
+              <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
+              {isLoadingProposals ? '제안상품 갱신 중...' : '실적DB 갱신 중...'}
+            </div>
+          )}
+
+          {isLoaded && lastUpdated && (
+            <div style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', gap: 10 }}>
+              {lastUpdated.pgm && <span>PGM {formatUpdated(lastUpdated.pgm)}</span>}
+              {lastUpdated.proposal && <span>제안 {formatUpdated(lastUpdated.proposal)}</span>}
+              {lastUpdated.performance && <span>실적 {formatUpdated(lastUpdated.performance)}</span>}
+              {lastUpdated.preSchedule && <span>선편성 {formatUpdated(lastUpdated.preSchedule)}</span>}
+            </div>
+          )}
+
+          {isLoaded && (
+            <div style={{ fontSize: 11, color: 'var(--text2)' }}>
+              {startDate} ~ {endDate} · 풀 {poolType}
+            </div>
+          )}
+
+          {/* 테마 토글 */}
+          <button
+            onClick={toggleTheme}
+            style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', fontSize: 11, color: 'var(--text2)', cursor: 'pointer' }}
+          >
+            {theme === 'light' ? '🌙' : '☀️'}
+          </button>
+        </div>
       </nav>
 
       <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -131,6 +156,13 @@ export default function App() {
         {activeTab === 'ratio'    && <ScheduleRatio />}
         {activeTab === 'status'   && <ScheduleStatus />}
       </div>
+
+      {toast && (
+        <div style={{ position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', background: toast.type === 'success' ? 'var(--green)' : 'var(--red)', color: '#fff', padding: '10px 20px', borderRadius: 8, fontSize: 13, fontWeight: 600, zIndex: 9999, boxShadow: '0 4px 16px rgba(0,0,0,.15)', animation: 'fadeIn .2s ease' }}>
+          <style>{`@keyframes fadeIn{from{opacity:0;transform:translateX(-50%) translateY(8px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}`}</style>
+          {toast.msg}
+        </div>
+      )}
     </div>
   )
 }
@@ -138,17 +170,8 @@ export default function App() {
 function MenuItem({ onClick, children, danger }) {
   const [hover, setHover] = useState(false)
   return (
-    <button
-      onClick={onClick}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: 'block', width: '100%', textAlign: 'left',
-        padding: '7px 16px', background: hover ? 'var(--bg4)' : 'transparent',
-        border: 'none', color: danger ? 'var(--yellow)' : 'var(--text)',
-        fontSize: 12, cursor: 'pointer'
-      }}
-    >
+    <button onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 16px', background: hover ? 'var(--bg3)' : 'transparent', border: 'none', color: danger ? 'var(--red)' : 'var(--text)', fontSize: 12, cursor: 'pointer' }}>
       {children}
     </button>
   )

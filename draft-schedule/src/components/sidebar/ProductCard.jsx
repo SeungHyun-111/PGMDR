@@ -1,11 +1,6 @@
-export default function ProductCard({ item, performanceRows, manualInputs }) {
-  // 실적 매칭
-  const perfs = performanceRows.filter(p => p.pgmCodeName === item.pgmCodeName)
-  const lastPerf = perfs.length > 0 ? perfs[perfs.length - 1] : null
-  const manualInput = manualInputs[item.itemId]
-
+export default function ProductCard({ item, perfList = [], manualInput }) {
+  const lastPerf = perfList.length > 0 ? perfList[perfList.length - 1] : null
   const salesPerf = manualInput?.salesPerWeightedMin ?? lastPerf?.salesPerWeightedMin ?? null
-  const isNew = item.newProductType && item.newProductType !== ''
   const isManual = !!manualInput?.salesPerWeightedMin
 
   const teamColor = item.mdTeam?.includes('IP') ? 'var(--ip-t)' : 'var(--ca-t)'
@@ -28,7 +23,6 @@ export default function ProductCard({ item, performanceRows, manualInputs }) {
       onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--border2)'}
       onMouseLeave={e => e.currentTarget.style.borderColor = 'var(--border)'}
     >
-      {/* 상단 */}
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 5, marginBottom: 3 }}>
         <div style={{ flex: 1, fontSize: 11, fontWeight: 600, color: 'var(--text)', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
           {item.pgmCodeName || item.programName || '상품명 없음'}
@@ -37,15 +31,9 @@ export default function ProductCard({ item, performanceRows, manualInputs }) {
           {item.mdTeam || '-'}
         </div>
       </div>
-
-      {/* 하단 메타 */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-        {item.dealType && (
-          <span style={{ fontSize: 9, color: 'var(--text3)' }}>{item.dealType}</span>
-        )}
-        {isNew && (
-          <span style={{ fontSize: 9, color: 'var(--yellow)', fontWeight: 700 }}>NEW</span>
-        )}
+        {item.dealType && <span style={{ fontSize: 9, color: 'var(--text3)' }}>{item.dealType}</span>}
+        {item.newProductType && <span style={{ fontSize: 9, color: 'var(--yellow)', fontWeight: 700 }}>NEW</span>}
         {salesPerf != null ? (
           <span style={{ fontSize: 9, color: isManual ? 'var(--orange)' : 'var(--green)', fontWeight: 700 }}>
             {isManual ? '✏ ' : ''}{Number(salesPerf).toLocaleString()}원

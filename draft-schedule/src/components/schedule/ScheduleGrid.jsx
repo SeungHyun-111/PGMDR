@@ -1,13 +1,13 @@
 import { useMemo, useState, useRef, useEffect } from 'react'
-import useScheduleStore from '../../store/useScheduleStore'
+import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
 import ScheduleBlock from './ScheduleBlock'
+import { splitWeightedMin } from '../../utils/weightedMin'
 
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
 const TIME_COL_WIDTH = 34
-const SLOT_COL_WIDTH = 120
 const HEADER_HEIGHT = 36
 const TOOLBAR_HEIGHT = 32
-const TARGET_SCROLL_RATIO = 1.2
+const ROW_HEIGHT = 28
 
 function timeToMin(timeText) {
   if (!timeText) return 0
@@ -16,27 +16,29 @@ function timeToMin(timeText) {
 }
 
 export default function ScheduleGrid({ onBlockDrop }) {
-  const { pgmSlots, scheduleBlocks } = useScheduleStore()
+  const { pgmSlots, scheduleBlocks, saveBlock, removeBlock } = useScheduleStore()
   const containerRef = useRef(null)
-  const [containerSize, setContainerSize] = useState({ width: 1200, height: 700 })
+  const [containerWidth, setContainerWidth] = useState(1200)
   const [splitSlots, setSplitSlots] = useState({})
+  const [splitPopup, setSplitPopup] = useState(null)
 
   useEffect(() => {
     if (!containerRef.current) return
-    const ro = new ResizeObserver(entries => {
-      const { width, height } = entries[0].contentRect
-      setContainerSize({ width, height })
-    })
+    const ro = new ResizeObserver(entries => setContainerWidth(entries[0].contentRect.width))
     ro.observe(containerRef.current)
     return () => ro.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const handler = () => setSplitPopup(null)
+    document.addEventListener('click', handler)
+    return () => document.removeEventListener('click', handler)
   }, [])
 
   const dates = useMemo(() => {
     const seen = new Set()
     const result = []
-    pgmSlots.forEach(s => {
-      if (!seen.has(s.dateKey)) { seen.add(s.dateKey); result.push(s.dateKey) }
-    })
+    pgmSlots.forEach(s => { if (!seen.has(s.dateKey)) { seen.add(s.dateKey); result.push(s.dateKey) } })
     return result.sort()
   }, [pgmSlots])
 
@@ -46,84 +48,89 @@ export default function ScheduleGrid({ onBlockDrop }) {
       if (!map[s.dateKey]) map[s.dateKey] = []
       map[s.dateKey].push(s)
     })
-    Object.keys(map).forEach(date => {
-      map[date].sort((a, b) => timeToMin(a.timeText) - timeToMin(b.timeText))
-    })
+    Object.keys(map).forEach(date => map[date].sort((a, b) => timeToMin(a.timeText) - timeToMin(b.timeText)))
     return map
   }, [pgmSlots])
 
-  // 날짜별 총 분 계산 → 가장 긴 날 기준으로 높이
-  const maxTotalMin = useMemo(() => {
-    return Math.max(...Object.values(slotsByDate).map(slots =>
-      slots.reduce((a, s) => a + s.durationMin, 0)
-    ))
-  }, [slotsByDate])
+  const getRowHeight = (slotId) => splitSlots[slotId] ? ROW_HEIGHT * 2 : ROW_HEIGHT
 
-  const slotHeightPerMin = useMemo(() => {
-    const available = (containerSize.height - HEADER_HEIGHT - TOOLBAR_HEIGHT) * TARGET_SCROLL_RATIO
-    return available / maxTotalMin
-  }, [containerSize.height, maxTotalMin])
+  const totalHeight = useMemo(() => {
+    return Math.max(...dates.map(date => {
+      const slots = slotsByDate[date] || []
+      return slots.reduce((acc, s) => acc + getRowHeight(s.slotId), 0)
+    }))
+  }, [slotsByDate, dates, splitSlots])
 
-  const totalHeight = maxTotalMin * slotHeightPerMin
+  const colWidth = useMemo(() => {
+    return (containerWidth - TIME_COL_WIDTH * dates.length) / dates.length
+  }, [containerWidth, dates.length])
 
-  // 전체 가로폭에 맞게 슬롯 컬럼 너비 자동 계산
-  const slotColWidth = useMemo(() => {
-    const totalCols = dates.length // 각 날짜당 시간축+슬롯 = 1세트
-    const available = containerSize.width - TIME_COL_WIDTH * dates.length
-    return available / dates.length
-  }, [containerSize.width, dates.length])
+  const handleTimeAxisRightClick = (e, slot) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const isSplit = !!splitSlots[slot.slotId]
+    const singleBlock = scheduleBlocks[slot.slotId]
+    const caBlock = scheduleBlocks[`${slot.slotId}_CA`]
+    const ipBlock = scheduleBlocks[`${slot.slotId}_IP`]
+    setSplitPopup({ slotId: slot.slotId, slot, mode: isSplit ? 'merge' : 'split', singleBlock, caBlock, ipBlock, x: e.clientX, y: e.clientY })
+  }
 
-  const toggleSplit = (slotId) => {
-    setSplitSlots(prev => ({ ...prev, [slotId]: !prev[slotId] }))
+  const handleSplitConfirm = async (choice) => {
+    const { slotId, slot, mode, singleBlock, caBlock, ipBlock } = splitPopup
+    const { caWeighted, ipWeighted } = splitWeightedMin(slot.weightedMin, slot.dateKey, slot.timeText)
+
+    if (mode === 'split') {
+      setSplitSlots(prev => ({ ...prev, [slotId]: true }))
+      if (singleBlock && !singleBlock.isDefault) {
+        // 기존 실제 블록 → 선택 채널에 배치, 나머지는 디폴트
+        await removeBlock(slotId)
+        const keepKey = `${slotId}_${choice}`
+        const otherChannel = choice === 'CA' ? 'IP' : 'CA'
+        const otherKey = `${slotId}_${otherChannel}`
+        await saveBlock(keepKey, { ...singleBlock, blockKey: keepKey, channel: choice, weightedMin: choice === 'CA' ? caWeighted : ipWeighted })
+        await saveBlock(otherKey, makeDefaultBlock(slot, otherChannel))
+      } else {
+        // 디폴트 블록 → 둘 다 디폴트로 분리
+        await removeBlock(slotId)
+        await saveBlock(`${slotId}_CA`, makeDefaultBlock(slot, 'CA'))
+        await saveBlock(`${slotId}_IP`, makeDefaultBlock(slot, 'IP'))
+      }
+    } else {
+      // 분리 → 일원
+      setSplitSlots(prev => ({ ...prev, [slotId]: false }))
+      const keepBlock = choice === 'CA' ? caBlock : ipBlock
+      const removeChannel = choice === 'CA' ? 'IP' : 'CA'
+      await removeBlock(`${slotId}_${removeChannel}`)
+      if (keepBlock && !keepBlock.isDefault) {
+        await removeBlock(`${slotId}_${choice}`)
+        await saveBlock(slotId, { ...keepBlock, blockKey: slotId, channel: choice, weightedMin: slot.weightedMin })
+      } else {
+        await removeBlock(`${slotId}_${choice}`)
+        await saveBlock(slotId, makeDefaultBlock(slot, 'ALL'))
+      }
+    }
+    setSplitPopup(null)
   }
 
   if (!pgmSlots.length) return null
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
 
       {/* 툴바 */}
-      <div style={{
-        height: TOOLBAR_HEIGHT, display: 'flex', alignItems: 'center',
-        padding: '0 12px', gap: 12, borderBottom: '1px solid var(--border)',
-        background: 'var(--bg2)', flexShrink: 0
-      }}>
-        <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-          총 {pgmSlots.length}슬롯 · {dates.length}일 · 슬롯 우클릭 → CA/IP 분리
-        </div>
+      <div style={{ height: TOOLBAR_HEIGHT, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 12, borderBottom: '1px solid var(--border)', background: 'var(--bg2)', flexShrink: 0 }}>
+        <div style={{ fontSize: 11, color: 'var(--text3)' }}>총 {pgmSlots.length}슬롯 · {dates.length}일 · 시간축 우클릭 → CA/IP 분리</div>
         {Object.values(splitSlots).some(Boolean) && (
-          <button
-            onClick={() => setSplitSlots({})}
-            style={{
-              fontSize: 10, padding: '2px 8px', background: 'var(--bg4)',
-              border: '1px solid var(--border2)', color: 'var(--text2)',
-              borderRadius: 4, cursor: 'pointer'
-            }}
-          >
-            분리 전체 해제
-          </button>
+          <button onClick={() => setSplitSlots({})} style={{ fontSize: 10, padding: '2px 8px', background: 'var(--bg4)', border: '1px solid var(--border2)', color: 'var(--text2)', borderRadius: 4, cursor: 'pointer' }}>분리 전체 해제</button>
         )}
       </div>
 
       {/* 헤더 */}
-      <div style={{
-        display: 'flex', flexShrink: 0, height: HEADER_HEIGHT,
-        borderBottom: '1px solid var(--border)', background: 'var(--bg2)',
-        zIndex: 20, overflowX: 'hidden'
-      }}>
+      <div style={{ display: 'flex', flexShrink: 0, height: HEADER_HEIGHT, borderBottom: '1px solid var(--border)', background: 'var(--bg2)', zIndex: 20 }}>
         {dates.map((date, di) => (
-          <div key={date} style={{
-            display: 'flex', flexShrink: 0,
-            width: TIME_COL_WIDTH + slotColWidth,
-            borderLeft: di === 0 ? 'none' : '2px solid var(--border2)',
-          }}>
-            {/* 시간 헤더 */}
+          <div key={date} style={{ display: 'flex', flexShrink: 0, width: TIME_COL_WIDTH + colWidth, borderLeft: di === 0 ? 'none' : '2px solid var(--border2)' }}>
             <div style={{ width: TIME_COL_WIDTH, flexShrink: 0 }} />
-            {/* 날짜 헤더 */}
-            <div style={{
-              flex: 1, display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center'
-            }}>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
                 {DAY_LABELS[di]} <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text3)' }}>{date.slice(5)}</span>
               </div>
@@ -136,132 +143,168 @@ export default function ScheduleGrid({ onBlockDrop }) {
       <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex' }}>
         {dates.map((date, di) => {
           const slots = slotsByDate[date] || []
+          let top = 0
           return (
-            <div key={date} style={{
-              display: 'flex', flexShrink: 0,
-              width: TIME_COL_WIDTH + slotColWidth,
-              borderLeft: di === 0 ? 'none' : '2px solid var(--border2)',
-              position: 'relative'
-            }}>
+            <div key={date} style={{ display: 'flex', flexShrink: 0, width: TIME_COL_WIDTH + colWidth, borderLeft: di === 0 ? 'none' : '2px solid var(--border2)', position: 'relative', height: totalHeight }}>
 
               {/* 시간축 */}
-<div style={{ width: TIME_COL_WIDTH, flexShrink: 0, position: 'relative', height: totalHeight, borderRight: '1px solid var(--border2)' }}>
-  {slots.reduce((acc, slot) => {
-    const top = acc.top
-    const height = slot.durationMin * slotHeightPerMin
-    const [h, m] = slot.timeText.split(':')
-    acc.elements.push(
-      <div key={slot.slotId} style={{
-        position: 'absolute', top, left: 0, right: 0, height,
-        borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center',
-        justifyContent: 'flex-start', paddingLeft: 3
-      }}>
-        <span style={{ fontSize: 9, color: 'var(--text2)', fontWeight: 600, whiteSpace: 'nowrap' }}>
-          {String(h).padStart(2,'0')}:{String(m).padStart(2,'0')}
-        </span>
-      </div>
-    )
-    acc.top += height
-    return acc
-  }, { top: 0, elements: [] }).elements}
-</div>
+              <div style={{ width: TIME_COL_WIDTH, flexShrink: 0, position: 'relative', height: totalHeight, borderRight: '1px solid var(--border2)' }}>
+                {slots.map(slot => {
+                  const rowH = getRowHeight(slot.slotId)
+                  const t = top
+                  top += rowH
+                  const [h, m] = slot.timeText.split(':')
+                  const isSplit = !!splitSlots[slot.slotId]
+                  return (
+                    <div
+                      key={slot.slotId}
+                      style={{ position: 'absolute', top: t, left: 0, right: 0, height: rowH, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 3, cursor: 'context-menu', background: isSplit ? 'rgba(74,108,247,.05)' : 'transparent' }}
+                      onContextMenu={e => handleTimeAxisRightClick(e, slot)}
+                    >
+                      <span style={{ fontSize: Math.min(10, rowH * 0.38), color: isSplit ? 'var(--accent2)' : 'var(--text2)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        {String(h).padStart(2, '0')}:{String(m).padStart(2, '0')}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
 
               {/* 슬롯 컬럼 */}
               <div style={{ flex: 1, position: 'relative', height: totalHeight }}>
-                {slots.reduce((acc, slot) => {
-                  const top = acc.top
-                  const height = slot.durationMin * slotHeightPerMin
-                  const isSplit = !!splitSlots[slot.slotId]
-                  acc.elements.push(
-                    <SlotRow
-                      key={slot.slotId}
-                      slot={slot}
-                      top={top}
-                      height={height}
-                      isSplit={isSplit}
-                      block={scheduleBlocks[slot.slotId]}
-                      onDrop={onBlockDrop}
-                      onToggleSplit={() => toggleSplit(slot.slotId)}
-                    />
-                  )
-                  acc.top += height
-                  return acc
-                }, { top: 0, elements: [] }).elements}
+                {(() => {
+                  let t = 0
+                  return slots.map(slot => {
+                    const rowH = getRowHeight(slot.slotId)
+                    const isSplit = !!splitSlots[slot.slotId]
+                    const singleBlock = scheduleBlocks[slot.slotId]
+                    const caBlock = scheduleBlocks[`${slot.slotId}_CA`]
+                    const ipBlock = scheduleBlocks[`${slot.slotId}_IP`]
+                    const el = (
+                      <SlotRow
+                        key={slot.slotId}
+                        slot={slot}
+                        top={t}
+                        rowHeight={rowH}
+                        halfHeight={ROW_HEIGHT}
+                        isSplit={isSplit}
+                        singleBlock={singleBlock}
+                        caBlock={caBlock}
+                        ipBlock={ipBlock}
+                        onDrop={onBlockDrop}
+                        saveBlock={saveBlock}
+                        removeBlock={removeBlock}
+                      />
+                    )
+                    t += rowH
+                    return el
+                  })
+                })()}
               </div>
-
             </div>
           )
         })}
       </div>
+
+      {/* 분리/일원 팝업 */}
+      {splitPopup && (
+        <div onClick={e => e.stopPropagation()} style={{ position: 'fixed', left: splitPopup.x, top: splitPopup.y, zIndex: 9999, background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 8, padding: '12px 16px', minWidth: 260, boxShadow: '0 8px 24px rgba(0,0,0,.5)' }}>
+          {splitPopup.mode === 'split' ? (
+            <>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>CA / IP 분리</div>
+              <div style={{ fontSize: 11, color: 'var(--text2)', marginBottom: 12, lineHeight: 1.5 }}>
+                {splitPopup.singleBlock && !splitPopup.singleBlock.isDefault
+                  ? 'CA/IP 분리 시 현재 블록을 어느 채널에 남기겠습니까?'
+                  : '빈 슬롯을 CA/IP로 분리합니다.'}
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {splitPopup.singleBlock && !splitPopup.singleBlock.isDefault ? (
+                  <>
+                    <button onClick={() => handleSplitConfirm('CA')} style={{ flex: 1, padding: '7px 0', background: 'var(--ca2)', border: 'none', color: '#fff', borderRadius: 5, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>CA 유지</button>
+                    <button onClick={() => handleSplitConfirm('IP')} style={{ flex: 1, padding: '7px 0', background: 'var(--ip2)', border: 'none', color: '#fff', borderRadius: 5, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>IP 유지</button>
+                  </>
+                ) : (
+                  <button onClick={() => handleSplitConfirm('CA')} style={{ flex: 1, padding: '7px 0', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 5, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>분리</button>
+                )}
+                <button onClick={() => setSplitPopup(null)} style={{ flex: 1, padding: '7px 0', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 5, fontSize: 12, cursor: 'pointer' }}>취소</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>전채널(일원) 변경</div>
+              <div style={{ fontSize: 11, color: 'var(--yellow)', marginBottom: 12, lineHeight: 1.5 }}>
+                ⚠ CA/IP 중 선택한 하나만 남기고 나머지는 삭제됩니다.
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {(splitPopup.caBlock && !splitPopup.caBlock.isDefault) && (
+                  <button onClick={() => handleSplitConfirm('CA')} style={{ flex: 1, padding: '7px 0', background: 'var(--ca2)', border: 'none', color: '#fff', borderRadius: 5, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>CA 유지</button>
+                )}
+                {(splitPopup.ipBlock && !splitPopup.ipBlock.isDefault) && (
+                  <button onClick={() => handleSplitConfirm('IP')} style={{ flex: 1, padding: '7px 0', background: 'var(--ip2)', border: 'none', color: '#fff', borderRadius: 5, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>IP 유지</button>
+                )}
+                {(!splitPopup.caBlock || splitPopup.caBlock.isDefault) && (!splitPopup.ipBlock || splitPopup.ipBlock.isDefault) && (
+                  <button onClick={() => handleSplitConfirm('CA')} style={{ flex: 1, padding: '7px 0', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 5, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>일원으로 변경</button>
+                )}
+                <button onClick={() => setSplitPopup(null)} style={{ flex: 1, padding: '7px 0', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 5, fontSize: 12, cursor: 'pointer' }}>취소</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   )
 }
 
-function SlotRow({ slot, top, height, isSplit, block, onDrop, onToggleSplit }) {
+function SlotRow({ slot, top, rowHeight, halfHeight, isSplit, singleBlock, caBlock, ipBlock, onDrop, saveBlock, removeBlock }) {
   const [caHover, setCaHover] = useState(false)
   const [ipHover, setIpHover] = useState(false)
   const prevent = e => e.preventDefault()
 
   const handleDrop = (e, ch) => {
     e.preventDefault()
+    const isBlock = e.dataTransfer.getData('isBlock')
     const itemId = e.dataTransfer.getData('itemId')
-    if (itemId && onDrop) onDrop(slot, ch, itemId)
+    const blockKey = e.dataTransfer.getData('blockKey')
+
+    if (isBlock === 'true' && blockKey) {
+      const { scheduleBlocks } = useScheduleStore.getState()
+      const existingBlock = scheduleBlocks[blockKey]
+      if (!existingBlock) return
+      removeBlock(blockKey)
+      const newKey = isSplit ? `${slot.slotId}_${ch}` : slot.slotId
+      saveBlock(newKey, { ...existingBlock, slotId: slot.slotId, blockKey: newKey, dateKey: slot.dateKey, timeText: slot.timeText, durationMin: slot.durationMin, weightedMin: slot.weightedMin, channel: ch })
+    } else if (itemId) {
+      onDrop(slot, ch, itemId, isSplit)
+    }
   }
 
+  const fontSize = Math.min(10, halfHeight * 0.38)
+
   return (
-    <div
-      style={{
-        position: 'absolute', top, left: 0, right: 0, height,
-        borderBottom: '1px solid var(--border)'
-      }}
-      onContextMenu={e => { e.preventDefault(); onToggleSplit() }}
-    >
+    <div style={{ position: 'absolute', top, left: 0, right: 0, height: rowHeight, borderBottom: '1px solid var(--border)' }}>
       {isSplit ? (
         <>
           <div
-            style={{
-              position: 'absolute', top: 0, left: 0, width: '50%', height: '100%',
-              background: caHover ? 'rgba(61,90,138,.2)' : 'rgba(42,58,92,.06)',
-              transition: 'background .1s'
-            }}
-            onDragOver={prevent}
-            onDrop={e => handleDrop(e, 'CA')}
-            onDragEnter={() => setCaHover(true)}
-            onDragLeave={() => setCaHover(false)}
+            style={{ position: 'absolute', top: 0, left: 0, right: 0, height: halfHeight, background: caHover ? 'rgba(61,90,138,.2)' : 'transparent', borderBottom: '1px solid var(--border)', transition: 'background .1s' }}
+            onDragOver={prevent} onDrop={e => handleDrop(e, 'CA')}
+            onDragEnter={() => setCaHover(true)} onDragLeave={() => setCaHover(false)}
           >
-            <div style={{ position: 'absolute', top: 2, left: 3, fontSize: 8, color: 'var(--ca-t)', opacity: .5, fontWeight: 700 }}>CA</div>
-            {block?.channel === 'CA' && <ScheduleBlock block={block} height={height} />}
+            {caBlock && <ScheduleBlock block={caBlock} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} />}
           </div>
-          <div style={{ position: 'absolute', top: 0, left: '50%', width: 1, height: '100%', background: 'var(--border2)' }} />
           <div
-            style={{
-              position: 'absolute', top: 0, left: '50%', width: '50%', height: '100%',
-              background: ipHover ? 'rgba(106,61,138,.2)' : 'rgba(58,42,74,.06)',
-              transition: 'background .1s'
-            }}
-            onDragOver={prevent}
-            onDrop={e => handleDrop(e, 'IP')}
-            onDragEnter={() => setIpHover(true)}
-            onDragLeave={() => setIpHover(false)}
+            style={{ position: 'absolute', top: halfHeight, left: 0, right: 0, height: halfHeight, background: ipHover ? 'rgba(106,61,138,.2)' : 'transparent', transition: 'background .1s' }}
+            onDragOver={prevent} onDrop={e => handleDrop(e, 'IP')}
+            onDragEnter={() => setIpHover(true)} onDragLeave={() => setIpHover(false)}
           >
-            <div style={{ position: 'absolute', top: 2, left: 3, fontSize: 8, color: 'var(--ip-t)', opacity: .5, fontWeight: 700 }}>IP</div>
-            {block?.channel === 'IP' && <ScheduleBlock block={block} height={height} />}
+            {ipBlock && <ScheduleBlock block={ipBlock} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} />}
           </div>
         </>
       ) : (
         <div
-          style={{
-            position: 'absolute', inset: 0,
-            background: caHover ? 'rgba(74,108,247,.06)' : 'transparent',
-            transition: 'background .1s'
-          }}
-          onDragOver={prevent}
-          onDrop={e => handleDrop(e, 'ALL')}
-          onDragEnter={() => setCaHover(true)}
-          onDragLeave={() => setCaHover(false)}
+          style={{ position: 'absolute', inset: 0, background: caHover ? 'rgba(74,108,247,.06)' : 'transparent', transition: 'background .1s' }}
+          onDragOver={prevent} onDrop={e => handleDrop(e, 'ALL')}
+          onDragEnter={() => setCaHover(true)} onDragLeave={() => setCaHover(false)}
         >
-          {block && <ScheduleBlock block={block} height={height} />}
+          {singleBlock && <ScheduleBlock block={singleBlock} height={rowHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} />}
         </div>
       )}
     </div>
