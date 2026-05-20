@@ -18,19 +18,11 @@ function normalizeTime(timeText) {
 export function makeDefaultBlock(slot, channel = 'ALL') {
   const blockKey = channel === 'ALL' ? slot.slotId : `${slot.slotId}_${channel}`
   return {
-    slotId: slot.slotId,
-    blockKey,
-    dateKey: slot.dateKey,
-    timeText: slot.timeText,
-    durationMin: slot.durationMin,
-    weightedMin: slot.weightedMin,
-    channel,
-    pgmCodeName: '[편성팀]',
-    orgName: '편성팀',
-    mdTeam: '편성팀',
-    memoCode: '[전사블록]',
-    isDefault: true,
-    assignedAt: Date.now()
+    slotId: slot.slotId, blockKey,
+    dateKey: slot.dateKey, timeText: slot.timeText,
+    durationMin: slot.durationMin, weightedMin: slot.weightedMin,
+    channel, pgmCodeName: '[편성팀]', orgName: '편성팀', mdTeam: '편성팀',
+    memoCode: '[전사블록]', isDefault: true, assignedAt: Date.now()
   }
 }
 
@@ -51,20 +43,12 @@ function buildPreScheduleBlocks(pgmSlots, preScheduleRows, existingBlocks) {
     const dvMatch = String(pre.displayValue || '').match(/\d{2}:\d{2}(.)/)
     const dealTypeChar = dvMatch ? dvMatch[1] : ''
     preBlocks[slot.slotId] = {
-      slotId: slot.slotId,
-      blockKey: slot.slotId,
-      dateKey: slot.dateKey,
-      timeText: slot.timeText,
-      durationMin: slot.durationMin,
-      weightedMin: slot.weightedMin,
-      channel: 'CA',
-      pgmCodeName: pre.pgmCodeName,
-      orgName: pre.orgName,
-      mdTeam: pre.orgName,
-      dealTypeChar,
-      isPreSchedule: true,
-      isDefault: false,
-      assignedAt: Date.now()
+      slotId: slot.slotId, blockKey: slot.slotId,
+      dateKey: slot.dateKey, timeText: slot.timeText,
+      durationMin: slot.durationMin, weightedMin: slot.weightedMin,
+      channel: 'ALL', // 선편성 기본 일원
+      pgmCodeName: pre.pgmCodeName, orgName: pre.orgName, mdTeam: pre.orgName,
+      dealTypeChar, isPreSchedule: true, isDefault: false, assignedAt: Date.now()
     }
   })
   return preBlocks
@@ -73,60 +57,60 @@ function buildPreScheduleBlocks(pgmSlots, preScheduleRows, existingBlocks) {
 function buildDefaultBlocks(pgmSlots, existingBlocks) {
   const missing = {}
   pgmSlots.forEach(slot => {
-    if (!existingBlocks[slot.slotId]) {
-      missing[slot.slotId] = makeDefaultBlock(slot, 'ALL')
-    }
+    if (!existingBlocks[slot.slotId]) missing[slot.slotId] = makeDefaultBlock(slot, 'ALL')
   })
   return missing
 }
 
 const useScheduleStore = create((setState, getState) => ({
-  startDate: '',
-  endDate: '',
-  poolType: 'A',
-  isLoaded: false,
-  isLoading: false,
-  isLoadingProposals: false,
-  isLoadingPerformance: false,
+  startDate: '', endDate: '', poolType: 'A',
+  isLoaded: false, isLoading: false,
+  isLoadingProposals: false, isLoadingPerformance: false,
   error: null,
-
-  pgmSlots: [],
-  targetMetrics: null,
-  scheduleBlocks: {},
-  manualInputs: {},
-
-  proposalItems: [],
-  proposalLoaded: false,
-  performanceRows: [],
-  performanceLoaded: false,
-  preScheduleRows: [],
-  preScheduleLoaded: false,
-
+  pgmSlots: [], targetMetrics: null, weightedMinTargets: [],
+  scheduleBlocks: {}, manualInputs: {},
+  proposalItems: [], proposalLoaded: false,
+  performanceRows: [], performanceLoaded: false,
+  preScheduleRows: [], preScheduleLoaded: false,
   lastUpdated: null,
+  userName: localStorage.getItem('userName') || '',
 
-  // 세션 초기화 후 새로 로드
+  setUserName: (name) => {
+    localStorage.setItem('userName', name)
+    setState({ userName: name })
+  },
+
+  // 로그 저장
+  writeLog: async (action, blockKey, before, after) => {
+    const { startDate, poolType, userName } = getState()
+    const weekKey = `${startDate}_${poolType}`
+    const logKey = `log_${Date.now()}`
+    await set(ref(db, `sessions/${weekKey}/logs/${logKey}`), {
+      timestamp: Date.now(),
+      action,
+      blockKey,
+      pgmCodeName: after?.pgmCodeName || before?.pgmCodeName || '',
+      dateKey: after?.dateKey || before?.dateKey || '',
+      timeText: after?.timeText || before?.timeText || '',
+      userName: userName || '익명',
+      before: before || null,
+      after: after || null,
+    })
+  },
+
   resetSession: async (startDate, poolType) => {
     setState({ isLoading: true, error: null, isLoaded: false })
     try {
       const weekKey = `${startDate}_${poolType}`
-      // 기존 세션 완전 삭제
       await set(ref(db, `sessions/${weekKey}`), null)
-      // 구독 해제
       const prev = getState()._blocksUnsubscribe
       if (prev) prev()
-      // 상태 초기화
       setState({
-        scheduleBlocks: {},
-        manualInputs: {},
-        proposalItems: [],
-        performanceRows: [],
-        preScheduleRows: [],
-        proposalLoaded: false,
-        performanceLoaded: false,
-        preScheduleLoaded: false,
-        lastUpdated: null,
+        scheduleBlocks: {}, manualInputs: {},
+        proposalItems: [], performanceRows: [], preScheduleRows: [],
+        proposalLoaded: false, performanceLoaded: false, preScheduleLoaded: false,
+        lastUpdated: null, weightedMinTargets: [],
       })
-      // 새로 로드
       await getState().loadInitData(startDate, poolType)
     } catch (e) {
       setState({ error: e.message, isLoading: false })
@@ -144,18 +128,14 @@ const useScheduleStore = create((setState, getState) => ({
         const gasData = await fetchInitData(startDate, poolType)
         const now = Date.now()
         await set(ref(db, `sessions/${weekKey}`), {
-          gasData,
-          scheduleBlocks: {},
-          manualInputs: {},
-          createdAt: now,
+          gasData, scheduleBlocks: {}, manualInputs: {}, createdAt: now,
           lastUpdated: { pgm: now, proposal: now, performance: now, preSchedule: now }
         })
         const pgmSlots = gasData.pgmSlots || []
         const preScheduleRows = gasData.preScheduleRows || []
         const preBlocks = buildPreScheduleBlocks(pgmSlots, preScheduleRows, {})
         const defaultBlocks = buildDefaultBlocks(pgmSlots, preBlocks)
-        const allBlocks = { ...defaultBlocks, ...preBlocks }
-        await set(ref(db, `sessions/${weekKey}/scheduleBlocks`), allBlocks)
+        await set(ref(db, `sessions/${weekKey}/scheduleBlocks`), { ...defaultBlocks, ...preBlocks })
       }
 
       const pgmSnap = await get(ref(db, `sessions/${weekKey}/gasData/pgmSlots`))
@@ -163,6 +143,9 @@ const useScheduleStore = create((setState, getState) => ({
 
       const targetSnap = await get(ref(db, `sessions/${weekKey}/gasData/targetMetrics`))
       const targetMetrics = targetSnap.exists() ? targetSnap.val() : null
+
+      const weightedSnap = await get(ref(db, `sessions/${weekKey}/gasData/weightedMinTargets`))
+      const weightedMinTargets = weightedSnap.exists() ? Object.values(weightedSnap.val()) : []
 
       const meta = metaSnap.exists() ? metaSnap.val() : {}
 
@@ -182,19 +165,11 @@ const useScheduleStore = create((setState, getState) => ({
       const lastUpdated = lastUpdatedSnap.exists() ? lastUpdatedSnap.val() : null
 
       setState({
-        startDate,
-        endDate: meta.endDate || '',
-        poolType,
-        pgmSlots,
-        targetMetrics,
-        scheduleBlocks,
-        manualInputs,
-        lastUpdated,
-        isLoaded: true,
-        isLoading: false,
-        proposalLoaded: false,
-        performanceLoaded: false,
-        preScheduleLoaded: false,
+        startDate, endDate: meta.endDate || '', poolType,
+        pgmSlots, targetMetrics, weightedMinTargets,
+        scheduleBlocks, manualInputs, lastUpdated,
+        isLoaded: true, isLoading: false,
+        proposalLoaded: false, performanceLoaded: false, preScheduleLoaded: false,
       })
 
       getState()._subscribeBlocks(weekKey)
@@ -254,16 +229,20 @@ const useScheduleStore = create((setState, getState) => ({
   },
 
   saveBlock: async (blockKey, blockData) => {
-    const { startDate, poolType } = getState()
+    const { startDate, poolType, scheduleBlocks, writeLog } = getState()
     const weekKey = `${startDate}_${poolType}`
+    const before = scheduleBlocks[blockKey] || null
     await update(ref(db, `sessions/${weekKey}/scheduleBlocks/${blockKey}`), blockData)
+    // 실제 편성 or 수정일 때만 로그
+    if (!blockData.isDefault) {
+      await writeLog(before ? '수정' : '편성', blockKey, before, { ...before, ...blockData })
+    }
   },
 
   removeBlock: async (blockKey) => {
-    const { startDate, poolType, pgmSlots, scheduleBlocks, proposalItems } = getState()
+    const { startDate, poolType, pgmSlots, scheduleBlocks, proposalItems, writeLog } = getState()
     const weekKey = `${startDate}_${poolType}`
     const block = scheduleBlocks[blockKey]
-
     const isSimpleSlot = !blockKey.includes('_CA') && !blockKey.includes('_IP')
     const slotId = isSimpleSlot ? blockKey : blockKey.replace('_CA', '').replace('_IP', '')
     const slot = pgmSlots.find(s => s.slotId === slotId)
@@ -277,6 +256,10 @@ const useScheduleStore = create((setState, getState) => ({
         const originalItem = allItems.find(p => p.itemId === block.itemId)
         if (originalItem) setState(s => ({ proposalItems: [...s.proposalItems, originalItem] }))
       }
+    }
+
+    if (block && !block.isDefault) {
+      await writeLog('삭제', blockKey, block, null)
     }
 
     if (slot) {
@@ -297,9 +280,8 @@ const useScheduleStore = create((setState, getState) => ({
     const gasSnap = await get(ref(db, `sessions/${weekKey}/gasData/proposalItems`))
     const allItems = gasSnap.exists() ? gasSnap.val() : []
     const originalItem = allItems.find(p => p.itemId === block.itemId)
-    if (originalItem) {
-      const alreadyIn = proposalItems.some(p => p.itemId === block.itemId)
-      if (!alreadyIn) setState(s => ({ proposalItems: [...s.proposalItems, originalItem] }))
+    if (originalItem && !proposalItems.some(p => p.itemId === block.itemId)) {
+      setState(s => ({ proposalItems: [...s.proposalItems, originalItem] }))
     }
   },
 

@@ -96,42 +96,26 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
     }
 
     // 이미 실제 블록이 있으면 경쟁 상태
-    if (existingBlock && !existingBlock.isDefault) {
-      const brand1 = (existingBlock.pgmCodeName || '').replace(/^\[(.+?)\].*/, '$1')
-      const brand2 = (item.pgmCodeName || '').replace(/^\[(.+?)\].*/, '$1')
-      saveBlock(blockKey, {
-        slotId: slot.slotId,
-        blockKey,
-        dateKey: slot.dateKey,
-        timeText: slot.timeText,
-        durationMin: slot.durationMin,
-        weightedMin,
-        channel,
-        isCompeting: true,
-        pgmCodeName: `[${brand1}*${brand2}]`,
-        item1: {
-          itemId: existingBlock.itemId,
-          pgmCodeName: existingBlock.pgmCodeName,
-          mdTeam: existingBlock.mdTeam,
-          orgName: existingBlock.orgName,
-          dealType: existingBlock.dealType,
-          weightedMin: existingBlock.weightedMin,
-        },
-        item2: {
-          itemId: item.itemId,
-          pgmCodeName: item.pgmCodeName,
-          mdTeam: item.mdTeam,
-          orgName: item.mdTeam,
-          dealType: item.dealType,
-          weightedMin,
-        },
-        isDefault: false,
-        assignedAt: Date.now()
-      })
-      removeFromSidebar(itemId)
-      return
-    }
-
+if (existingBlock && !existingBlock.isDefault) {
+  const brand1 = (existingBlock.pgmCodeName || '').replace(/^\[(.+?)\].*/, '$1')
+  const brand2 = (item.pgmCodeName || '').replace(/^\[(.+?)\].*/, '$1')
+  // 경쟁 가중분 = 두 블록 합산
+  const competingWeightedMin = (existingBlock.weightedMin || 0) + weightedMin
+  saveBlock(blockKey, {
+    slotId: slot.slotId, blockKey,
+    dateKey: slot.dateKey, timeText: slot.timeText,
+    durationMin: slot.durationMin,
+    weightedMin: competingWeightedMin, // 합산
+    channel,
+    isCompeting: true,
+    pgmCodeName: `[${brand1}*${brand2}]`,
+    item1: { itemId: existingBlock.itemId, pgmCodeName: existingBlock.pgmCodeName, mdTeam: existingBlock.mdTeam, orgName: existingBlock.orgName, dealType: existingBlock.dealType, weightedMin: existingBlock.weightedMin },
+    item2: { itemId: item.itemId, pgmCodeName: item.pgmCodeName, mdTeam: item.mdTeam, orgName: item.mdTeam, dealType: item.dealType, weightedMin },
+    isDefault: false, assignedAt: Date.now()
+  })
+  removeFromSidebar(itemId)
+  return
+}
     saveBlock(blockKey, {
       slotId: slot.slotId,
       blockKey,
@@ -168,7 +152,9 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
         </div>
       ) : (
         <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
-          <ScheduleGrid onBlockDrop={handleBlockDrop} />
+          <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+            <ScheduleGrid onBlockDrop={handleBlockDrop} />
+          </div>
           <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(v => !v)} />
         </div>
       )}

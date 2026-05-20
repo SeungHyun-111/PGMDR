@@ -25,8 +25,12 @@ export default function App() {
     isLoaded, startDate, endDate, poolType,
     isLoadingProposals, isLoadingPerformance,
     refreshPerformance, refreshProposals, refreshPreSchedule,
-    lastUpdated
+    lastUpdated, userName, setUserName
   } = useScheduleStore()
+
+  // 사용자 이름 없으면 팝업
+  const [showUserPopup, setShowUserPopup] = useState(!userName)
+  const [userNameInput, setUserNameInput] = useState('')
 
   useEffect(() => {
     const handler = (e) => {
@@ -71,25 +75,44 @@ export default function App() {
     return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
   }
 
+  const handleUserConfirm = () => {
+    if (!userNameInput.trim()) return alert('이름을 입력해주세요.')
+    setUserName(userNameInput.trim())
+    setShowUserPopup(false)
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <nav style={{
-        display: 'flex', alignItems: 'center',
-        borderBottom: '1px solid var(--border)',
-        background: 'var(--bg2)', height: 44, padding: '0 16px',
-        flexShrink: 0, position: 'relative', zIndex: 100,
-        boxShadow: '0 1px 4px rgba(0,0,0,.06)'
-      }}>
+
+      {/* 사용자 이름 입력 팝업 */}
+      {showUserPopup && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
+          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: '32px 40px', minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text)' }}>편성 작업판</div>
+            <div style={{ fontSize: 12, color: 'var(--text2)' }}>작업 로그에 표시될 이름을 입력해주세요.</div>
+            <input
+              autoFocus
+              value={userNameInput}
+              onChange={e => setUserNameInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleUserConfirm()}
+              placeholder="이름 입력..."
+              style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '9px 12px', borderRadius: 6, fontSize: 13 }}
+            />
+            <button onClick={handleUserConfirm}
+              style={{ padding: '10px 0', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
+              시작
+            </button>
+          </div>
+        </div>
+      )}
+
+      <nav style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', background: 'var(--bg2)', height: 44, padding: '0 16px', flexShrink: 0, position: 'relative', zIndex: 100, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
 
         <div ref={menuRef} style={{ position: 'relative', marginRight: 24 }}>
-          <button
-            onClick={() => setMenuOpen(v => !v)}
-            style={{ background: 'transparent', border: 'none', fontSize: 15, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}
-          >
-            편성 작업판
-            <span style={{ fontSize: 10, color: 'var(--text3)' }}>▼</span>
+          <button onClick={() => setMenuOpen(v => !v)}
+            style={{ background: 'transparent', border: 'none', fontSize: 15, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+            편성 작업판 <span style={{ fontSize: 10, color: 'var(--text3)' }}>▼</span>
           </button>
-
           {menuOpen && (
             <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 4, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 0', minWidth: 200, boxShadow: '0 8px 24px rgba(0,0,0,.12)' }}>
               <div style={{ padding: '4px 12px 6px', fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '.5px' }}>초기 설정</div>
@@ -110,9 +133,7 @@ export default function App() {
               borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
               color: activeTab === tab.id ? 'var(--accent)' : 'var(--text2)',
               cursor: 'pointer', fontSize: 12, whiteSpace: 'nowrap', fontWeight: activeTab === tab.id ? 600 : 400
-            }}>
-              {tab.label}
-            </button>
+            }}>{tab.label}</button>
           ))}
         </div>
 
@@ -124,7 +145,6 @@ export default function App() {
               {isLoadingProposals ? '제안상품 갱신 중...' : '실적DB 갱신 중...'}
             </div>
           )}
-
           {isLoaded && lastUpdated && (
             <div style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', gap: 10 }}>
               {lastUpdated.pgm && <span>PGM {formatUpdated(lastUpdated.pgm)}</span>}
@@ -133,18 +153,18 @@ export default function App() {
               {lastUpdated.preSchedule && <span>선편성 {formatUpdated(lastUpdated.preSchedule)}</span>}
             </div>
           )}
-
           {isLoaded && (
-            <div style={{ fontSize: 11, color: 'var(--text2)' }}>
-              {startDate} ~ {endDate} · 풀 {poolType}
-            </div>
+            <div style={{ fontSize: 11, color: 'var(--text2)' }}>{startDate} ~ {endDate} · 풀 {poolType}</div>
           )}
-
-          {/* 테마 토글 */}
-          <button
-            onClick={toggleTheme}
-            style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', fontSize: 11, color: 'var(--text2)', cursor: 'pointer' }}
+          {/* 사용자 이름 */}
+          <div
+            onClick={() => setShowUserPopup(true)}
+            style={{ fontSize: 11, color: 'var(--text2)', cursor: 'pointer', padding: '3px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg3)' }}
           >
+            👤 {userName || '미설정'}
+          </div>
+          <button onClick={toggleTheme}
+            style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', fontSize: 11, color: 'var(--text2)', cursor: 'pointer' }}>
             {theme === 'light' ? '🌙' : '☀️'}
           </button>
         </div>

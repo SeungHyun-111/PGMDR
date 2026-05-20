@@ -1,4 +1,4 @@
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbw-SjXjzHpNDyttZp6_JOpjOOuTJiGpJVPvnKbESo_oLgI3DhMbJhYOI2O6WhHR4uI1/exec'
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxtCcY6a0PpjYZeUN3eTl45qQ28HIuPHRQspVpdh5xidSgEPbHura3nVXbFRKRAeJHo/exec'
 
 export async function fetchInitData(startDate, poolType = 'A') {
   const url = `${GAS_URL}?action=init&startDate=${startDate}&poolType=${poolType}`

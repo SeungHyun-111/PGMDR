@@ -1,6 +1,6 @@
 export default function ProductCard({ item, perfList = [], manualInput }) {
   const lastPerf = perfList.length > 0 ? perfList[perfList.length - 1] : null
-  const salesPerf = manualInput?.salesPerWeightedMin ?? lastPerf?.salesPerWeightedMin ?? null
+  const salesPerf = manualInput?.profitPerWeightedMin ?? lastPerf?.profitPerWeightedMin ?? null
   const isManual = !!manualInput?.salesPerWeightedMin
 
   const teamColor = item.mdTeam?.includes('IP') ? 'var(--ip-t)' : 'var(--ca-t)'
