@@ -1,7 +1,5 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
-import usePerformanceMap from '../../hooks/usePerformanceMap'
-import useFilterOptions from '../../hooks/useFilterOptions'
 import ProductCard from './ProductCard'
 import ProductFilters from './ProductFilters'
 import SidebarExpanded from './SidebarExpanded'
@@ -9,76 +7,63 @@ import SidebarExpanded from './SidebarExpanded'
 const PAGE_SIZE = 50
 
 export default function Sidebar({ isOpen, onToggle }) {
-  const { proposalItems, performanceRows, loadProposals, proposalLoaded } = useScheduleStore()
-  const perfMap = usePerformanceMap(performanceRows)
-  const listRef = useRef(null)
-  const [filters, setFilters] = useState({ search: '', team: '', dealType: '', newType: '', sort: '' })
-  const [page, setPage] = useState(1)
+  const { proposalItems, perfMap, loadProposals, proposalLoaded } = useScheduleStore()
+
+  const [filters, setFilters] = useState({
+    keyword: '',
+    category: '전체',
+    team: '전체',
+    dealType: '전체',
+    newProductType: '전체',
+    hasPerf: '전체',
+  })
+
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [expanded, setExpanded] = useState(false)
+  const scrollRef = useRef(null)
 
   useEffect(() => {
     if (isOpen && !proposalLoaded) loadProposals()
   }, [isOpen])
 
-  const filtered = useMemo(() => {
-    let items = [...proposalItems]
-    if (filters.search) {
-      const q = filters.search.toLowerCase()
-      items = items.filter(i => (i.pgmCodeName || '').toLowerCase().includes(q) || (i.pgmCode || '').toLowerCase().includes(q))
-    }
-    if (filters.team)     items = items.filter(i => i.mdTeam === filters.team)
-    if (filters.dealType) items = items.filter(i => i.dealType === filters.dealType)
-    if (filters.newType)  items = items.filter(i => i.newProductType === filters.newType)
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE)
+    if (scrollRef.current) scrollRef.current.scrollTop = 0
+  }, [filters])
 
-    if (filters.sort === 'perf_desc') {
-      items.sort((a, b) => (perfMap[b.pgmCodeName]?.[0]?.profitPerWeightedMin || 0) - (perfMap[a.pgmCodeName]?.[0]?.profitPerWeightedMin || 0))
-    } else if (filters.sort === 'perf_asc') {
-      items.sort((a, b) => (perfMap[a.pgmCodeName]?.[0]?.profitPerWeightedMin || 0) - (perfMap[b.pgmCodeName]?.[0]?.profitPerWeightedMin || 0))
-    } else if (filters.sort === 'new_first') {
-      items.sort((a, b) => (b.newProductType ? 1 : 0) - (a.newProductType ? 1 : 0))
-    } else if (filters.sort === 'remain_desc') {
-      items.sort((a, b) => (b.remainingSchedule || 0) - (a.remainingSchedule || 0))
-    }
-    return items
+  const filteredItems = useMemo(() => {
+    const keyword = filters.keyword.trim().toLowerCase()
+    return proposalItems.filter(item => {
+      if (keyword) {
+        const target = [item.pgmCodeName, item.mdTeam, item.mdCategory].join(' ').toLowerCase()
+        if (!target.includes(keyword)) return false
+      }
+      if (filters.team !== '전체' && (item.mdTeam || item.team) !== filters.team) return false
+      if (filters.dealType !== '전체') {
+        const t = item.dealTypeConverted || item.dealType || ''
+        if (t !== filters.dealType) return false
+      }
+      if (filters.newProductType !== '전체' && item.newProductType !== filters.newProductType) return false
+      if (filters.hasPerf !== '전체') {
+        const has = !!perfMap[item.perfKey]
+        if (filters.hasPerf === '있음' && !has) return false
+        if (filters.hasPerf === '없음' && has) return false
+      }
+      return true
+    })
   }, [proposalItems, filters, perfMap])
 
-  const paged = filtered.slice(0, page * PAGE_SIZE)
-
-  // 편성표→사이드바 드롭 (드래그 위치에 삽입)
-  const handleDropOnList = async (e) => {
-    e.preventDefault()
-    if (e.dataTransfer.getData('isBlock') !== 'true') return
-    const blockKey = e.dataTransfer.getData('blockKey')
-    if (!blockKey) return
-
-    // 마우스 Y 위치 기준 삽입 인덱스 계산
-    const cards = [...(listRef.current?.querySelectorAll('[data-card]') || [])]
-    let insertIndex = proposalItems.length
-    for (let i = 0; i < cards.length; i++) {
-      const rect = cards[i].getBoundingClientRect()
-      if (e.clientY < rect.top + rect.height / 2) { insertIndex = i; break }
+  const handleScroll = () => {
+    const el = scrollRef.current
+    if (!el) return
+    if (el.scrollTop + el.clientHeight >= el.scrollHeight - 100) {
+      setVisibleCount(prev => Math.min(prev + PAGE_SIZE, filteredItems.length))
     }
-
-    const { scheduleBlocks, copyBlockToSidebar, removeBlock } = useScheduleStore.getState()
-    const block = scheduleBlocks[blockKey]
-    if (!block) return
-
-    await copyBlockToSidebar(block)
-    await removeBlock(blockKey)
-
-    // 삽입 위치 조정
-    useScheduleStore.setState(s => {
-      const items = [...s.proposalItems]
-      if (items.length === 0) return {}
-      const added = items[items.length - 1]
-      items.splice(items.length - 1, 1)
-      items.splice(Math.min(insertIndex, items.length), 0, added)
-      return { proposalItems: items }
-    })
   }
 
   if (!isOpen) return (
-    <div onClick={onToggle} style={{ width: 20, background: 'var(--bg2)', borderLeft: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+    <div onClick={onToggle}
+      style={{ width: 20, background: 'var(--bg2)', borderLeft: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
       <span style={{ fontSize: 10, color: 'var(--text3)', writingMode: 'vertical-rl' }}>제안상품</span>
     </div>
   )
@@ -87,50 +72,44 @@ export default function Sidebar({ isOpen, onToggle }) {
     <>
       <div style={{ width: 260, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-        {/* 헤더 */}
         <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)' }}>
-            제안상품 <span style={{ color: 'var(--text3)', fontWeight: 400 }}>{filtered.length}건</span>
+            상품 풀 <span style={{ color: 'var(--text3)', fontWeight: 400 }}>{filteredItems.length}건</span>
           </span>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => setExpanded(v => !v)} title="하단 확장 보기"
+            <button onClick={() => setExpanded(v => !v)}
               style={{ background: expanded ? 'var(--accent)' : 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px', fontSize: 10, color: expanded ? '#fff' : 'var(--text3)', cursor: 'pointer' }}>
               ⬆ 확장
             </button>
-            <button onClick={onToggle} style={{ background: 'transparent', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 13 }}>✕</button>
+            <button onClick={onToggle}
+              style={{ background: 'transparent', border: 'none', color: 'var(--text3)', cursor: 'pointer', fontSize: 13 }}>✕</button>
           </div>
         </div>
 
-        {/* 필터 */}
-        <ProductFilters filters={filters} onChange={f => { setFilters(f); setPage(1) }} />
+        <ProductFilters filters={filters} setFilters={setFilters} />
 
-        {/* 리스트 */}
-        <div ref={listRef} style={{ flex: 1, overflowY: 'auto', padding: '6px 8px' }}
-          onDragOver={e => e.preventDefault()} onDrop={handleDropOnList}>
+        <div ref={scrollRef} onScroll={handleScroll}
+          style={{ flex: 1, overflowY: 'auto', padding: '6px 8px' }}>
           {!proposalLoaded ? (
             <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center', paddingTop: 20 }}>로딩 중...</div>
-          ) : filtered.length === 0 ? (
+          ) : filteredItems.length === 0 ? (
             <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center', paddingTop: 20 }}>검색 결과 없음</div>
           ) : (
             <>
-              {paged.map((item, i) => (
-                <div key={item.itemId} data-card={i}>
-                  <ProductCard item={item} perfMap={perfMap} index={i} />
-                </div>
+              {filteredItems.slice(0, visibleCount).map((item, i) => (
+                <ProductCard key={item.itemId} item={item} perfMap={perfMap} index={i} />
               ))}
-              {paged.length < filtered.length && (
-                <button onClick={() => setPage(p => p + 1)}
-                  style={{ width: '100%', padding: '8px', background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 5, fontSize: 11, cursor: 'pointer', marginTop: 4 }}>
-                  더 보기 ({filtered.length - paged.length}건 남음)
-                </button>
+              {visibleCount < filteredItems.length && (
+                <div style={{ fontSize: 11, color: 'var(--text3)', textAlign: 'center', padding: '8px 0' }}>
+                  스크롤하면 더 불러옵니다
+                </div>
               )}
             </>
           )}
         </div>
       </div>
 
-      {/* 하단 확장 패널 */}
-      {expanded && <SidebarExpanded items={filtered} onClose={() => setExpanded(false)} />}
+      {expanded && <SidebarExpanded items={filteredItems} onClose={() => setExpanded(false)} />}
     </>
   )
 }

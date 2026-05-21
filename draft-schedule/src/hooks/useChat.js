@@ -10,13 +10,13 @@ export default function useChat() {
   useEffect(() => {
     if (!startDate) return
     const weekKey = `${startDate}_${poolType}`
-    const r = ref(db, `sessions/${weekKey}/chat`)
+    const r = ref(db, `chat/${weekKey}`)  // 루트 분리된 경로
 
     onValue(r, snap => {
       if (!snap.exists()) { setMessages([]); return }
       const msgs = Object.values(snap.val())
         .sort((a, b) => a.timestamp - b.timestamp)
-        .slice(-100) // 최근 100개
+        .slice(-100)
       setMessages(msgs)
     })
 
@@ -26,8 +26,7 @@ export default function useChat() {
   const sendMessage = async () => {
     if (!input.trim() || !startDate) return
     const weekKey = `${startDate}_${poolType}`
-    const msgKey = `msg_${Date.now()}`
-    await set(ref(db, `sessions/${weekKey}/chat/${msgKey}`), {
+    await set(ref(db, `chat/${weekKey}/msg_${Date.now()}`), {
       userName,
       text: input.trim(),
       timestamp: Date.now(),

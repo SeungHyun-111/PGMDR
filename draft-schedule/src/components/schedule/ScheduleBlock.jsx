@@ -1,15 +1,18 @@
-import { useState, useRef, useEffect } from 'react'
+// src/components/schedule/ScheduleBlock.jsx
+import { useState, useEffect } from 'react'
 import BlockEditModal from '../modal/BlockEditModal'
 import useScheduleStore from '../../store/useScheduleStore'
 import { getDealTypeChar } from '../../constants/dealTypes'
+import { findBestPerf } from '../../hooks/usePerformanceMap'
 
 export default function ScheduleBlock({ block, height, saveBlock, removeBlock }) {
-  const [hover, setHover] = useState(false)
-  const [contextMenu, setContextMenu] = useState(null)
-  const [editModal, setEditModal] = useState(false)
+  const [hover, setHover]               = useState(false)
+  const [tooltipPos, setTooltipPos]     = useState(null)
+  const [contextMenu, setContextMenu]   = useState(null)
+  const [editModal, setEditModal]       = useState(false)
   const [annotationPopup, setAnnotationPopup] = useState(false)
-  const [annotationText, setAnnotationText] = useState('')
-  const { copyBlockToSidebar } = useScheduleStore()
+  const [annotationText, setAnnotationText]   = useState('')
+  const { copyBlockToSidebar, perfMap } = useScheduleStore()
 
   useEffect(() => {
     const handler = () => setContextMenu(null)
@@ -22,7 +25,6 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
   const hasAnnotation = !!block.annotation
   const hasHash = !!(block.scheduleComment && block.scheduleComment.includes('#'))
 
-  // 팀명 앞 2글자
   const teamShort = isCompeting
     ? '경쟁'
     : ((block.orgName || block.mdTeam || '').replace('팀', '').slice(0, 2))
@@ -42,8 +44,8 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
     : 'rgba(127,212,127,.35)'
 
   const textColor = isCompeting ? '#ffd700' : '#fff'
-  const fontSize = height > 30 ? 10 : 9
-  const badgeSz  = Math.max(7, fontSize - 1)
+  const fontSize  = height > 30 ? 10 : 9
+  const badgeSz   = Math.max(7, fontSize - 1)
 
   const handleDragStart = (e) => {
     if (isDefault || isCompeting) { e.preventDefault(); return }
@@ -52,6 +54,18 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
     e.dataTransfer.setData('itemId', block.itemId || '')
     e.dataTransfer.setData('isBlock', 'true')
     e.dataTransfer.effectAllowed = 'move'
+  }
+
+  const handleMouseEnter = (e) => {
+    // 툴팁 위치를 fixed로 계산 (부모 overflow 잘림 방지)
+    const rect = e.currentTarget.getBoundingClientRect()
+    setTooltipPos({ x: rect.right + 6, y: rect.top })
+    setHover(true)
+  }
+
+  const handleMouseLeave = () => {
+    setHover(false)
+    setTooltipPos(null)
   }
 
   const handleSaveAnnotation = () => {
@@ -71,12 +85,15 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
     ] : []),
   ]
 
+  const lastPerf = block.perfKey
+    ? (perfMap[block.perfKey] || null)
+    : findBestPerf(perfMap, block.dealType, block.pgmCodeName)
+
   return (
     <div style={{ position: 'absolute', inset: '1px' }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
     >
-      {/* 블록 본체 */}
       <div
         draggable={!isDefault && !isCompeting}
         onDragStart={handleDragStart}
@@ -110,12 +127,11 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
         )}
       </div>
 
-      {/* 툴팁 */}
-      {hover && !contextMenu && (
-        <BlockTooltip block={block} />
+      {/* 툴팁: position fixed로 부모 overflow 잘림 완전 방지 */}
+      {hover && tooltipPos && !contextMenu && (
+        <BlockTooltip block={block} lastPerf={lastPerf} pos={tooltipPos} />
       )}
 
-      {/* 우클릭 메뉴 */}
       {contextMenu && (
         <div onClick={e => e.stopPropagation()}
           style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 9999, background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 6, padding: '4px 0', minWidth: 160, boxShadow: '0 4px 16px rgba(0,0,0,.5)' }}>
@@ -130,7 +146,6 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
         </div>
       )}
 
-      {/* 첨삭 팝업 */}
       {annotationPopup && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
           onClick={() => setAnnotationPopup(false)}>
@@ -156,30 +171,33 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
       {editModal && (
         <BlockEditModal
           block={block}
-          onSave={updated => { saveBlock(block.blockKey || block.slotId, { ...updated, dealTypeChar: getDealTypeChar(updated.dealType || '') }); setEditModal(false) }}
           onClose={() => setEditModal(false)}
+          saveBlock={saveBlock}
         />
       )}
     </div>
   )
 }
 
-function BlockTooltip({ block }) {
+function BlockTooltip({ block, lastPerf, pos }) {
+  // 화면 오른쪽 잘림 방지
+  const left = pos.x + 230 > window.innerWidth ? pos.x - 236 : pos.x
+
   const rows = [
-    ['팀',      block.orgName || block.mdTeam || '-'],
-    ['채널',    block.channel || '-'],
+    ['팀',       block.orgName || block.mdTeam || '-'],
+    ['채널',     block.channel || '-'],
     ['거래형태', block.dealType || '-'],
     ['카테고리', block.mdCategory || '-'],
     ['방송일시', `${block.dateKey} ${block.timeText}`],
     ['방송시간', `${block.durationMin}분`],
     ['가중분',   block.weightedMin || '-'],
     ['메모코드', block.memoCode || '-'],
-    ['편성C',   block.scheduleComment || '-'],
+    ['편성C',    block.scheduleComment || '-'],
     ...(block.annotation ? [['첨삭', block.annotation]] : []),
   ]
 
   return (
-    <div style={{ position: 'absolute', left: '105%', top: 0, zIndex: 999, background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 6, padding: '8px 10px', minWidth: 200, maxWidth: 280, boxShadow: '0 4px 16px rgba(0,0,0,.3)', pointerEvents: 'none' }}>
+    <div style={{ position: 'fixed', left, top: pos.y, zIndex: 9999, background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 6, padding: '8px 10px', minWidth: 220, maxWidth: 300, boxShadow: '0 4px 16px rgba(0,0,0,.3)', pointerEvents: 'none' }}>
       {block.isCompeting ? (
         <>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--red)', marginBottom: 8 }}>⚔ 경쟁 중</div>
@@ -196,12 +214,29 @@ function BlockTooltip({ block }) {
           ))}
         </>
       ) : (
-        rows.map(([label, val]) => (
-          <div key={label} style={{ display: 'flex', gap: 8, fontSize: 10, marginBottom: 2 }}>
-            <span style={{ color: 'var(--text3)', minWidth: 52, flexShrink: 0 }}>{label}</span>
-            <span style={{ color: label === '첨삭' ? 'var(--yellow)' : 'var(--text)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{val}</span>
-          </div>
-        ))
+        <>
+          {rows.map(([label, val]) => (
+            <div key={label} style={{ display: 'flex', gap: 8, fontSize: 10, marginBottom: 2 }}>
+              <span style={{ color: 'var(--text3)', minWidth: 52, flexShrink: 0 }}>{label}</span>
+              <span style={{ color: label === '첨삭' ? 'var(--yellow)' : 'var(--text)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{val}</span>
+            </div>
+          ))}
+          {lastPerf && (
+            <>
+              <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', marginBottom: 4 }}>직전 실적 ({lastPerf.broadcastDate})</div>
+              {[
+                ['취급/분', Number(lastPerf.salesPerWeightedMin  || 0).toLocaleString(), 'var(--accent)'],
+                ['한익/분', Number(lastPerf.profitPerWeightedMin || 0).toLocaleString(), 'var(--green)'],
+              ].map(([label, val, color]) => (
+                <div key={label} style={{ display: 'flex', gap: 8, fontSize: 10, marginBottom: 2 }}>
+                  <span style={{ color: 'var(--text3)', minWidth: 52, flexShrink: 0 }}>{label}</span>
+                  <span style={{ color, fontWeight: 700 }}>{val}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </>
       )}
     </div>
   )

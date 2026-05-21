@@ -1,154 +1,174 @@
-import { useState, useMemo } from 'react'
+// src/components/modal/BlockEditModal.jsx
+import { useState } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
-import { DEAL_TYPES, getDealTypeChar } from '../../constants/dealTypes'
+import { DEAL_TYPES } from '../../constants/dealTypes'
 import { CATEGORIES } from '../../constants/categories'
 import { CHANNELS } from '../../constants/channels'
-import usePerformanceMap, { findBestPerf } from '../../hooks/usePerformanceMap'
+import { makePerfKey } from '../../hooks/usePerformanceMap'
 
-const labelStyle = { fontSize: 11, color: 'var(--text2)', fontWeight: 600, marginBottom: 4, display: 'block' }
+const inp = { background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 9px', borderRadius: 5, fontSize: 12, width: '100%' }
 
-function Field({ label, hint, children }) {
+function Field({ label, children }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label style={labelStyle}>
-        {label}
-        {hint && <span style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 400, marginLeft: 6 }}>{hint}</span>}
-      </label>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, marginBottom: 10 }}>
+      <label style={{ fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>{label}</label>
       {children}
     </div>
   )
 }
 
-export default function BlockEditModal({ block, onSave, onClose }) {
-  const { proposalItems, performanceRows } = useScheduleStore.getState()
-  const proposalItem = proposalItems.find(p => p.itemId === block.itemId) || {}
-  const perfMap = usePerformanceMap(performanceRows)
-
-  const dealType = block.dealType || proposalItem.dealType || ''
-  const lastPerf = findBestPerf(perfMap, dealType, block.pgmCodeName)
+export default function BlockEditModal({ block, onClose, saveBlock }) {
+  const { perfMap, manualInputs, saveManualInput, removeBlock } = useScheduleStore()
+  const blockKey = block.blockKey || block.slotId
 
   const [form, setForm] = useState({
-    pgmCodeName:                  block.pgmCodeName || '',
-    channel:                      block.channel || 'ALL',
-    mdTeam:                       block.mdTeam || block.orgName || proposalItem.mdTeam || '',
-    dealType,
-    mdCategory:                   block.mdCategory || proposalItem.mdCategory || '',
-    videoStatus:                  block.videoStatus || proposalItem.videoStatus || '',
-    memoCode:                     block.memoCode || '',
-    scheduleComment:              block.scheduleComment || '',
-    expectedSalesPerWeightedMin:  block.expectedSalesPerWeightedMin  ?? lastPerf?.salesPerWeightedMin  ?? '',
-    expectedProfitPerWeightedMin: block.expectedProfitPerWeightedMin ?? lastPerf?.profitPerWeightedMin ?? '',
-    mixedCostPerMin:              block.mixedCostPerMin || proposalItem.fixedFee || '',
+    pgmCodeName:       block.pgmCodeName       || '',
+    mdTeam:            block.mdTeam            || block.orgName || '',
+    mdCategory:        block.mdCategory        || '',
+    dealType:          block.dealType          || '',
+    dealTypeConverted: block.dealTypeConverted || block.dealType || '',
+    channel:           block.channel           || 'ALL',
+    memoCode:          block.memoCode          || '',
+    scheduleComment:   block.scheduleComment   || '',
+    annotation:        block.annotation        || '',
   })
 
-  const handleChange = (e) => {
-    const { name, value } = e.target
-    setForm(f => ({ ...f, [name]: value }))
-  }
+  const currentPerfKey = makePerfKey(form.dealTypeConverted || form.dealType, form.pgmCodeName)
+  const lastPerf = currentPerfKey ? (perfMap[currentPerfKey] || null) : null
 
-  const handleSave = () => {
-    onSave({
+  // manualKey가 null이면 수동입력 저장 자체를 건너뜀
+  const manualKey = block.perfKey || currentPerfKey || null
+  const manual = manualKey ? (manualInputs[manualKey] || {}) : {}
+  const [manualSales,  setManualSales]  = useState(manual.expectedSalesPerWeightedMin  ?? '')
+  const [manualProfit, setManualProfit] = useState(manual.expectedProfitPerWeightedMin ?? '')
+
+  const setField = (key, val) => setForm(prev => {
+    const next = { ...prev, [key]: val }
+    if (key === 'dealType') next.dealTypeConverted = val
+    return next
+  })
+
+  const handleSave = async () => {
+    const dealTypeConverted = form.dealTypeConverted || form.dealType
+    const perfKey = makePerfKey(dealTypeConverted, form.pgmCodeName)
+
+    // perfKey null이면 patch에서 제외 (Firebase update에서 null = 해당 경로 삭제)
+    const patch = {
       ...form,
-      dealTypeChar:                getDealTypeChar(form.dealType),
-      expectedSalesPerWeightedMin:  Number(form.expectedSalesPerWeightedMin)  || 0,
-      expectedProfitPerWeightedMin: Number(form.expectedProfitPerWeightedMin) || 0,
-      mixedCostPerMin:              Number(form.mixedCostPerMin) || 0,
-    })
+      dealTypeConverted,
+      isDefault: false,
+      ...(perfKey ? { perfKey } : {}),
+    }
+
+    await saveBlock(blockKey, patch)
+
+    // manualKey가 null이면 saveManualInput 호출하지 않음 (null 경로 에러 방지)
+    if (manualKey) {
+      await saveManualInput(manualKey, {
+        expectedSalesPerWeightedMin:  manualSales  === '' ? null : Number(manualSales),
+        expectedProfitPerWeightedMin: manualProfit === '' ? null : Number(manualProfit),
+      })
+    }
+    onClose()
   }
 
-  const inp = { background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '7px 10px', borderRadius: 5, fontSize: 12, width: '100%' }
-  const sel = { ...inp, cursor: 'pointer' }
+  const handleDelete = () => {
+    if (!window.confirm('이 블록을 편성표에서 제거하시겠습니까?')) return
+    removeBlock(blockKey)
+    onClose()
+  }
+
+  const fmt = v => Number(v || 0).toLocaleString()
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={onClose}>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={onClose}>
       <div onClick={e => e.stopPropagation()}
-        style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '24px 28px', width: 500, maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+        style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '24px 28px', width: 500, maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
 
-        <div style={{ fontSize: 14, fontWeight: 700 }}>블록 수정</div>
-
-        <div style={{ background: 'var(--bg3)', borderRadius: 6, padding: '8px 12px', fontSize: 11, color: 'var(--text2)' }}>
+        <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>블록 수정</div>
+        <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 12, background: 'var(--bg3)', padding: '6px 10px', borderRadius: 5 }}>
           {block.dateKey} {block.timeText} · {block.durationMin}분 · 가중분 {block.weightedMin}
         </div>
 
-        <Field label="채널">
-          <div style={{ display: 'flex', gap: 8 }}>
-            {CHANNELS.map(ch => (
-              <button key={ch} onClick={() => setForm(f => ({ ...f, channel: ch }))} style={{
-                flex: 1, padding: '7px 0', borderRadius: 5, border: '1px solid', fontSize: 11, fontWeight: 700, cursor: 'pointer',
-                background: form.channel === ch ? (ch === 'CA' ? 'var(--ca2)' : ch === 'IP' ? 'var(--ip2)' : 'var(--all2)') : 'var(--bg4)',
-                borderColor: form.channel === ch ? 'transparent' : 'var(--border)',
-                color: form.channel === ch ? '#fff' : 'var(--text2)'
-              }}>{ch}</button>
-            ))}
-          </div>
-        </Field>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <Field label="편성코드명">
-            <input name="pgmCodeName" value={form.pgmCodeName} onChange={handleChange} style={inp} />
+            <input value={form.pgmCodeName} onChange={e => setField('pgmCodeName', e.target.value)} style={inp} />
           </Field>
           <Field label="팀명">
-            <input name="mdTeam" value={form.mdTeam} onChange={handleChange} style={inp} />
+            <input value={form.mdTeam} onChange={e => setField('mdTeam', e.target.value)} style={inp} />
           </Field>
-        </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="거래형태" hint={proposalItem.dealType ? `원본: ${proposalItem.dealType}` : ''}>
-            <select name="dealType" value={form.dealType} onChange={handleChange} style={sel}>
+          <Field label="거래형태">
+            <select value={form.dealType} onChange={e => setField('dealType', e.target.value)} style={inp}>
               <option value="">선택</option>
-              {DEAL_TYPES.map(d => <option key={d} value={d}>{d}</option>)}
+              {DEAL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </Field>
-          <Field label="카테고리" hint={proposalItem.mdCategory ? `원본: ${proposalItem.mdCategory}` : ''}>
-            <select name="mdCategory" value={form.mdCategory} onChange={handleChange} style={sel}>
+          <Field label="카테고리">
+            <select value={form.mdCategory} onChange={e => setField('mdCategory', e.target.value)} style={inp}>
               <option value="">선택</option>
               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </Field>
+          <Field label="채널">
+            <select value={form.channel} onChange={e => setField('channel', e.target.value)} style={inp}>
+              {CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label="메모코드">
+            <input value={form.memoCode} onChange={e => setField('memoCode', e.target.value)} style={inp} />
+          </Field>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="영상구분">
-            <input name="videoStatus" value={form.videoStatus} onChange={handleChange} style={inp} placeholder="신규, 재활용..." />
-          </Field>
-          <Field label="분당혼합비용">
-            <input name="mixedCostPerMin" type="number" value={form.mixedCostPerMin} onChange={handleChange} style={inp} placeholder="0" />
-          </Field>
-        </div>
+        <Field label="편성C">
+          <textarea value={form.scheduleComment} onChange={e => setField('scheduleComment', e.target.value)} rows={2}
+            placeholder="# 포함 시 블록에 표시" style={{ ...inp, resize: 'vertical' }} />
+        </Field>
+        <Field label="첨삭">
+          <textarea value={form.annotation} onChange={e => setField('annotation', e.target.value)} rows={2}
+            style={{ ...inp, resize: 'vertical' }} />
+        </Field>
 
-        {lastPerf && (
-          <div style={{ background: 'var(--bg3)', borderRadius: 6, padding: '8px 12px', fontSize: 11 }}>
-            <div style={{ color: 'var(--text3)', marginBottom: 4 }}>
-              직전 실적 ({lastPerf.broadcastDate} {lastPerf.broadcastTime})
+        <div style={{ background: 'var(--bg3)', borderRadius: 6, padding: '10px 12px', marginTop: 4 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 8 }}>
+            직전 실적
+            {lastPerf
+              ? <span style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 400, marginLeft: 6 }}>({lastPerf.broadcastDate} {lastPerf.broadcastTime})</span>
+              : <span style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 400, marginLeft: 6 }}>— 매칭 없음</span>
+            }
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>취급/분</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>{fmt(lastPerf?.salesPerWeightedMin)}</div>
             </div>
-            <div style={{ display: 'flex', gap: 16 }}>
-              <span>분당취급액 <strong style={{ color: 'var(--accent)' }}>{Number(lastPerf.salesPerWeightedMin).toLocaleString()}</strong></span>
-              <span>분당한계이익 <strong style={{ color: 'var(--green)' }}>{Number(lastPerf.profitPerWeightedMin).toLocaleString()}</strong></span>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 2 }}>한익/분</div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--green)' }}>{fmt(lastPerf?.profitPerWeightedMin)}</div>
             </div>
           </div>
-        )}
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <Field label="예상 분당취급액">
-            <input name="expectedSalesPerWeightedMin" type="number" value={form.expectedSalesPerWeightedMin} onChange={handleChange} style={inp} />
-          </Field>
-          <Field label="예상 분당한계이익">
-            <input name="expectedProfitPerWeightedMin" type="number" value={form.expectedProfitPerWeightedMin} onChange={handleChange} style={inp} />
-          </Field>
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+            <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 6 }}>수동 입력 (비워두면 직전 실적 사용)</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <Field label="수동 취급/분">
+                <input type="number" value={manualSales} onChange={e => setManualSales(e.target.value)}
+                  placeholder={fmt(lastPerf?.salesPerWeightedMin)} style={inp} />
+              </Field>
+              <Field label="수동 한익/분">
+                <input type="number" value={manualProfit} onChange={e => setManualProfit(e.target.value)}
+                  placeholder={fmt(lastPerf?.profitPerWeightedMin)} style={inp} />
+              </Field>
+            </div>
+          </div>
         </div>
 
-        <Field label="메모코드">
-          <input name="memoCode" value={form.memoCode} onChange={handleChange} style={inp} placeholder="[전사블록]" />
-        </Field>
-
-        <Field label="편성C (코멘트)">
-          <textarea name="scheduleComment" value={form.scheduleComment} onChange={handleChange} rows={3}
-            placeholder="편성 관련 코멘트... (#포함 시 블록에 표시)" style={{ ...inp, resize: 'vertical' }} />
-        </Field>
-
-        <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
-          <button onClick={onClose} style={{ flex: 1, padding: '9px 0', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>취소</button>
-          <button onClick={handleSave} style={{ flex: 2, padding: '9px 0', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>저장</button>
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button onClick={handleDelete}
+            style={{ padding: '8px 14px', background: 'transparent', border: '1px solid var(--red)', color: 'var(--red)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>삭제</button>
+          <div style={{ flex: 1 }} />
+          <button onClick={onClose}
+            style={{ padding: '8px 14px', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>취소</button>
+          <button onClick={handleSave}
+            style={{ padding: '8px 20px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>저장</button>
         </div>
       </div>
     </div>

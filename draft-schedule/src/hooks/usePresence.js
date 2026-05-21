@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { db, ref, set, onValue, off } from '../api/firebase'
 import useScheduleStore from '../store/useScheduleStore'
 
@@ -9,53 +9,62 @@ export default function usePresence() {
     if (!startDate || !userName) return
     const weekKey = `${startDate}_${poolType}`
     const uid = `${userName}_${Date.now()}`
-    const presenceRef = ref(db, `sessions/${weekKey}/presence/${uid}`)
+    const presenceRef = ref(db, `presence/${weekKey}/${uid}`)
 
     const data = {
       userName,
-      joinedAt: Date.now(),
-      lastSeen: Date.now(),
+      poolType,
+      ts: Date.now()
     }
 
     set(presenceRef, data)
 
-    // 30초마다 lastSeen 갱신
     const interval = setInterval(() => {
-      set(presenceRef, { ...data, lastSeen: Date.now() })
+      set(presenceRef, {
+        ...data,
+        ts: Date.now()
+      })
     }, 30000)
-
-    // 탭 닫힐 때 제거
-    const cleanup = () => set(presenceRef, null)
-    window.addEventListener('beforeunload', cleanup)
 
     return () => {
       clearInterval(interval)
-      window.removeEventListener('beforeunload', cleanup)
       set(presenceRef, null)
     }
   }, [startDate, poolType, userName])
 }
 
-export function usePresenceList() {
+export function usePresenceUsers() {
   const { startDate, poolType } = useScheduleStore()
   const [users, setUsers] = useState([])
 
   useEffect(() => {
     if (!startDate) return
     const weekKey = `${startDate}_${poolType}`
-    const r = ref(db, `sessions/${weekKey}/presence`)
+    const presenceRef = ref(db, `presence/${weekKey}`)
 
-    onValue(r, snap => {
-      if (!snap.exists()) { setUsers([]); return }
+    const unsubscribe = onValue(presenceRef, snapshot => {
+      const val = snapshot.val() || {}
       const now = Date.now()
-      const active = Object.values(snap.val())
-        .filter(u => now - u.lastSeen < 60000) // 1분 이내
-        .sort((a, b) => a.joinedAt - b.joinedAt)
-      setUsers(active)
+
+      const list = Object.values(val)
+        .filter(u => u && now - u.ts < 90000)
+        .reduce((acc, u) => {
+          if (!acc.find(x => x.userName === u.userName)) {
+            acc.push(u)
+          }
+          return acc
+        }, [])
+
+      setUsers(list)
     })
 
-    return () => off(r)
+    return () => off(presenceRef)
   }, [startDate, poolType])
 
   return users
+}
+
+export function usePresenceCount() {
+  const users = usePresenceUsers()
+  return users.length
 }

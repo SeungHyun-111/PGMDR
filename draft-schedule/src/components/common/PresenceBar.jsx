@@ -1,3 +1,4 @@
+// src/components/common/PresenceBar.jsx
 import { useState, useEffect } from 'react'
 import { db, ref, onValue, off } from '../../api/firebase'
 import useScheduleStore from '../../store/useScheduleStore'
@@ -17,14 +18,18 @@ export default function PresenceBar() {
   useEffect(() => {
     if (!startDate) return
     const weekKey = `${startDate}_${poolType}`
-    const r = ref(db, `sessions/${weekKey}/presence`)
+    const r = ref(db, `presence/${weekKey}`)
 
     onValue(r, snap => {
       if (!snap.exists()) { setUsers([]); return }
       const now = Date.now()
       const active = Object.values(snap.val())
-        .filter(u => now - u.lastSeen < 60000)
-        .sort((a, b) => a.joinedAt - b.joinedAt)
+        .filter(u => u && now - u.ts < 90000)          // ← lastSeen → ts
+        .reduce((acc, u) => {
+          if (!acc.find(x => x.userName === u.userName)) acc.push(u)
+          return acc
+        }, [])
+        .sort((a, b) => (a.ts || 0) - (b.ts || 0))
       setUsers(active)
     })
 
