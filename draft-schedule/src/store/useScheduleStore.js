@@ -46,7 +46,7 @@ function buildPreScheduleBlocks(pgmSlots, preScheduleRows, existingBlocks) {
       slotId: slot.slotId, blockKey: slot.slotId,
       dateKey: slot.dateKey, timeText: slot.timeText,
       durationMin: slot.durationMin, weightedMin: slot.weightedMin,
-      channel: 'ALL', // 선편성 기본 일원
+      channel: 'ALL',
       pgmCodeName: pre.pgmCodeName, orgName: pre.orgName, mdTeam: pre.orgName,
       dealTypeChar, isPreSchedule: true, isDefault: false, assignedAt: Date.now()
     }
@@ -62,13 +62,34 @@ function buildDefaultBlocks(pgmSlots, existingBlocks) {
   return missing
 }
 
+// Firebase 실시간 구독 관리
+const subscriptions = {}
+
+function subscribe(weekKey, path, callback) {
+  const key = `${weekKey}/${path}`
+  if (subscriptions[key]) off(ref(db, `sessions/${key}`))
+  const r = ref(db, `sessions/${key}`)
+  onValue(r, callback)
+  subscriptions[key] = r
+}
+
+function unsubscribeAll() {
+  Object.values(subscriptions).forEach(r => off(r))
+  Object.keys(subscriptions).forEach(k => delete subscriptions[k])
+}
+
 const useScheduleStore = create((setState, getState) => ({
   startDate: '', endDate: '', poolType: 'A',
   isLoaded: false, isLoading: false,
   isLoadingProposals: false, isLoadingPerformance: false,
   error: null,
+
   pgmSlots: [], targetMetrics: null, weightedMinTargets: [],
   scheduleBlocks: {}, manualInputs: {},
+  splitSlots: {},      // CA/IP 분리 상태 (Firebase 실시간)
+  starred: {},         // 별표 상태 (Firebase 실시간)
+  scheduledItemIds: {}, // 편성 완료된 itemId (Firebase 실시간)
+
   proposalItems: [], proposalLoaded: false,
   performanceRows: [], performanceLoaded: false,
   preScheduleRows: [], preScheduleLoaded: false,
@@ -86,9 +107,7 @@ const useScheduleStore = create((setState, getState) => ({
     const weekKey = `${startDate}_${poolType}`
     const logKey = `log_${Date.now()}`
     await set(ref(db, `sessions/${weekKey}/logs/${logKey}`), {
-      timestamp: Date.now(),
-      action,
-      blockKey,
+      timestamp: Date.now(), action, blockKey,
       pgmCodeName: after?.pgmCodeName || before?.pgmCodeName || '',
       dateKey: after?.dateKey || before?.dateKey || '',
       timeText: after?.timeText || before?.timeText || '',
@@ -98,15 +117,16 @@ const useScheduleStore = create((setState, getState) => ({
     })
   },
 
+  // 세션 초기화
   resetSession: async (startDate, poolType) => {
     setState({ isLoading: true, error: null, isLoaded: false })
     try {
       const weekKey = `${startDate}_${poolType}`
       await set(ref(db, `sessions/${weekKey}`), null)
-      const prev = getState()._blocksUnsubscribe
-      if (prev) prev()
+      unsubscribeAll()
       setState({
         scheduleBlocks: {}, manualInputs: {},
+        splitSlots: {}, starred: {}, scheduledItemIds: {},
         proposalItems: [], performanceRows: [], preScheduleRows: [],
         proposalLoaded: false, performanceLoaded: false, preScheduleLoaded: false,
         lastUpdated: null, weightedMinTargets: [],
@@ -128,7 +148,9 @@ const useScheduleStore = create((setState, getState) => ({
         const gasData = await fetchInitData(startDate, poolType)
         const now = Date.now()
         await set(ref(db, `sessions/${weekKey}`), {
-          gasData, scheduleBlocks: {}, manualInputs: {}, createdAt: now,
+          gasData, scheduleBlocks: {}, manualInputs: {},
+          splitSlots: {}, starred: {}, scheduledItemIds: {},
+          createdAt: now,
           lastUpdated: { pgm: now, proposal: now, performance: now, preSchedule: now }
         })
         const pgmSlots = gasData.pgmSlots || []
@@ -138,66 +160,84 @@ const useScheduleStore = create((setState, getState) => ({
         await set(ref(db, `sessions/${weekKey}/scheduleBlocks`), { ...defaultBlocks, ...preBlocks })
       }
 
-      const pgmSnap = await get(ref(db, `sessions/${weekKey}/gasData/pgmSlots`))
+      // 초기 데이터 로드
+      const [pgmSnap, targetSnap, weightedSnap, blocksSnap, inputsSnap, lastUpdatedSnap,
+             splitSnap, starredSnap, scheduledSnap] = await Promise.all([
+        get(ref(db, `sessions/${weekKey}/gasData/pgmSlots`)),
+        get(ref(db, `sessions/${weekKey}/gasData/targetMetrics`)),
+        get(ref(db, `sessions/${weekKey}/gasData/weightedMinTargets`)),
+        get(ref(db, `sessions/${weekKey}/scheduleBlocks`)),
+        get(ref(db, `sessions/${weekKey}/manualInputs`)),
+        get(ref(db, `sessions/${weekKey}/lastUpdated`)),
+        get(ref(db, `sessions/${weekKey}/splitSlots`)),
+        get(ref(db, `sessions/${weekKey}/starred`)),
+        get(ref(db, `sessions/${weekKey}/scheduledItemIds`)),
+      ])
+
       const pgmSlots = pgmSnap.exists() ? pgmSnap.val() : []
-
-      const targetSnap = await get(ref(db, `sessions/${weekKey}/gasData/targetMetrics`))
-      const targetMetrics = targetSnap.exists() ? targetSnap.val() : null
-
-      const weightedSnap = await get(ref(db, `sessions/${weekKey}/gasData/weightedMinTargets`))
-      const weightedMinTargets = weightedSnap.exists() ? Object.values(weightedSnap.val()) : []
-
-      const meta = metaSnap.exists() ? metaSnap.val() : {}
-
-      const blocksSnap = await get(ref(db, `sessions/${weekKey}/scheduleBlocks`))
       let scheduleBlocks = blocksSnap.exists() ? blocksSnap.val() : {}
 
+      // 누락된 디폴트 블록 보충
       const missing = buildDefaultBlocks(pgmSlots, scheduleBlocks)
       if (Object.keys(missing).length > 0) {
         await update(ref(db, `sessions/${weekKey}/scheduleBlocks`), missing)
         scheduleBlocks = { ...scheduleBlocks, ...missing }
       }
 
-      const inputsSnap = await get(ref(db, `sessions/${weekKey}/manualInputs`))
-      const manualInputs = inputsSnap.exists() ? inputsSnap.val() : {}
-
-      const lastUpdatedSnap = await get(ref(db, `sessions/${weekKey}/lastUpdated`))
-      const lastUpdated = lastUpdatedSnap.exists() ? lastUpdatedSnap.val() : null
+      const meta = metaSnap.exists() ? metaSnap.val() : {}
 
       setState({
         startDate, endDate: meta.endDate || '', poolType,
-        pgmSlots, targetMetrics, weightedMinTargets,
-        scheduleBlocks, manualInputs, lastUpdated,
+        pgmSlots,
+        targetMetrics: targetSnap.exists() ? targetSnap.val() : null,
+        weightedMinTargets: weightedSnap.exists() ? Object.values(weightedSnap.val()) : [],
+        scheduleBlocks,
+        manualInputs: inputsSnap.exists() ? inputsSnap.val() : {},
+        lastUpdated: lastUpdatedSnap.exists() ? lastUpdatedSnap.val() : null,
+        splitSlots: splitSnap.exists() ? splitSnap.val() : {},
+        starred: starredSnap.exists() ? starredSnap.val() : {},
+        scheduledItemIds: scheduledSnap.exists() ? scheduledSnap.val() : {},
         isLoaded: true, isLoading: false,
         proposalLoaded: false, performanceLoaded: false, preScheduleLoaded: false,
       })
 
-      getState()._subscribeBlocks(weekKey)
+      // 실시간 구독 시작
+      getState()._subscribeAll(weekKey)
 
     } catch (e) {
       setState({ error: e.message, isLoading: false })
     }
   },
 
-  _blocksUnsubscribe: null,
-  _subscribeBlocks: (weekKey) => {
-    const prev = getState()._blocksUnsubscribe
-    if (prev) prev()
-    const blocksRef = ref(db, `sessions/${weekKey}/scheduleBlocks`)
-    onValue(blocksRef, snap => {
-      setState({ scheduleBlocks: snap.exists() ? snap.val() : {} })
+  _subscribeAll: (weekKey) => {
+    unsubscribeAll()
+
+    const paths = {
+      scheduleBlocks: snap => setState({ scheduleBlocks: snap.exists() ? snap.val() : {} }),
+      splitSlots:     snap => setState({ splitSlots:     snap.exists() ? snap.val() : {} }),
+      starred:        snap => setState({ starred:        snap.exists() ? snap.val() : {} }),
+      scheduledItemIds: snap => setState({ scheduledItemIds: snap.exists() ? snap.val() : {} }),
+      manualInputs:   snap => setState({ manualInputs:   snap.exists() ? snap.val() : {} }),
+    }
+
+    Object.entries(paths).forEach(([path, handler]) => {
+      const r = ref(db, `sessions/${weekKey}/${path}`)
+      onValue(r, handler)
+      subscriptions[`${weekKey}/${path}`] = r
     })
-    setState({ _blocksUnsubscribe: () => off(blocksRef) })
   },
 
   loadProposals: async () => {
-    const { startDate, poolType, proposalLoaded } = getState()
+    const { startDate, poolType, proposalLoaded, scheduledItemIds } = getState()
     if (proposalLoaded) return
     setState({ isLoadingProposals: true })
     try {
       const weekKey = `${startDate}_${poolType}`
       const snap = await get(ref(db, `sessions/${weekKey}/gasData/proposalItems`))
-      setState({ proposalItems: snap.exists() ? snap.val() : [], proposalLoaded: true, isLoadingProposals: false })
+      const all = snap.exists() ? snap.val() : []
+      // 이미 편성된 아이템 제외
+      const items = all.filter(p => !scheduledItemIds[p.itemId])
+      setState({ proposalItems: items, proposalLoaded: true, isLoadingProposals: false })
     } catch (e) {
       setState({ error: e.message, isLoadingProposals: false })
     }
@@ -228,34 +268,31 @@ const useScheduleStore = create((setState, getState) => ({
     }
   },
 
+  // 블록 저장
   saveBlock: async (blockKey, blockData) => {
     const { startDate, poolType, scheduleBlocks, writeLog } = getState()
     const weekKey = `${startDate}_${poolType}`
     const before = scheduleBlocks[blockKey] || null
     await update(ref(db, `sessions/${weekKey}/scheduleBlocks/${blockKey}`), blockData)
-    // 실제 편성 or 수정일 때만 로그
     if (!blockData.isDefault) {
       await writeLog(before ? '수정' : '편성', blockKey, before, { ...before, ...blockData })
     }
   },
 
+  // 블록 삭제 → 디폴트 복원
   removeBlock: async (blockKey) => {
-    const { startDate, poolType, pgmSlots, scheduleBlocks, proposalItems, writeLog } = getState()
+    const { startDate, poolType, pgmSlots, scheduleBlocks, writeLog } = getState()
     const weekKey = `${startDate}_${poolType}`
     const block = scheduleBlocks[blockKey]
+
     const isSimpleSlot = !blockKey.includes('_CA') && !blockKey.includes('_IP')
-    const slotId = isSimpleSlot ? blockKey : blockKey.replace('_CA', '').replace('_IP', '')
+    const slotId = isSimpleSlot ? blockKey : blockKey.replace('_CA','').replace('_IP','')
     const slot = pgmSlots.find(s => s.slotId === slotId)
     const channel = isSimpleSlot ? 'ALL' : (blockKey.includes('_CA') ? 'CA' : 'IP')
 
+    // 편성 아이템이면 scheduledItemIds에서 제거
     if (block && !block.isDefault && !block.isCompeting && block.itemId) {
-      const alreadyIn = proposalItems.some(p => p.itemId === block.itemId)
-      if (!alreadyIn) {
-        const gasSnap = await get(ref(db, `sessions/${weekKey}/gasData/proposalItems`))
-        const allItems = gasSnap.exists() ? gasSnap.val() : []
-        const originalItem = allItems.find(p => p.itemId === block.itemId)
-        if (originalItem) setState(s => ({ proposalItems: [...s.proposalItems, originalItem] }))
-      }
+      await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${block.itemId}`), null)
     }
 
     if (block && !block.isDefault) {
@@ -269,7 +306,19 @@ const useScheduleStore = create((setState, getState) => ({
     }
   },
 
-  removeFromSidebar: (itemId) => {
+  // 편성 아이템 사이드바에서 제거 + Firebase 기록
+  scheduleItem: async (itemId) => {
+    const { startDate, poolType } = getState()
+    const weekKey = `${startDate}_${poolType}`
+    await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${itemId}`), true)
+    setState(s => ({ proposalItems: s.proposalItems.filter(p => p.itemId !== itemId) }))
+  },
+
+  // 사이드바로 복귀
+  removeFromSidebar: async (itemId) => {
+    const { startDate, poolType } = getState()
+    const weekKey = `${startDate}_${poolType}`
+    await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${itemId}`), true)
     setState(s => ({ proposalItems: s.proposalItems.filter(p => p.itemId !== itemId) }))
   },
 
@@ -277,12 +326,30 @@ const useScheduleStore = create((setState, getState) => ({
     const { startDate, poolType, proposalItems } = getState()
     if (!block.itemId) return
     const weekKey = `${startDate}_${poolType}`
+    // scheduledItemIds에서 제거 → 다시 사이드바로
+    await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${block.itemId}`), null)
     const gasSnap = await get(ref(db, `sessions/${weekKey}/gasData/proposalItems`))
     const allItems = gasSnap.exists() ? gasSnap.val() : []
     const originalItem = allItems.find(p => p.itemId === block.itemId)
     if (originalItem && !proposalItems.some(p => p.itemId === block.itemId)) {
       setState(s => ({ proposalItems: [...s.proposalItems, originalItem] }))
     }
+  },
+
+  // CA/IP 분리 토글
+  toggleSplitSlot: async (slotId) => {
+    const { startDate, poolType, splitSlots } = getState()
+    const weekKey = `${startDate}_${poolType}`
+    const current = !!splitSlots[slotId]
+    await set(ref(db, `sessions/${weekKey}/splitSlots/${slotId}`), current ? null : true)
+  },
+
+  // 별표 토글
+  toggleStarred: async (itemId) => {
+    const { startDate, poolType, starred } = getState()
+    const weekKey = `${startDate}_${poolType}`
+    const current = !!starred[itemId]
+    await set(ref(db, `sessions/${weekKey}/starred/${itemId}`), current ? null : true)
   },
 
   saveManualInput: async (itemId, inputData) => {
@@ -318,7 +385,9 @@ const useScheduleStore = create((setState, getState) => ({
       const now = Date.now()
       await update(ref(db, `sessions/${weekKey}/gasData`), { proposalItems: data.proposalItems })
       await update(ref(db, `sessions/${weekKey}/lastUpdated`), { proposal: now })
-      setState(s => ({ proposalItems: data.proposalItems, proposalLoaded: true, isLoadingProposals: false, lastUpdated: { ...s.lastUpdated, proposal: now } }))
+      const { scheduledItemIds } = getState()
+      const items = data.proposalItems.filter(p => !scheduledItemIds[p.itemId])
+      setState(s => ({ proposalItems: items, proposalLoaded: true, isLoadingProposals: false, lastUpdated: { ...s.lastUpdated, proposal: now } }))
     } catch (e) {
       setState({ error: e.message, isLoadingProposals: false })
     }
@@ -347,7 +416,7 @@ const useScheduleStore = create((setState, getState) => ({
   addCustomProposalItem: async (itemData) => {
     const { startDate, poolType, proposalItems } = getState()
     const weekKey = `${startDate}_${poolType}`
-    const customItem = { ...itemData, itemId: `CUSTOM_${Date.now()}`, isCustom: true, source: { type: 'custom' } }
+    const customItem = { ...itemData, itemId: `CUSTOM_${Date.now()}`, isCustom: true }
     setState({ proposalItems: [...proposalItems, customItem] })
     await set(ref(db, `sessions/${weekKey}/customProposalItems/${customItem.itemId}`), customItem)
   },
