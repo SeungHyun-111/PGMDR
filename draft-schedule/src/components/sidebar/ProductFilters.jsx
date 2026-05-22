@@ -40,6 +40,10 @@ export default function ProductFilters({ filters, setFilters }) {
           <option value="있음">실적있음</option>
           <option value="없음">실적없음</option>
         </select>
+        <button onClick={() => sel('starOnly', !filters.starOnly)}
+          style={{ ...selectStyle, flex: 'none', padding: '4px 8px', background: filters.starOnly ? 'var(--yellow)' : 'var(--bg3)', color: filters.starOnly ? '#fff' : 'var(--text3)', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>
+          ★
+        </button>
       </div>
     </div>
   )

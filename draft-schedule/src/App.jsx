@@ -31,13 +31,27 @@ export default function App() {
 
   const {
     isLoaded, startDate, endDate, poolType,
-    isLoadingProposals, isLoadingPerformance,
-    refreshPerformance, refreshProposals, refreshPreSchedule,
+    isLoadingProposals, isLoadingPerformance, isLoadingPreSchedule, isLoadingGasAll,
+    refreshPerformance, refreshProposals, refreshPreSchedule, refreshAllGasData,
     lastUpdated, userName, setUserName
   } = useScheduleStore()
 
   // Firebase presence 등록
   usePresence()
+
+  // 드래그 중 전역 ⊘ 커서 제거: dragover preventDefault 없는 영역에서도 move 커서 유지
+  useEffect(() => {
+    const prevent = e => e.preventDefault()
+    const onStart = () => document.addEventListener('dragover', prevent)
+    const onEnd   = () => document.removeEventListener('dragover', prevent)
+    document.addEventListener('dragstart', onStart)
+    document.addEventListener('dragend',   onEnd)
+    return () => {
+      document.removeEventListener('dragstart', onStart)
+      document.removeEventListener('dragend',   onEnd)
+      document.removeEventListener('dragover',  prevent)
+    }
+  }, [])
 
   const [showUserPopup, setShowUserPopup] = useState(!userName)
   const [userNameInput, setUserNameInput] = useState('')
@@ -65,6 +79,9 @@ export default function App() {
     setMenuOpen(false)
     if (action === 'newSetup') {
       setSetupPopup(true)
+    } else if (action === 'refreshAllGas') {
+      if (!window.confirm('GAS에서 전체 데이터를 재동기화합니다.\n사용자 편성 블록은 유지되며, 선편성·디폴트 블록은 최신 데이터로 덮어씁니다.\n계속하시겠습니까?')) return
+      await refreshAllGasData(); showToast('GAS 전체 재동기화 완료')
     } else if (action === 'refreshPerformance') {
       await refreshPerformance(); showToast('실적DB 갱신 완료')
     } else if (action === 'refreshPreSchedule') {
@@ -86,7 +103,7 @@ export default function App() {
     return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
   }
 
-  const isRefreshing = isLoadingProposals || isLoadingPerformance
+  const isRefreshing = isLoadingProposals || isLoadingPerformance || isLoadingPreSchedule || isLoadingGasAll
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -138,7 +155,7 @@ export default function App() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--accent)' }}>
               <div style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid var(--border)', borderTop: '2px solid var(--accent)', animation: 'spin 0.8s linear infinite' }} />
               <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
-              {isLoadingProposals ? '제안상품 갱신 중...' : '실적DB 갱신 중...'}
+              {isLoadingGasAll ? 'GAS 전체 재동기화 중...' : isLoadingProposals ? '제안상품 갱신 중...' : isLoadingPreSchedule ? '선편성 갱신 중...' : '실적DB 갱신 중...'}
             </div>
           )}
 
@@ -211,6 +228,9 @@ function NavMenu({ onAction }) {
   const [hover, setHover] = useState(null)
   const groups = [
     { group: '초기 설정', items: [{ id: 'newSetup', label: '새 편성 시작', danger: true }] },
+    { group: 'GAS 재동기화', items: [
+      { id: 'refreshAllGas', label: 'GAS 전체 재동기화', warn: true },
+    ]},
     { group: '개별 업데이트', items: [
       { id: 'refreshPreSchedule', label: '선편성정보 갱신' },
       { id: 'refreshProposal',    label: '제안상품 갱신' },
@@ -225,7 +245,7 @@ function NavMenu({ onAction }) {
           {g.items.map(item => (
             <button key={item.id} onClick={() => onAction(item.id)}
               onMouseEnter={() => setHover(item.id)} onMouseLeave={() => setHover(null)}
-              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 16px', background: hover === item.id ? 'var(--bg3)' : 'transparent', border: 'none', color: item.danger ? 'var(--red)' : 'var(--text)', fontSize: 12, cursor: 'pointer' }}>
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 16px', background: hover === item.id ? 'var(--bg3)' : 'transparent', border: 'none', color: item.danger ? 'var(--red)' : item.warn ? 'var(--orange)' : 'var(--text)', fontSize: 12, cursor: 'pointer' }}>
               {item.label}
             </button>
           ))}

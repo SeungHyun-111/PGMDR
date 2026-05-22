@@ -5,19 +5,18 @@ import ScheduleGrid from '../components/schedule/ScheduleGrid'
 import Sidebar from '../components/sidebar/Sidebar'
 import SetupModal from '../components/modal/SetupModal'
 import { splitWeightedMin } from '../utils/weightedMin'
-import { makePerfKey } from '../hooks/usePerformanceMap'
+import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
 
 export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   const {
     isLoaded, isLoading, error,
     scheduleBlocks, perfMap,
-    loadInitData, loadStarred, saveBlock, scheduleItem,
+    loadInitData, resetSession, saveBlock, scheduleItem,
   } = useScheduleStore()
 
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
   useEffect(() => {
-    loadStarred()
     const lastKey = localStorage.getItem('lastWeekKey')
     if (lastKey && !isLoaded) {
       const [date, pool] = lastKey.split('_')
@@ -26,7 +25,13 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   }, [])
 
   const handleSetupComplete = async (startDate, poolType) => {
-    await loadInitData(startDate, poolType)
+    // setupPopup=true → 사용자가 명시적으로 "새 편성 시작" 선택 → Firebase 완전 삭제 후 GAS 재호출
+    // !isLoaded (초기 자동 로드) → Firebase 캐시 있으면 재사용
+    if (setupPopup) {
+      await resetSession(startDate, poolType)
+    } else {
+      await loadInitData(startDate, poolType)
+    }
     setSetupPopup(false)
   }
 
@@ -44,7 +49,8 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
       weightedMin = channel === 'CA' ? caWeighted : ipWeighted
     }
 
-    const dealTypeConverted = item.dealTypeConverted || item.dealType || ''
+    // 항상 정규화된 값 사용 (드롭 시점 item 상태와 무관하게 일관성 보장)
+    const dealTypeConverted = normalizeDealType(item.dealTypeConverted || item.dealType || '')
     const perfKey = makePerfKey(dealTypeConverted, item.pgmCodeName) || undefined
     // perfKey가 없으면 undefined로 두어 Firebase에 null 저장 방지
 
@@ -122,7 +128,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', height: 'calc(100% - var(--panel-h, 0px))', overflow: 'hidden', transition: 'height .15s ease' }}>
       <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
         <ScheduleGrid onBlockDrop={handleBlockDrop} />
       </div>

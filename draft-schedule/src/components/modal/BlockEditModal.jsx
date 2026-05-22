@@ -18,29 +18,34 @@ function Field({ label, children }) {
 }
 
 export default function BlockEditModal({ block, onClose, saveBlock }) {
-  const { perfMap, manualInputs, saveManualInput, removeBlock } = useScheduleStore()
+  const { perfMap, manualInputs, saveManualInput, removeBlock, changeBlockChannel, weightedMinTargets } = useScheduleStore()
   const blockKey = block.blockKey || block.slotId
 
+  const initDealType = block.dealTypeConverted || block.dealType || ''
   const [form, setForm] = useState({
     pgmCodeName:       block.pgmCodeName       || '',
     mdTeam:            block.mdTeam            || block.orgName || '',
     mdCategory:        block.mdCategory        || '',
-    dealType:          block.dealType          || '',
-    dealTypeConverted: block.dealTypeConverted || block.dealType || '',
+    dealType:          initDealType,
+    dealTypeConverted: initDealType,
     channel:           block.channel           || 'ALL',
+    timeText:          block.timeText          || '',
     memoCode:          block.memoCode          || '',
     scheduleComment:   block.scheduleComment   || '',
     annotation:        block.annotation        || '',
   })
 
+  const teamNames = weightedMinTargets.map(t => t.teamName).filter(Boolean)
+  const teamTarget = weightedMinTargets.find(t => t.teamName === form.mdTeam) || null
+
   const currentPerfKey = makePerfKey(form.dealTypeConverted || form.dealType, form.pgmCodeName)
   const lastPerf = currentPerfKey ? (perfMap[currentPerfKey] || null) : null
 
-  // manualKey가 null이면 수동입력 저장 자체를 건너뜀
   const manualKey = block.perfKey || currentPerfKey || null
   const manual = manualKey ? (manualInputs[manualKey] || {}) : {}
   const [manualSales,  setManualSales]  = useState(manual.expectedSalesPerWeightedMin  ?? '')
   const [manualProfit, setManualProfit] = useState(manual.expectedProfitPerWeightedMin ?? '')
+  const [saveState, setSaveState] = useState('idle')
 
   const setField = (key, val) => setForm(prev => {
     const next = { ...prev, [key]: val }
@@ -49,27 +54,59 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
   })
 
   const handleSave = async () => {
-    const dealTypeConverted = form.dealTypeConverted || form.dealType
-    const perfKey = makePerfKey(dealTypeConverted, form.pgmCodeName)
+    if (saveState !== 'idle') return
+    setSaveState('saving')
+    try {
+      const dealTypeConverted = form.dealTypeConverted || form.dealType
+      const perfKey = makePerfKey(dealTypeConverted, form.pgmCodeName)
 
-    // perfKey null이면 patch에서 제외 (Firebase update에서 null = 해당 경로 삭제)
-    const patch = {
-      ...form,
-      dealTypeConverted,
-      isDefault: false,
-      ...(perfKey ? { perfKey } : {}),
+      const patch = {
+        ...form,
+        dealTypeConverted,
+        orgName:   form.mdTeam,  // orgName과 mdTeam 동기화
+        isDefault: false,
+        ...(perfKey ? { perfKey } : {}),
+      }
+
+      const origChannel = block.blockKey?.endsWith('_CA') ? 'CA'
+        : block.blockKey?.endsWith('_IP') ? 'IP' : 'ALL'
+
+      if (form.channel !== origChannel) {
+        await changeBlockChannel(block, form.channel, patch)
+      } else {
+        await saveBlock(blockKey, patch)
+      }
+
+      if (manualKey) {
+        await saveManualInput(manualKey, {
+          expectedSalesPerWeightedMin:  manualSales  === '' ? null : Number(manualSales),
+          expectedProfitPerWeightedMin: manualProfit === '' ? null : Number(manualProfit),
+        })
+      }
+
+      // 사이드바 카드 데이터 동기화 (편성표 수정 내용이 사이드바에도 반영)
+      if (block.itemId) {
+        useScheduleStore.setState(s => ({
+          proposalItems: s.proposalItems.map(p =>
+            p.itemId === block.itemId
+              ? {
+                  ...p,
+                  pgmCodeName:       form.pgmCodeName,
+                  mdTeam:            form.mdTeam,
+                  mdCategory:        form.mdCategory,
+                  dealType:          dealTypeConverted,
+                  dealTypeConverted: dealTypeConverted,
+                }
+              : p
+          ),
+        }))
+      }
+
+      setSaveState('saved')
+      setTimeout(onClose, 700)
+    } catch {
+      setSaveState('idle')
     }
-
-    await saveBlock(blockKey, patch)
-
-    // manualKey가 null이면 saveManualInput 호출하지 않음 (null 경로 에러 방지)
-    if (manualKey) {
-      await saveManualInput(manualKey, {
-        expectedSalesPerWeightedMin:  manualSales  === '' ? null : Number(manualSales),
-        expectedProfitPerWeightedMin: manualProfit === '' ? null : Number(manualProfit),
-      })
-    }
-    onClose()
   }
 
   const handleDelete = () => {
@@ -81,8 +118,10 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
   const fmt = v => Number(v || 0).toLocaleString()
 
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }} onClick={onClose}>
-      <div onClick={e => e.stopPropagation()}
+    // 배경 클릭 시에만 닫힘 (모달 내부 클릭으로 인한 의도치 않은 닫힘 방지)
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div
         style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '24px 28px', width: 500, maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
 
         <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>블록 수정</div>
@@ -95,7 +134,17 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
             <input value={form.pgmCodeName} onChange={e => setField('pgmCodeName', e.target.value)} style={inp} />
           </Field>
           <Field label="팀명">
-            <input value={form.mdTeam} onChange={e => setField('mdTeam', e.target.value)} style={inp} />
+            {teamNames.length > 0 ? (
+              <select value={form.mdTeam} onChange={e => setField('mdTeam', e.target.value)} style={inp}>
+                <option value="">선택</option>
+                {teamNames.map(t => <option key={t} value={t}>{t}</option>)}
+                {form.mdTeam && !teamNames.includes(form.mdTeam) && (
+                  <option value={form.mdTeam}>{form.mdTeam}</option>
+                )}
+              </select>
+            ) : (
+              <input value={form.mdTeam} onChange={e => setField('mdTeam', e.target.value)} style={inp} />
+            )}
           </Field>
           <Field label="거래형태">
             <select value={form.dealType} onChange={e => setField('dealType', e.target.value)} style={inp}>
@@ -113,6 +162,10 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
             <select value={form.channel} onChange={e => setField('channel', e.target.value)} style={inp}>
               {CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+          </Field>
+          <Field label="시작시간">
+            <input value={form.timeText} onChange={e => setField('timeText', e.target.value)}
+              placeholder="예: 23:21" style={inp} />
           </Field>
           <Field label="메모코드">
             <input value={form.memoCode} onChange={e => setField('memoCode', e.target.value)} style={inp} />
@@ -161,14 +214,28 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
           </div>
         </div>
 
+        <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
         <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
           <button onClick={handleDelete}
             style={{ padding: '8px 14px', background: 'transparent', border: '1px solid var(--red)', color: 'var(--red)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>삭제</button>
           <div style={{ flex: 1 }} />
           <button onClick={onClose}
             style={{ padding: '8px 14px', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>취소</button>
-          <button onClick={handleSave}
-            style={{ padding: '8px 20px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>저장</button>
+          <button onClick={handleSave} disabled={saveState !== 'idle'}
+            style={{
+              padding: '8px 20px', border: 'none', color: '#fff', borderRadius: 6,
+              fontSize: 12, fontWeight: 700,
+              background: saveState === 'saved' ? 'var(--green)' : 'var(--accent)',
+              cursor: saveState !== 'idle' ? 'default' : 'pointer',
+              opacity: saveState === 'saving' ? 0.7 : 1,
+              transition: 'background .2s, opacity .2s',
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+            {saveState === 'saving' && (
+              <span style={{ width: 11, height: 11, borderRadius: '50%', border: '2px solid rgba(255,255,255,.4)', borderTop: '2px solid #fff', animation: 'spin .7s linear infinite', display: 'inline-block' }} />
+            )}
+            {saveState === 'saved' ? '✓ 저장됨' : saveState === 'saving' ? '저장 중...' : '저장'}
+          </button>
         </div>
       </div>
     </div>

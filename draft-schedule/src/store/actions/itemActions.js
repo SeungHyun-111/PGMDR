@@ -5,21 +5,52 @@ export function createItemActions(setState, getState) {
   return {
 
     async loadProposals() {
-      const { startDate, poolType, proposalLoaded, scheduledItemIds } = getState()
+      const { startDate, poolType, proposalLoaded } = getState()
       if (proposalLoaded) return
       setState({ isLoadingProposals: true })
       try {
         const weekKey = `${startDate}_${poolType}`
         const snap = await get(ref(db, `sessions/${weekKey}/gasData/proposalItems`))
-        const all  = snap.exists() ? snap.val() : []
+        const raw  = snap.exists() ? snap.val() : []
+        const entries = Array.isArray(raw)
+          ? raw.map((v, i) => ({ ...v, _fbIdx: i }))
+          : Object.entries(raw).map(([k, v]) => ({ ...v, _fbIdx: Number(k) }))
         setState({
-          proposalItems:      all.filter(p => !scheduledItemIds[p.itemId]).map(buildProposalItem),
+          proposalItems:      entries.map(buildProposalItem),
           proposalLoaded:     true,
           isLoadingProposals: false,
         })
       } catch (e) {
         setState({ error: e.message, isLoadingProposals: false })
       }
+    },
+
+    async updateProposalItem(itemId, fbIdx, patch) {
+      const { startDate, poolType, proposalItems } = getState()
+      // fbIdx가 없으면 현재 state 순서로 보정
+      const resolvedIdx = (fbIdx !== undefined && fbIdx !== null)
+        ? fbIdx
+        : proposalItems.findIndex(p => p.itemId === itemId)
+      if (resolvedIdx < 0) return
+      const weekKey = `${startDate}_${poolType}`
+      await update(ref(db, `sessions/${weekKey}/gasData/proposalItems/${resolvedIdx}`), patch)
+      setState(s => ({
+        proposalItems: s.proposalItems.map(p =>
+          p.itemId === itemId ? buildProposalItem({ ...p, ...patch }) : p
+        ),
+      }))
+    },
+
+    async addProposalItem(itemData) {
+      const { startDate, poolType, proposalItems } = getState()
+      const weekKey = `${startDate}_${poolType}`
+      const fbIdx = proposalItems.length
+      // _fbIdx는 내부 메타 — Firebase에는 저장하지 않음
+      const newItem = { ...itemData, itemId: `manual_${Date.now()}` }
+      await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${fbIdx}`), newItem)
+      setState(s => ({
+        proposalItems: [...s.proposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx })],
+      }))
     },
 
     async scheduleItem(itemId) {
@@ -44,14 +75,14 @@ export function createItemActions(setState, getState) {
     async saveManualInput(perfKey, data) {
       const { startDate, poolType } = getState()
       const weekKey = `${startDate}_${poolType}`
-      await update(ref(db, `sessions/${weekKey}/manualInputs/${perfKey}`), data)
+      // Firebase 경로에 [ ] 불허 → 인코딩
+      const safeKey = perfKey.replace(/\[/g, '__LB__').replace(/\]/g, '__RB__')
+      await update(ref(db, `sessions/${weekKey}/manualInputs/${safeKey}`), data)
     },
 
     setUserName(name) {
       localStorage.setItem('userName', name)
       setState({ userName: name })
     },
-
-    loadStarred() {},
   }
 }

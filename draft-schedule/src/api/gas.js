@@ -1,22 +1,14 @@
-const GAS_URL = 'https://script.google.com/macros/s/AKfycbzO12T4ND-TfI2BV-vICQO0qAEcsjlVgKQdAabZ41-aY4sh5rnUg-eqD9nVyWZG7C3A/exec'
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbzaGlpoXio4K9wr5G1D8nxUCbxZk2xGJa2DCrzHFy-QxkCLzkWt0j_e4Ik9jzMWUloC/exec'
 
-export async function fetchInitData(startDate, poolType = 'A') {
-  const url = `${GAS_URL}?action=init&startDate=${startDate}&poolType=${poolType}`
-  const res = await fetch(url)
+async function gasGet(params) {
+  const qs  = new URLSearchParams(params).toString()
+  const res = await fetch(`${GAS_URL}?${qs}`)
   const json = await res.json()
   if (!json.success) throw new Error(json.error || 'GAS 호출 실패')
   return json.data
 }
 
-export async function fetchRefreshPerformance() {
-  const url = `${GAS_URL}?action=refreshPerformance`
-  const res = await fetch(url)
-  const json = await res.json()
-  if (!json.success) throw new Error(json.error || 'GAS 호출 실패')
-  return json.data
-}
-
-export async function fetchProposalRows(startDate, poolType = 'A') {
-  const data = await fetchInitData(startDate, poolType)
-  return data.proposalRows || []
-}
+export const fetchInitData            = (startDate, poolType = 'A') => gasGet({ action: 'init',               startDate, poolType })
+export const fetchRefreshPerformance  = ()                           => gasGet({ action: 'refreshPerformance'                      })
+export const fetchRefreshProposals    = (poolType = 'A')             => gasGet({ action: 'refreshProposals',   poolType            })
+export const fetchRefreshPreSchedule  = ()                           => gasGet({ action: 'refreshPreSchedule'                      })

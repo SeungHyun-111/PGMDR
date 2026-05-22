@@ -1,13 +1,9 @@
 import { useMemo, useState } from 'react'
 import useScheduleStore from '../store/useScheduleStore'
 import useCategoryMap from '../hooks/useCategoryMap'
-import { findBestPerf } from '../hooks/usePerformanceMap'
-
 function calcForecast(block, perfMap, manualInputs) {
-  const manual   = manualInputs[block.perfKey] || manualInputs[block.itemId] || {}
-  const lastPerf = block.perfKey
-    ? (perfMap[block.perfKey] || null)
-    : findBestPerf(perfMap, block.dealType, block.pgmCodeName)
+  const manual   = block.perfKey ? (manualInputs[block.perfKey] || {}) : {}
+  const lastPerf = block.perfKey ? (perfMap[block.perfKey] || null) : null
 
   const salesPerMin  = manual.expectedSalesPerWeightedMin  ?? lastPerf?.salesPerWeightedMin  ?? 0
   const profitPerMin = manual.expectedProfitPerWeightedMin ?? lastPerf?.profitPerWeightedMin ?? 0

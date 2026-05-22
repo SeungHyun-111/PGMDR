@@ -4,12 +4,18 @@ import ScheduleBlock from './ScheduleBlock'
 import useScheduleStore from '../../store/useScheduleStore'
 import { splitWeightedMin } from '../../utils/weightedMin'
 
-export default function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_IP, onDrop, saveBlock, removeBlock }) {
+function isDimmed(block, teamFilter) {
+  if (!block || block.isDefault || teamFilter === '전체') return false
+  const t = block.mdTeam || block.orgName || ''
+  return t !== teamFilter
+}
+
+export default function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_IP, onDrop, saveBlock, removeBlock, teamFilter = '전체' }) {
   const [caHover, setCaHover] = useState(false)
   const [ipHover, setIpHover] = useState(false)
   const halfHeight = height / 2
   const fontSize = Math.min(10, halfHeight * 0.38)
-  const prevent = e => e.preventDefault()
+  const prevent = e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }
 
   const handleDrop = (e, ch) => {
     e.preventDefault()
@@ -54,19 +60,19 @@ export default function SlotRow({ slot, top, height, isSplit, block, splitBlock_
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: halfHeight, background: caHover ? 'rgba(61,90,138,.2)' : 'transparent', borderBottom: '1px solid var(--border)', transition: 'background .1s' }}
             onDragOver={prevent} onDrop={e => handleDrop(e, 'CA')}
             onDragEnter={() => setCaHover(true)} onDragLeave={() => setCaHover(false)}>
-            {splitBlock_CA && <ScheduleBlock block={splitBlock_CA} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} />}
+            {splitBlock_CA && <ScheduleBlock block={splitBlock_CA} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(splitBlock_CA, teamFilter)} />}
           </div>
           <div style={{ position: 'absolute', top: halfHeight, left: 0, right: 0, height: halfHeight, background: ipHover ? 'rgba(106,61,138,.2)' : 'transparent', transition: 'background .1s' }}
             onDragOver={prevent} onDrop={e => handleDrop(e, 'IP')}
             onDragEnter={() => setIpHover(true)} onDragLeave={() => setIpHover(false)}>
-            {splitBlock_IP && <ScheduleBlock block={splitBlock_IP} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} />}
+            {splitBlock_IP && <ScheduleBlock block={splitBlock_IP} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(splitBlock_IP, teamFilter)} />}
           </div>
         </>
       ) : (
         <div style={{ position: 'absolute', inset: 0, background: caHover ? 'rgba(74,108,247,.06)' : 'transparent', transition: 'background .1s' }}
           onDragOver={prevent} onDrop={e => handleDrop(e, 'ALL')}
           onDragEnter={() => setCaHover(true)} onDragLeave={() => setCaHover(false)}>
-          {block && <ScheduleBlock block={block} height={height} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} />}
+          {block && <ScheduleBlock block={block} height={height} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(block, teamFilter)} />}
         </div>
       )}
     </div>

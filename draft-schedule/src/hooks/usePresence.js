@@ -1,9 +1,27 @@
 import { useState, useEffect } from 'react'
-import { db, ref, set, onValue, off } from '../api/firebase'
+import { db, ref, set, get, update, onValue, off } from '../api/firebase'
 import useScheduleStore from '../store/useScheduleStore'
 
 export default function usePresence() {
   const { userName, startDate, poolType } = useScheduleStore()
+
+  // 48시간 이상 된 presence 항목 일괄 삭제 (앱 로드 시 1회)
+  useEffect(() => {
+    get(ref(db, 'presence')).then(snap => {
+      if (!snap.exists()) return
+      const cutoff = Date.now() - 48 * 60 * 60 * 1000
+      const deletions = {}
+      snap.forEach(weekSnap => {
+        weekSnap.forEach(userSnap => {
+          const d = userSnap.val()
+          if (d && d.ts < cutoff) {
+            deletions[`presence/${weekSnap.key}/${userSnap.key}`] = null
+          }
+        })
+      })
+      if (Object.keys(deletions).length) update(ref(db), deletions)
+    })
+  }, [])
 
   useEffect(() => {
     if (!startDate || !userName) return

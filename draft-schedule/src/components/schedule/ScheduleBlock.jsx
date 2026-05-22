@@ -3,19 +3,23 @@ import { useState, useEffect } from 'react'
 import BlockEditModal from '../modal/BlockEditModal'
 import useScheduleStore from '../../store/useScheduleStore'
 import { getDealTypeChar } from '../../constants/dealTypes'
-import { findBestPerf } from '../../hooks/usePerformanceMap'
 
-export default function ScheduleBlock({ block, height, saveBlock, removeBlock }) {
+export default function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }) {
   const [hover, setHover]               = useState(false)
   const [tooltipPos, setTooltipPos]     = useState(null)
   const [contextMenu, setContextMenu]   = useState(null)
   const [editModal, setEditModal]       = useState(false)
   const [annotationPopup, setAnnotationPopup] = useState(false)
   const [annotationText, setAnnotationText]   = useState('')
-  const { copyBlockToSidebar, perfMap } = useScheduleStore()
+  const { returnBlockToSidebar, perfMap } = useScheduleStore()
 
+  // 클릭 시 context menu 닫기 + hover 상태도 함께 초기화 (tooltip 잔류 방지)
   useEffect(() => {
-    const handler = () => setContextMenu(null)
+    const handler = () => {
+      setContextMenu(null)
+      setHover(false)
+      setTooltipPos(null)
+    }
     document.addEventListener('click', handler)
     return () => document.removeEventListener('click', handler)
   }, [])
@@ -25,30 +29,43 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
   const hasAnnotation = !!block.annotation
   const hasHash = !!(block.scheduleComment && block.scheduleComment.includes('#'))
 
+  const dealType  = block.dealTypeConverted || block.dealType || ''
+  const isDirect  = dealType.includes('[직]') || dealType.includes('직매입')
+  const isPurple  = dealType.includes('[모]') || dealType.includes('모바일광고')
+                 || dealType.includes('[혼]') || dealType.includes('혼합')
+                 || dealType.includes('[액]') || dealType.includes('정액')
+  const isGreenBg = !isDirect && !isPurple && hasHash
+
   const teamShort = isCompeting
     ? '경쟁'
-    : ((block.orgName || block.mdTeam || '').replace('팀', '').slice(0, 2))
+    : ((block.mdTeam || block.orgName || '').replace('팀', '').slice(0, 2))
 
   const dealChar = isCompeting ? '' : getDealTypeChar(block.dealType || block.dealTypeChar || '')
 
   const bgColor = isCompeting ? '#8b0000'
-    : isDefault ? '#111318'
-    : block.channel === 'IP' ? 'var(--ip2)'
-    : block.channel === 'CA' ? 'var(--ca2)'
-    : 'var(--all2)'
+    : isDefault  ? 'var(--bg3)'
+    : isDirect   ? '#1d4ed8'
+    : isPurple   ? '#7c3aed'
+    : isGreenBg  ? '#166534'
+    : 'var(--bg2)'
 
   const borderColor = isCompeting ? '#ff4444'
-    : isDefault ? 'var(--border2)'
-    : block.channel === 'IP' ? 'rgba(196,126,245,.35)'
-    : block.channel === 'CA' ? 'rgba(126,179,245,.35)'
-    : 'rgba(127,212,127,.35)'
+    : isDefault  ? 'var(--border)'
+    : isDirect   ? 'rgba(59,130,246,.5)'
+    : isPurple   ? 'rgba(139,92,246,.5)'
+    : isGreenBg  ? 'rgba(34,197,94,.5)'
+    : 'var(--border)'
 
-  const textColor = isCompeting ? '#ffd700' : '#fff'
+  const isColored = !isDefault && (isCompeting || isDirect || isPurple || isGreenBg)
+  const textColor = isColored ? '#fff' : 'var(--text)'
   const fontSize  = height > 30 ? 10 : 9
   const badgeSz   = Math.max(7, fontSize - 1)
+  const badgeBg   = isColored ? 'rgba(0,0,0,.25)' : 'rgba(0,0,0,.07)'
 
   const handleDragStart = (e) => {
     if (isDefault || isCompeting) { e.preventDefault(); return }
+    setHover(false)
+    setTooltipPos(null)
     e.stopPropagation()
     e.dataTransfer.setData('blockKey', block.blockKey || block.slotId)
     e.dataTransfer.setData('itemId', block.itemId || '')
@@ -57,7 +74,7 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
   }
 
   const handleMouseEnter = (e) => {
-    // 툴팁 위치를 fixed로 계산 (부모 overflow 잘림 방지)
+    if (contextMenu || editModal || annotationPopup) return
     const rect = e.currentTarget.getBoundingClientRect()
     setTooltipPos({ x: rect.right + 6, y: rect.top })
     setHover(true)
@@ -77,7 +94,7 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
     { label: '수정', action: () => setEditModal(true) },
     { label: hasAnnotation ? '첨삭 수정' : '첨삭 추가', action: () => { setAnnotationText(block.annotation || ''); setAnnotationPopup(true) } },
     ...(!isDefault && !isCompeting ? [
-      { label: '복사 → 사이드바', action: () => copyBlockToSidebar(block) },
+      { label: '사이드바로 반환', action: () => returnBlockToSidebar(block) },
       { label: '삭제', action: () => removeBlock(block.blockKey || block.slotId), danger: true },
     ] : []),
     ...(isCompeting ? [
@@ -85,29 +102,35 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
     ] : []),
   ]
 
-  const lastPerf = block.perfKey
-    ? (perfMap[block.perfKey] || null)
-    : findBestPerf(perfMap, block.dealType, block.pgmCodeName)
+  const lastPerf = block.perfKey ? (perfMap[block.perfKey] || null) : null
 
   return (
-    <div style={{ position: 'absolute', inset: '1px' }}
+    <div style={{ position: 'absolute', inset: '1px', opacity: dimmed ? 0.12 : 1, transition: 'opacity .15s' }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       <div
         draggable={!isDefault && !isCompeting}
         onDragStart={handleDragStart}
-        onContextMenu={e => { e.preventDefault(); e.stopPropagation(); setContextMenu({ x: e.clientX, y: e.clientY }) }}
+        onContextMenu={e => {
+          e.preventDefault(); e.stopPropagation()
+          // 화면 경계 벗어남 방지
+          const approxH = menuItems.length * 34 + 10
+          const approxW = 170
+          const y = e.clientY + approxH > window.innerHeight ? e.clientY - approxH : e.clientY
+          const x = e.clientX + approxW > window.innerWidth  ? e.clientX - approxW : e.clientX
+          setContextMenu({ x, y })
+        }}
         onDoubleClick={() => setEditModal(true)}
         style={{ position: 'absolute', inset: 0, background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 3, overflow: 'hidden', cursor: isDefault ? 'default' : 'grab', display: 'flex', alignItems: 'center', padding: '0 4px', gap: 3 }}
       >
         {teamShort && (
-          <span style={{ fontSize: badgeSz, fontWeight: 700, color: textColor, background: 'rgba(0,0,0,.3)', padding: '0 3px', height: 14, borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+          <span style={{ fontSize: badgeSz, fontWeight: 700, color: textColor, background: badgeBg, padding: '0 3px', height: 14, borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
             {teamShort}
           </span>
         )}
         {dealChar && !isDefault && !isCompeting && (
-          <span style={{ fontSize: badgeSz, fontWeight: 700, color: '#fff', background: 'rgba(0,0,0,.25)', padding: '0 3px', height: 14, borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+          <span style={{ fontSize: badgeSz, fontWeight: 700, color: textColor, background: badgeBg, padding: '0 3px', height: 14, borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
             {dealChar}
           </span>
         )}
@@ -115,7 +138,7 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
           {block.pgmCodeName}
         </span>
         {(block.weightedMin || 0) > 0 && (
-          <span style={{ fontSize: badgeSz, color: 'rgba(255,255,255,.5)', whiteSpace: 'nowrap', flexShrink: 0 }}>
+          <span style={{ fontSize: badgeSz, color: isColored ? 'rgba(255,255,255,.45)' : 'var(--text3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
             {block.weightedMin}
           </span>
         )}
@@ -127,8 +150,8 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
         )}
       </div>
 
-      {/* 툴팁: position fixed로 부모 overflow 잘림 완전 방지 */}
-      {hover && tooltipPos && !contextMenu && (
+      {/* 툴팁: contextMenu/editModal/annotationPopup 없을 때만 표시 */}
+      {hover && tooltipPos && !contextMenu && !editModal && !annotationPopup && (
         <BlockTooltip block={block} lastPerf={lastPerf} pos={tooltipPos} />
       )}
 
@@ -148,9 +171,8 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
 
       {annotationPopup && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
-          onClick={() => setAnnotationPopup(false)}>
-          <div onClick={e => e.stopPropagation()}
-            style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '20px 24px', minWidth: 320, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          onClick={e => { if (e.target === e.currentTarget) setAnnotationPopup(false) }}>
+          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '20px 24px', minWidth: 320, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 700 }}>📎 첨삭 — {block.pgmCodeName}</div>
             <textarea value={annotationText} onChange={e => setAnnotationText(e.target.value)} rows={5} autoFocus
               style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 5, fontSize: 12, resize: 'vertical' }} />
@@ -180,11 +202,14 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock })
 }
 
 function BlockTooltip({ block, lastPerf, pos }) {
-  // 화면 오른쪽 잘림 방지
-  const left = pos.x + 230 > window.innerWidth ? pos.x - 236 : pos.x
+  // 화면 오른쪽/아래 잘림 방지
+  const tooltipW = 230
+  const approxH  = block.isCompeting ? 150 : (block.annotation ? 290 : 220)
+  const left = pos.x + tooltipW > window.innerWidth ? pos.x - tooltipW - 12 : pos.x
+  const top  = Math.min(pos.y, window.innerHeight - approxH - 8)
 
   const rows = [
-    ['팀',       block.orgName || block.mdTeam || '-'],
+    ['팀',       block.mdTeam || block.orgName || '-'],
     ['채널',     block.channel || '-'],
     ['거래형태', block.dealType || '-'],
     ['카테고리', block.mdCategory || '-'],
@@ -197,7 +222,7 @@ function BlockTooltip({ block, lastPerf, pos }) {
   ]
 
   return (
-    <div style={{ position: 'fixed', left, top: pos.y, zIndex: 9999, background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 6, padding: '8px 10px', minWidth: 220, maxWidth: 300, boxShadow: '0 4px 16px rgba(0,0,0,.3)', pointerEvents: 'none' }}>
+    <div style={{ position: 'fixed', left, top, zIndex: 9999, background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 6, padding: '8px 10px', minWidth: tooltipW, maxWidth: 300, boxShadow: '0 4px 16px rgba(0,0,0,.3)', pointerEvents: 'none' }}>
       {block.isCompeting ? (
         <>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--red)', marginBottom: 8 }}>⚔ 경쟁 중</div>

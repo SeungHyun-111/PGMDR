@@ -22,6 +22,7 @@ export default function ScheduleGrid({ onBlockDrop }) {
   const containerRef = useRef(null)
   const [containerWidth, setContainerWidth] = useState(1200)
   const [splitPopup, setSplitPopup] = useState(null)
+  const [teamFilter, setTeamFilter] = useState('전체')
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -76,13 +77,17 @@ export default function ScheduleGrid({ onBlockDrop }) {
     e.preventDefault()
     e.stopPropagation()
     const isSplit = !!splitSlots[slot.slotId]
+    const popupW = 276
+    const popupH = 120
+    const x = e.clientX + popupW > window.innerWidth  ? e.clientX - popupW : e.clientX
+    const y = e.clientY + popupH > window.innerHeight ? e.clientY - popupH : e.clientY
     setSplitPopup({
       slotId: slot.slotId, slot,
       mode: isSplit ? 'merge' : 'split',
       singleBlock: scheduleBlocks[slot.slotId],
       caBlock: scheduleBlocks[`${slot.slotId}_CA`],
       ipBlock: scheduleBlocks[`${slot.slotId}_IP`],
-      x: e.clientX, y: e.clientY,
+      x, y,
     })
   }
 
@@ -120,12 +125,16 @@ export default function ScheduleGrid({ onBlockDrop }) {
     setSplitPopup(null)
   }
 
-  const handleClearAllSplits = async () => {
-    const { startDate, poolType } = useScheduleStore.getState()
-    const { db, ref, set } = await import('../../api/firebase')
-    const weekKey = `${startDate}_${poolType}`
-    await set(ref(db, `sessions/${weekKey}/splitSlots`), null)
-  }
+  const blockTeams = useMemo(() => {
+    const set = new Set()
+    Object.values(scheduleBlocks).forEach(b => {
+      if (b && !b.isDefault) {
+        const t = b.mdTeam || b.orgName || ''
+        if (t) set.add(t)
+      }
+    })
+    return ['전체', ...Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))]
+  }, [scheduleBlocks])
 
   if (!pgmSlots.length) return null
 
@@ -133,14 +142,18 @@ export default function ScheduleGrid({ onBlockDrop }) {
     <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
 
       {/* 툴바 */}
-      <div style={{ height: TOOLBAR_HEIGHT, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 12, borderBottom: '1px solid var(--border)', background: 'var(--bg2)', flexShrink: 0 }}>
+      <div style={{ height: TOOLBAR_HEIGHT, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 10, borderBottom: '1px solid var(--border)', background: 'var(--bg2)', flexShrink: 0 }}>
         <div style={{ fontSize: 11, color: 'var(--text3)' }}>
           총 {pgmSlots.length}슬롯 · {dates.length}일 · 시간축 우클릭 → CA/IP 분리
         </div>
-        {Object.values(splitSlots).some(Boolean) && (
-          <button onClick={handleClearAllSplits}
-            style={{ fontSize: 10, padding: '2px 8px', background: 'var(--bg4)', border: '1px solid var(--border2)', color: 'var(--text2)', borderRadius: 4, cursor: 'pointer' }}>
-            분리 전체 해제
+        <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)}
+          style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '2px 6px', borderRadius: 4, fontSize: 11, outline: 'none', marginLeft: 4 }}>
+          {blockTeams.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        {teamFilter !== '전체' && (
+          <button onClick={() => setTeamFilter('전체')}
+            style={{ fontSize: 10, padding: '2px 7px', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text3)', borderRadius: 4, cursor: 'pointer' }}>
+            ✕
           </button>
         )}
       </div>
@@ -177,10 +190,18 @@ export default function ScheduleGrid({ onBlockDrop }) {
                   const isSplit = !!splitSlots[slot.slotId]
                   return (
                     <div key={slot.slotId}
-                      style={{ position: 'absolute', top: currentTop, left: 0, right: 0, height: rowH, borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'flex-start', paddingLeft: 3, cursor: 'context-menu', background: isSplit ? 'rgba(74,108,247,.05)' : 'transparent' }}
+                      style={{
+                        position: 'absolute', top: currentTop, left: 0, right: 0, height: rowH,
+                        ...(isSplit
+                          ? { border: '2px double var(--red)', background: 'rgba(220,38,38,.03)' }
+                          : { borderBottom: '1px solid var(--border)', background: 'transparent' }
+                        ),
+                        display: 'flex', alignItems: 'center', justifyContent: 'flex-start',
+                        paddingLeft: 3, cursor: 'context-menu',
+                      }}
                       onContextMenu={e => handleTimeAxisRightClick(e, slot)}
                     >
-                      <span style={{ fontSize: Math.min(10, rowH * 0.38), color: isSplit ? 'var(--accent2)' : 'var(--text2)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: Math.min(10, rowH * 0.38), color: isSplit ? 'var(--red)' : 'var(--text2)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                         {String(h).padStart(2,'0')}:{String(m).padStart(2,'0')}
                       </span>
                     </div>
@@ -210,6 +231,7 @@ export default function ScheduleGrid({ onBlockDrop }) {
                         onDrop={onBlockDrop}
                         saveBlock={saveBlock}
                         removeBlock={removeBlock}
+                        teamFilter={teamFilter}
                       />
                     )
                   })

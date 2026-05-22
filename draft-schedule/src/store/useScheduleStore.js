@@ -30,9 +30,11 @@ const useScheduleStore = create((setState, getState) => ({
   manualInputs:     {},
   lastUpdated:      null,
 
-  proposalLoaded:       false,
-  isLoadingProposals:   false,
-  isLoadingPerformance: false,
+  proposalLoaded:         false,
+  isLoadingProposals:     false,
+  isLoadingPerformance:   false,
+  isLoadingPreSchedule:   false,
+  isLoadingGasAll:        false,
 
   // ── 로그 (내부용) ─────────────────────
   async _writeLog(action, blockKey, before, after) {

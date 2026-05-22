@@ -1,6 +1,13 @@
 import { db, ref, set, get, update } from '../../api/firebase'
-import { buildSlot, buildDefaultBlocks, buildPreScheduleBlocks, decodePerfMap } from '../helpers/blockBuilders'
+import { buildSlot, buildDefaultBlocks, buildPreScheduleBlocks, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
 import { subscribeRealtimePaths, unsubscribeAll } from '../helpers/firebaseSubscribe'
+
+function decodeMapKeys(obj) {
+  if (!obj) return {}
+  return Object.fromEntries(
+    Object.entries(obj).map(([k, v]) => [k.replace(/__LB__/g, '[').replace(/__RB__/g, ']'), v])
+  )
+}
 
 export function createSessionActions(setState, getState) {
   return {
@@ -15,7 +22,10 @@ export function createSessionActions(setState, getState) {
           const { fetchInitData } = await import('../../api/gas')
           const gasData = await fetchInitData(startDate, poolType)
           const now = Date.now()
-          await set(ref(db, `sessions/${weekKey}/gasData`), gasData)
+          await set(ref(db, `sessions/${weekKey}/gasData`), {
+            ...gasData,
+            perfMap: encodePerfMap(gasData.perfMap || {}),
+          })
           await set(ref(db, `sessions/${weekKey}/lastUpdated`), {
             pgm: now, proposal: now, performance: now, preSchedule: now
           })
@@ -61,10 +71,12 @@ export function createSessionActions(setState, getState) {
         scheduleBlocks = { ...scheduleBlocks, ...missing }
       }
 
+      const perfMap = perfMapSnap.exists() ? decodePerfMap(perfMapSnap.val()) : {}
+
       setState({
         startDate, endDate: meta.endDate || '', poolType,
         pgmSlots,
-        perfMap:            perfMapSnap.exists() ? decodePerfMap(perfMapSnap.val()) : {},
+        perfMap,
         preScheduleRows:    preSnap.exists()      ? preSnap.val()                   : [],
         weightedMinTargets: weightedSnap.exists() ? Object.values(weightedSnap.val()): [],
         targetMetrics:      targetSnap.exists()   ? targetSnap.val()                : null,
@@ -72,24 +84,33 @@ export function createSessionActions(setState, getState) {
         splitSlots:         splitSnap.exists()    ? splitSnap.val()                 : {},
         starred:            starredSnap.exists()  ? starredSnap.val()               : {},
         scheduledItemIds:   scheduledSnap.exists()? scheduledSnap.val()             : {},
-        manualInputs:       inputsSnap.exists()   ? inputsSnap.val()                : {},
+        manualInputs:       inputsSnap.exists()   ? decodeMapKeys(inputsSnap.val()) : {},
         lastUpdated:        updatedSnap.exists()  ? updatedSnap.val()               : null,
         isLoaded: true, isLoading: false, proposalLoaded: false,
       })
+
+      // 기존 세션에서 perfMap이 인코딩 없이 저장돼 유실된 경우 자동 복구
+      if (Object.keys(perfMap).length === 0) {
+        getState().refreshPerformance()
+      }
 
       subscribeRealtimePaths(weekKey, setState)
     },
 
     async resetSession(startDate, poolType) {
-      setState({ isLoading: true, error: null, isLoaded: false })
       unsubscribeAll()
-      await set(ref(db, `sessions/${startDate}_${poolType}`), null)
+      // 먼저 UI를 완전 초기 상태로 리셋 (스토어 잔존 데이터 즉시 제거)
       setState({
+        isLoading: true, isLoaded: false, error: null,
+        startDate: '', endDate: '', poolType: 'A',
+        pgmSlots: [], perfMap: {}, preScheduleRows: [],
+        weightedMinTargets: [], targetMetrics: null,
         scheduleBlocks: {}, splitSlots: {}, starred: {},
         scheduledItemIds: {}, manualInputs: {}, lastUpdated: null,
         proposalItems: [], proposalLoaded: false,
-        pgmSlots: [], perfMap: {}, preScheduleRows: [],
       })
+      // Firebase 해당 세션 완전 삭제 → loadInitData가 GAS 강제 호출
+      await set(ref(db, `sessions/${startDate}_${poolType}`), null)
       await getState().loadInitData(startDate, poolType)
     },
   }
