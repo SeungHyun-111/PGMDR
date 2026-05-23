@@ -5,9 +5,10 @@ import useRatioStats from '../hooks/useRatioStats'
 import RatioSummaryCards from '../components/ratio/RatioSummaryCards'
 import RatioDonutChart, { TEAM_COLORS } from '../components/ratio/RatioDonutChart'
 import RatioTable from '../components/ratio/RatioTable'
+import RatioPgmCount from '../components/ratio/RatioPgmCount'
 
 export default function ScheduleRatio() {
-  const { scheduleBlocks, pgmSlots, weightedMinTargets, proposalItems } = useScheduleStore()
+  const { scheduleBlocks, pgmSlots, weightedMinTargets, proposalItems, perfMap, manualInputs } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const [viewType, setViewType] = useState('team')
 
@@ -87,6 +88,8 @@ export default function ScheduleRatio() {
         showTarget={viewType === 'team'}
         chartData={chartData}
       />
+
+      <RatioPgmCount enrichedBlocks={enrichedBlocks} perfMap={perfMap} manualInputs={manualInputs} />
     </div>
   )
 }

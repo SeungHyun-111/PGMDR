@@ -4,10 +4,25 @@ import ProductCard from './ProductCard'
 import ProductFilters from './ProductFilters'
 import SidebarExpanded from './SidebarExpanded'
 
+const inp = { background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 4, fontSize: 11, width: '100%', boxSizing: 'border-box' }
+const ADD_FIELDS = [
+  { key: 'pgmCodeName',           label: '편성코드명',   required: true },
+  { key: 'mdTeam',                label: '팀명' },
+  { key: 'mdCategory',            label: '분류' },
+  { key: 'dealTypeConverted',     label: '거래형태' },
+  { key: 'newProductType',        label: '신상품구분' },
+  { key: 'mainPrice',             label: '메인가' },
+  { key: 'fixedFee',              label: '정액비' },
+  { key: 'preferredTime',         label: '희망시간' },
+  { key: 'availableWeightedMin1', label: '가용가중분' },
+  { key: 'remainingSchedule',     label: '잔여편성' },
+  { key: 'requestNote',           label: '기타요청' },
+]
+
 const PAGE_SIZE = 50
 
 export default function Sidebar({ isOpen, onToggle }) {
-  const { proposalItems, perfMap, starred, loadProposals, proposalLoaded, returnBlockToSidebar } = useScheduleStore()
+  const { proposalItems, perfMap, starred, loadProposals, proposalLoaded, returnBlockToSidebar, addProposalItem } = useScheduleStore()
 
   const [filters, setFilters] = useState({
     keyword: '',
@@ -15,9 +30,14 @@ export default function Sidebar({ isOpen, onToggle }) {
     team: '전체',
     dealType: '전체',
     newProductType: '전체',
-    hasPerf: '전체',
+    videoStatus: '전체',
+    sort: 'none',
     starOnly: false,
   })
+
+  const [addModal, setAddModal] = useState(false)
+  const [addForm, setAddForm]   = useState({})
+  const [adding, setAdding]     = useState(false)
 
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [bottomOpen, setBottomOpen] = useState(false)
@@ -39,7 +59,7 @@ export default function Sidebar({ isOpen, onToggle }) {
 
   const filteredItems = useMemo(() => {
     const keyword = filters.keyword.trim().toLowerCase()
-    return proposalItems.filter(item => {
+    const base = proposalItems.filter(item => {
       if (keyword) {
         const target = [item.pgmCodeName, item.mdTeam, item.mdCategory].join(' ').toLowerCase()
         if (!target.includes(keyword)) return false
@@ -50,19 +70,19 @@ export default function Sidebar({ isOpen, onToggle }) {
         if (t !== filters.dealType) return false
       }
       if (filters.newProductType !== '전체' && item.newProductType !== filters.newProductType) return false
-      if (filters.hasPerf !== '전체') {
-        const has = !!perfMap[item.perfKey]
-        if (filters.hasPerf === '있음' && !has) return false
-        if (filters.hasPerf === '없음' && has) return false
-      }
+      if (filters.videoStatus !== '전체' && (item.videoStatus || '') !== filters.videoStatus) return false
       if (filters.starOnly && !starred[item.itemId]) return false
       return true
-    }).sort((a, b) => {
-      const as = starred[a.itemId] ? 1 : 0
-      const bs = starred[b.itemId] ? 1 : 0
-      return bs - as
     })
-  }, [proposalItems, filters, perfMap])
+
+    if (filters.sort === 'asc') {
+      return [...base].sort((a, b) => (a.pgmCodeName || '').localeCompare(b.pgmCodeName || '', 'ko'))
+    }
+    if (filters.sort === 'desc') {
+      return [...base].sort((a, b) => (b.pgmCodeName || '').localeCompare(a.pgmCodeName || '', 'ko'))
+    }
+    return [...base].sort((a, b) => (starred[b.itemId] ? 1 : 0) - (starred[a.itemId] ? 1 : 0))
+  }, [proposalItems, filters, starred])
 
   // pinnedReturn 적용: 반환된 아이템을 드롭 위치에 삽입
   const visibleItems = useMemo(() => {
@@ -171,6 +191,10 @@ export default function Sidebar({ isOpen, onToggle }) {
             상품 풀 <span style={{ color: 'var(--text3)', fontWeight: 400 }}>{filteredItems.length}건</span>
           </span>
           <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={() => { setAddForm({}); setAddModal(true) }}
+              style={{ background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 4, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>
+              + 추가
+            </button>
             <button onClick={handleExpand}
               style={{ background: bottomOpen ? 'var(--accent)' : 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px', fontSize: 10, color: bottomOpen ? '#fff' : 'var(--text3)', cursor: 'pointer' }}>
               ⬆ 확장
@@ -218,6 +242,44 @@ export default function Sidebar({ isOpen, onToggle }) {
       </div>
 
       {bottomPanel}
+
+      {addModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
+          onClick={e => { if (e.target === e.currentTarget) setAddModal(false) }}>
+          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 10, padding: '22px 26px', width: 480, maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,.4)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>제안상품 추가</div>
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 16 }}>GAS 새로고침 시 원본으로 초기화됩니다.</div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              {ADD_FIELDS.map(f => (
+                <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 3, gridColumn: f.key === 'requestNote' ? '1 / -1' : undefined }}>
+                  <label style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>
+                    {f.label}{f.required && <span style={{ color: 'var(--red)' }}> *</span>}
+                  </label>
+                  {f.key === 'requestNote' ? (
+                    <textarea value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))}
+                      rows={2} style={{ ...inp, resize: 'vertical' }} />
+                  ) : (
+                    <input value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))} style={inp} />
+                  )}
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button onClick={() => setAddModal(false)}
+                style={{ flex: 1, padding: '8px 0', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 5, fontSize: 12, cursor: 'pointer' }}>취소</button>
+              <button onClick={async () => {
+                if (!addForm.pgmCodeName?.trim()) return
+                setAdding(true)
+                try { await addProposalItem(addForm); setAddModal(false); setAddForm({}) }
+                finally { setAdding(false) }
+              }} disabled={adding || !addForm.pgmCodeName?.trim()}
+                style={{ flex: 2, padding: '8px 0', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 5, fontSize: 12, fontWeight: 700, cursor: adding ? 'default' : 'pointer', opacity: adding ? 0.7 : 1 }}>
+                {adding ? '저장 중...' : '추가'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

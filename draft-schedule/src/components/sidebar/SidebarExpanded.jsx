@@ -42,7 +42,7 @@ const ADD_FIELDS = [
 const inp = { background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 4, fontSize: 11, width: '100%', boxSizing: 'border-box' }
 
 export default function SidebarExpanded({ items, onClose }) {
-  const { perfMap, starred, toggleStarred, updateProposalItem, addProposalItem, returnBlockToSidebar } = useScheduleStore()
+  const { perfMap, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar } = useScheduleStore()
   const [keyword, setKeyword]       = useState('')
   const [teamFilter, setTeamFilter] = useState('전체')
   const [starOnly, setStarOnly]     = useState(false)
@@ -57,6 +57,7 @@ export default function SidebarExpanded({ items, onClose }) {
   const [blockDragOver, setBlockDragOver] = useState(null) // { insertBeforeId: string|null }
   const [pinnedReturn, setPinnedReturn]   = useState(null) // { itemId, insertBeforeId }
   const [highlightId, setHighlightId]     = useState(null)
+  const [ctxMenu, setCtxMenu]             = useState(null) // { x, y, itemId }
 
   useEffect(() => {
     document.documentElement.style.setProperty('--panel-h', panelHeight + 'px')
@@ -318,6 +319,7 @@ export default function SidebarExpanded({ items, onClose }) {
                 <tr
                   data-item-id={item.itemId}
                   draggable
+                  onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, itemId: item.itemId }) }}
                   onDragStart={e => {
                     e.dataTransfer.setData('itemId', item.itemId)
                     e.dataTransfer.effectAllowed = 'move'
@@ -415,6 +417,27 @@ export default function SidebarExpanded({ items, onClose }) {
           </tbody>
         </table>
       </div>
+
+      {/* 우클릭 컨텍스트 메뉴 */}
+      {ctxMenu && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={() => setCtxMenu(null)} onContextMenu={e => e.preventDefault()}>
+          <div style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,.35)', zIndex: 9999, overflow: 'hidden', minWidth: 120 }}>
+            <button onClick={() => { duplicateProposalItem(ctxMenu.itemId); setCtxMenu(null) }}
+              style={{ display: 'block', width: '100%', padding: '9px 14px', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 12, cursor: 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg4)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              복사
+            </button>
+            <div style={{ height: 1, background: 'var(--border)' }} />
+            <button onClick={() => { deleteProposalItem(ctxMenu.itemId); setCtxMenu(null) }}
+              style={{ display: 'block', width: '100%', padding: '9px 14px', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--red)', fontSize: 12, cursor: 'pointer' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg4)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+              삭제
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 아이템 추가 모달 */}
       {addModal && (

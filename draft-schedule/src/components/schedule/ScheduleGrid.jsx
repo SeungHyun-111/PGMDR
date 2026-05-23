@@ -12,7 +12,7 @@ const TOOLBAR_HEIGHT = 32
 const MIN_ROW_HEIGHT = 28
 
 export default function ScheduleGrid({ onBlockDrop }) {
-  const { pgmSlots, customSlots, scheduleBlocks, saveBlock, removeBlock, splitSlots, toggleSplitSlot, splitSlotTime, deleteSlotTime } = useScheduleStore()
+  const { pgmSlots, customSlots, scheduleBlocks, saveBlock, removeBlock, splitSlots, toggleSplitSlot, splitSlotTime, deleteSlotTime, gridSearch, setGridSearch, searchPanelOpen, setSearchPanelOpen } = useScheduleStore()
   const containerRef = useRef(null)
   const [containerWidth, setContainerWidth] = useState(1200)
   const [containerHeight, setContainerHeight] = useState(0)
@@ -199,12 +199,13 @@ export default function ScheduleGrid({ onBlockDrop }) {
     <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
 
       {/* 툴바 */}
-      <div style={{ height: TOOLBAR_HEIGHT, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 10, borderBottom: '1px solid var(--border)', background: 'var(--bg2)', flexShrink: 0 }}>
+      <div style={{ height: TOOLBAR_HEIGHT, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 8, borderBottom: '1px solid var(--border)', background: 'var(--bg2)', flexShrink: 0 }}>
         <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-          총 {effectivePgmSlots.length}슬롯 · {dates.length}일 · 시간축 우클릭 → CA/IP 분리 · 시간 분할/삭제
+          총 {effectivePgmSlots.length}슬롯 · {dates.length}일
         </div>
+
         <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)}
-          style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '2px 6px', borderRadius: 4, fontSize: 11, outline: 'none', marginLeft: 4 }}>
+          style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '2px 6px', borderRadius: 4, fontSize: 11, outline: 'none' }}>
           {blockTeams.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
         {teamFilter !== '전체' && (
@@ -213,6 +214,23 @@ export default function ScheduleGrid({ onBlockDrop }) {
             ✕
           </button>
         )}
+
+        <input
+          value={gridSearch}
+          onChange={e => {
+            const v = e.target.value
+            setGridSearch(v)
+            setSearchPanelOpen(!!v)
+          }}
+          placeholder="🔍 편성표 검색"
+          style={{
+            marginLeft: 'auto',
+            width: gridSearch ? 170 : 130,
+            background: 'var(--bg3)', border: '1px solid var(--border)',
+            color: 'var(--text)', padding: '5px 8px', borderRadius: 4,
+            fontSize: 11, outline: 'none', transition: 'width .2s',
+          }}
+        />
       </div>
 
       {/* 헤더 */}
@@ -293,6 +311,7 @@ export default function ScheduleGrid({ onBlockDrop }) {
                         saveBlock={saveBlock}
                         removeBlock={removeBlock}
                         teamFilter={teamFilter}
+                        gridSearch={gridSearch}
                       />
                     )
                   })

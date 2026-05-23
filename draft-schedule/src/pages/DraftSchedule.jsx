@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import useScheduleStore from '../store/useScheduleStore'
 import ScheduleGrid from '../components/schedule/ScheduleGrid'
 import Sidebar from '../components/sidebar/Sidebar'
+import SearchPanel from '../components/schedule/SearchPanel'
 import SetupModal from '../components/modal/SetupModal'
 import { splitWeightedMin } from '../utils/weightedMin'
 import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
@@ -15,6 +16,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   } = useScheduleStore()
 
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const { setGridSearch, searchPanelOpen, setSearchPanelOpen } = useScheduleStore()
 
   // 진입 시 세션 복구: localStorage → Firebase activeSession 순으로 fallback
   useEffect(() => {
@@ -180,6 +182,13 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
         <ScheduleGrid onBlockDrop={handleBlockDrop} />
       </div>
       <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(v => !v)} />
+      <SearchPanel
+        isOpen={searchPanelOpen}
+        onToggle={() => {
+          if (searchPanelOpen) setGridSearch('')
+          setSearchPanelOpen(v => !v)
+        }}
+      />
     </div>
   )
 }

@@ -32,6 +32,11 @@ const useScheduleStore = create((setState, getState) => ({
   manualInputs:     {},
   lastUpdated:      null,
 
+  gridSearch: '',
+  setGridSearch: (q) => setState({ gridSearch: q }),
+  searchPanelOpen: false,
+  setSearchPanelOpen: (v) => setState({ searchPanelOpen: typeof v === 'function' ? v(getState().searchPanelOpen) : v }),
+
   proposalLoaded:         false,
   isLoadingProposals:     false,
   isLoadingPerformance:   false,
