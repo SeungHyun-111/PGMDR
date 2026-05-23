@@ -3,14 +3,17 @@ import useScheduleStore from '../../store/useScheduleStore'
 import ProductCard from './ProductCard'
 import ProductFilters from './ProductFilters'
 import SidebarExpanded from './SidebarExpanded'
+import { DEAL_TYPES } from '../../constants/dealTypes'
+import { CATEGORIES } from '../../constants/categories'
 
+const NEW_PRODUCT_TYPES = ['기존', '신상품', '재녹화', '재편집']
 const inp = { background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 4, fontSize: 11, width: '100%', boxSizing: 'border-box' }
 const ADD_FIELDS = [
   { key: 'pgmCodeName',           label: '편성코드명',   required: true },
-  { key: 'mdTeam',                label: '팀명' },
-  { key: 'mdCategory',            label: '분류' },
-  { key: 'dealTypeConverted',     label: '거래형태' },
-  { key: 'newProductType',        label: '신상품구분' },
+  { key: 'mdTeam',                label: '팀명',         select: 'teams' },
+  { key: 'mdCategory',            label: '분류',         options: CATEGORIES },
+  { key: 'dealTypeConverted',     label: '거래형태',     options: DEAL_TYPES },
+  { key: 'newProductType',        label: '신상품구분',   options: NEW_PRODUCT_TYPES },
   { key: 'mainPrice',             label: '메인가' },
   { key: 'fixedFee',              label: '정액비' },
   { key: 'preferredTime',         label: '희망시간' },
@@ -34,6 +37,11 @@ export default function Sidebar({ isOpen, onToggle }) {
     sort: 'none',
     starOnly: false,
   })
+
+  const teamOptions = useMemo(() => {
+    const set = new Set(proposalItems.map(i => i.mdTeam || '').filter(Boolean))
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [proposalItems])
 
   const [addModal, setAddModal] = useState(false)
   const [addForm, setAddForm]   = useState({})
@@ -258,6 +266,16 @@ export default function Sidebar({ isOpen, onToggle }) {
                   {f.key === 'requestNote' ? (
                     <textarea value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))}
                       rows={2} style={{ ...inp, resize: 'vertical' }} />
+                  ) : f.options ? (
+                    <select value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))} style={inp}>
+                      <option value="">선택</option>
+                      {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : f.select === 'teams' ? (
+                    <select value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))} style={inp}>
+                      <option value="">선택</option>
+                      {teamOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
                   ) : (
                     <input value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))} style={inp} />
                   )}

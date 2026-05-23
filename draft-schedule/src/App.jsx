@@ -10,6 +10,7 @@ import PresenceBar from './components/common/PresenceBar'
 import useScheduleStore from './store/useScheduleStore'
 import usePresence from './hooks/usePresence'
 import { applyTheme, getStoredTheme } from './styles/theme'
+import SessionSwitcher from './components/session/SessionSwitcher'
 
 const TABS = [
   { id: 'draft',    label: '초안 편성' },
@@ -172,7 +173,7 @@ export default function App() {
           )}
 
           {isLoaded && (
-            <div style={{ fontSize: 11, color: 'var(--text2)' }}>{startDate} ~ {endDate} · 풀 {poolType}</div>
+            <SessionSwitcher currentWeekKey={`${startDate}_${poolType}`} />
           )}
 
           {isLoaded && (

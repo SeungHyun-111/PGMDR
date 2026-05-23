@@ -1,4 +1,4 @@
-export default function RatioTable({ data, stats, targetMap, totalSlotWeighted, totalTarget, showTarget, chartData }) {
+export default function RatioTable({ data, groupDm = {}, stats, targetMap, totalSlotWeighted, totalTarget, showTarget, chartData }) {
   const sorted = Object.entries(data).sort((a, b) => b[1] - a[1])
 
   const getTeamColor = (name) => chartData?.find(d => d.name === name)?.color || 'var(--text3)'
@@ -10,6 +10,8 @@ export default function RatioTable({ data, stats, targetMap, totalSlotWeighted, 
           <tr style={{ background: 'var(--bg3)', borderBottom: '2px solid var(--border)' }}>
             <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>구분</th>
             <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>편성 가중분</th>
+            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>단순분</th>
+            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>평균 가중률</th>
             <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>편성 비중</th>
             {showTarget && <>
               <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>목표 가중분</th>
@@ -27,6 +29,8 @@ export default function RatioTable({ data, stats, targetMap, totalSlotWeighted, 
             const isDefault = name === '편성팀'
             const isCompeting = name === '경쟁'
             const teamColor = getTeamColor(name)
+            const dm = groupDm[name] || 0
+            const avgRate = dm > 0 ? (weighted / dm * 100).toFixed(1) + '%' : '-'
 
             return (
               <tr key={name} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg3)' }}>
@@ -42,6 +46,12 @@ export default function RatioTable({ data, stats, targetMap, totalSlotWeighted, 
                 </td>
                 <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: isDefault ? 'var(--text3)' : teamColor }}>
                   {Math.round(weighted).toLocaleString()}
+                </td>
+                <td style={{ padding: '10px 14px', textAlign: 'right', color: 'var(--text2)' }}>
+                  {dm > 0 ? dm.toLocaleString() : '-'}
+                </td>
+                <td style={{ padding: '10px 14px', textAlign: 'right', color: 'var(--text3)', fontSize: 11 }}>
+                  {avgRate !== '-' ? avgRate : '-'}
                 </td>
                 <td style={{ padding: '10px 14px', textAlign: 'right', color: 'var(--text2)', fontSize: 11 }}>
                   {totalPct.toFixed(1)}%
@@ -72,6 +82,10 @@ export default function RatioTable({ data, stats, targetMap, totalSlotWeighted, 
           <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--bg3)' }}>
             <td style={{ padding: '10px 14px', fontWeight: 700 }}>합계</td>
             <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--accent)' }}>{Math.round(stats.totalWeighted).toLocaleString()}</td>
+            <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--text2)' }}>{(stats.totalDm || 0) > 0 ? (stats.totalDm).toLocaleString() : '-'}</td>
+            <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--text2)', fontSize: 11 }}>
+              {(stats.totalDm || 0) > 0 ? (stats.totalWeighted / stats.totalDm * 100).toFixed(1) + '%' : '-'}
+            </td>
             <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--text2)' }}>100%</td>
             {showTarget && <>
               <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--text2)' }}>

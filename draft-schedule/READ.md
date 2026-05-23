@@ -19,9 +19,12 @@ Zustand 스토어로 상태를 관리하며 @dnd-kit 드래그로 편성 블록�
 
 ```
 {startDate}_{poolType}  →  예) 2026-05-19_A
-Firebase 경로: sessions/{weekKey}/...
-글로벌 포인터: activeSession  (협업 자동 합류용)
+Firebase 세션 데이터: sessions/{weekKey}/...
+Firebase 세션 레지스트리: activeSessions/{weekKey}  (세션 목록 화면용 경량 인덱스)
 ```
+
+> `activeSession` (단수) 강제 전환 노드는 2026-05-23에 제거됨.  
+> 세션 전환은 개인 localStorage(lastWeekKey) 기반으로만 동작 → 다른 팀원 화면에 영향 없음.
 
 ## 실행 명령
 
@@ -29,6 +32,7 @@ Firebase 경로: sessions/{weekKey}/...
 npm run dev      # 개발 서버 (HMR)
 npm run build    # 프로덕션 빌드
 npm run lint     # ESLint
+node scripts/cleanup-sessions.mjs  # Firebase 세션 전체 삭제
 ```
 
 ---
@@ -44,35 +48,12 @@ npm run lint     # ESLint
 | 2026-05-22 | SeungHyun-111 | feat | Firebase `activeSession` 추가 — 협업 시 자동 세션 동기화. 누군가 새 편성을 시작하면 모든 접속자가 같은 세션에 자동 합류. localStorage 의존 제거, Firebase를 공유 진입점으로 사용 |
 | 2026-05-22 | SeungHyun-111 | fix | split 슬롯 드래그·드롭 및 사이드바 블록 복구 |
 | 2026-05-22 | SeungHyun-111 | fix | index.html 및 스타일 오류 수정 |
-
----
-
-## 주요 이슈 / 결정 기록
-
-### 2026-05-22 — activeSession 협업 동기화
-
-**문제**: `lastWeekKey`를 `localStorage`에 저장 → 브라우저 단위 저장이라 다른 팀원 기기에는 없음.  
-한 명이 편성을 시작해도 나머지는 "편성 데이터가 없습니다" 화면만 봄.
-
-**해결**: Firebase 루트에 `activeSession` 노드 추가.
-- "새 편성 시작"(resetSession) 완료 시 `activeSession`에 weekKey 기록
-- 앱 진입 시 localStorage 없으면 Firebase `activeSession` 읽어 자동 합류
-- `onValue` 리스너로 세션 변경 시 모든 접속자 화면 자동 전환
-
-**적용 파일**:
-- `src/store/actions/sessionActions.js` — resetSession 완료 후 activeSession write
-- `src/pages/DraftSchedule.jsx` — 진입 시 activeSession 읽기 + 실시간 리스너
-
 | 2026-05-22 | SeungHyun-111 | feat | 실적예상값 페이지 전면 개편 — 요약카드(총취급고·한익·분당취급고·한익·미입력수), 일자별/팀별·카테고리별 Bar 차트(recharts), 그룹별 분당취급고·분당한익 요약표, 직전실적 미입력 블록 별도 알림 섹션, 전체 상세 테이블 인라인 수정(셀 클릭→입력→saveManualInput) 포함 (`PerformanceForecast.jsx`) |
 | 2026-05-22 | SeungHyun-111 | fix | 선편성 블록 경쟁 생성 버그 2종 — ①`handleBlockDrop`이 컴포넌트 클로저의 stale `scheduleBlocks`를 참조해 선편성 블록을 못 찾는 문제: `getState().scheduleBlocks`로 교체(`DraftSchedule.jsx`). ②`SlotRow` 블록-블록 드래그가 경쟁 로직 없이 덮어쓰는 문제: 타깃 슬롯에 비디폴트 블록이 있으면 경쟁 블록 생성으로 분기 추가(`SlotRow.jsx`). isPreSchedule: false 명시로 리프레시 시 보호 목록 포함 |
 | 2026-05-22 | SeungHyun-111 | fix | 선편성 블록 경쟁 생성 후 isPreSchedule 잔류 — saveBlock이 Firebase update(병합)를 사용하므로 선편성 블록에서 경쟁 생성 시 isPreSchedule: true가 남아, refreshActions의 protectedBlocks 필터(!b.isPreSchedule)에서 제외돼 다음 리프레시 시 경쟁 블록이 선편성으로 덮어써지는 버그. 경쟁 생성 패치에 isPreSchedule: false 명시 추가(`DraftSchedule.jsx`) |
 | 2026-05-22 | SeungHyun-111 | fix | 편성비중 totalTarget → totalSlotWeighted 기준 통일 — GAS weeklyTarget 합계 대신 주간 슬롯 가중분 합계를 전체 목표 기준으로 사용 (`ScheduleRatio.jsx`) |
 | 2026-05-22 | SeungHyun-111 | fix | ghost default 블록 Firebase 자동 정리 — splitSlots에 있는 슬롯의 isDefault 블록을 _loadFromFirebase 진입 시 자동 삭제 (`sessionActions.js`) |
-| 2026-05-22 | SeungHyun-111 | feat | 실적예상값 페이지 Hero 지표 개편 — 분당취급고·분당한익을 HeroCard(대형 숫자+진행바)로 최상단 강조. EffBar 컴포넌트(green≥90%/yellow≥65%/red)로 효율 시각화. 편성 효율(편성 가중분/전체 슬롯 가중분) 별도 HeroCard 추가 (`PerformanceForecast.jsx`) |
-| 2026-05-22 | SeungHyun-111 | feat | 실적예상값 차트 2×2 분리 — 취급고 볼륨과 분당 효율을 단일 차트에 혼합 시 시각화 왜곡 문제로 4개 카드로 분리: ①일자별 취급고(볼륨) ②팀/카테고리별 목표 vs 편성 가중분(TargetBar 진행바) ③일자별 분당취급고/한익(효율) ④팀/카테고리별 분당취급고/한익(가로 bar chart). 팀별에서만 목표 가중분(weightedMinTargets) 진행바 표시, 카테고리는 비중 표시 (`PerformanceForecast.jsx`) |
-| 2026-05-22 | SeungHyun-111 | fix | 테이블 헤더 정렬 통일 — 숫자 컬럼 헤더 textAlign을 데이터 셀과 동일하게 right/center로 맞춤. 열 정의 배열(groupCols, detailCols, missingCols)에서 align 속성으로 makeTh 함수 일괄 적용 (`PerformanceForecast.jsx`) |
 | 2026-05-22 | SeungHyun-111 | docs | 설명서 로컬 캐시 vs Firebase DB 섹션 추가 — localStorage(lastWeekKey·theme·userName)는 브라우저 단위·팀 미공유, Firebase(activeSession·sessions/{weekKey})는 팀 전체 실시간 공유임을 명시. 잘못된 Firebase 직접 수정 주의 안내 포함 (`HelpPage.jsx`) |
-
 | 2026-05-23 | SeungHyun-111 | feat | 탭명 '실적 예상값' → '시뮬레이션' 변경 (`App.jsx`) |
 | 2026-05-23 | SeungHyun-111 | feat | [편성팀] 디폴트 블록 완전 카드화 — `isDefault: false` + `memoCode: '[전사블록]'` 설정. 드래그·사이드바 반환·경쟁 생성 등 일반 블록과 동일하게 동작. 모든 컴포넌트에서 `isDefault` 조건 제거, `isPgmTeam`(pgmCodeName==='[편성팀]') 기준으로 스타일만 별도 적용. ghost 블록 정리 조건도 `isDefault→pgmCodeName==='[편성팀]'`로 변경 (`blockBuilders.js`, `sessionActions.js`, `ScheduleBlock.jsx`, `SlotRow.jsx`, `Sidebar.jsx`, `blockActions.js`) |
 | 2026-05-23 | SeungHyun-111 | feat | 시뮬레이션 페이지 Hero 카드 전면 개편 — ①분당취급고·②분당한익 달성률 progress bar를 전사 목표(companyTotal.salesPerMin/profitPerMin) 기준으로 변경. ③전사블록 시뮬레이션 카드: 편성팀 슬롯 수·가중분·비중 표시 + 분당취급고/한익 실시간 입력(debounce 500ms→saveManualInput). placeholder = 전사 목표값. 탭 전환 후 입력값 자동 복원(useEffect + pgmTeamRows[0].perfKey 기반 manualInputs 조회) (`PerformanceForecast.jsx`) |
@@ -82,10 +63,47 @@ npm run lint     # ESLint
 | 2026-05-23 | SeungHyun-111 | feat | 팀별 관점 차트 개선 — XAxis 캡 전사목표×1.5 + `allowDataOverflow`로 실제 클리핑 적용. 목표 없는 팀(편성팀·미분류 등)은 전사 목표로 fallback(effectiveTargetSalesPerMin/ProfitPerMin). 캡 초과 바에 인사이드 레이블(#.#만). 팀명 폰트 15px/YAxis 너비 75px. 바 높이 1.5배·barCategoryGap 16% (`PerformanceForecast.jsx`) |
 | 2026-05-23 | SeungHyun-111 | feat | 일자별 차트 팀별 툴팁 — 호버 시 팀별 취급효율/한익효율 + 비중 분해 표시. dailyTeamData useMemo(date×team 교차 집계) + DailyTeamTip 컴포넌트 추가 (`PerformanceForecast.jsx`) |
 | 2026-05-23 | SeungHyun-111 | feat | 일자별 클릭 필터 — 막대 클릭 시 해당 일자만 필터(selectedDate). displayRows = rows.filter(dateKey). Hero·요약·볼륨바·팀별관점·효율테이블·상세테이블 전체 연동. 선택된 바 노란 하이라이트·미선택 dim. 동일 일자 재클릭 또는 "전체 보기" 버튼으로 해제 (`PerformanceForecast.jsx`) |
+| 2026-05-23 | SeungHyun-111 | fix | 시뮬레이션 페이지 하단 2섹션 미렌더링 — ①`DailyTeamTip` 내 `.map()` Fragment에 key 누락(`<>` → `<Fragment key={t.name}>`)으로 React 19 렌더 크래시. ②외부 div에 `display:flex + height:100% + overflowY:auto` 동시 적용으로 스크롤 불가. 외부(스크롤 컨테이너)·내부(flex 레이아웃) div 분리로 해결 (`PerformanceForecast.jsx`) |
+| 2026-05-23 | SeungHyun-111 | feat | 시뮬레이션 테이블 정렬·리사이즈 — 직전실적미확인·편성별 실적 상세 두 테이블에 컬럼 헤더 클릭 정렬(▲▼⇅), 컬럼 우측 드래그 핸들 너비 조절 추가. 첫 드래그 시 모든 컬럼 offsetWidth 스냅샷 → `table-layout:fixed` 전환. 기본 상태는 `table-layout:auto + width:100%`로 페이지 폭 자동 채움. `overflow:hidden + textOverflow:ellipsis`로 줄바꿈 없이 우측 클리핑 (`PerformanceForecast.jsx`) |
+| 2026-05-23 | SeungHyun-111 | remove | 팀별 분당 효율 요약 테이블 삭제 — 요청 없이 포함된 섹션. `groupCols`, `makeThStyle` 함께 제거 (`PerformanceForecast.jsx`) |
+| 2026-05-23 | SeungHyun-111 | fix | 직전실적미확인 섹션 항상 펼침 — 아코디언 토글(showMissing state) 제거, 항상 열린 상태 (`PerformanceForecast.jsx`) |
+| 2026-05-23 | SeungHyun-111 | feat | 시간 분할·삭제 기능 — Firebase `sessions/{weekKey}/customSlots` 경로 신설. GAS 원본 pgmSlots 보존하며 오버라이드 레이어로 관리. 시간 라벨 우클릭 → 분할/삭제 모달. `getEffectivePgmSlots` 유틸리티로 pgmSlots+customSlots 병합·시간순 정렬. customSlots Firebase 실시간 구독 추가 (`timeSlotActions.js`, `effectiveSlots.js`, `ScheduleGrid.jsx`, `sessionActions.js`, `firebaseSubscribe.js`) |
+| 2026-05-23 | SeungHyun-111 | feat | 편성비중 PGM건수 카드 3종 신설 — `RatioPgmCount.jsx` 신규. 채널별/거래형태별/영상구분별 피벗 테이블 카드를 세로 3장 배치 (`ScheduleRatio.jsx`) |
+| 2026-05-23 | SeungHyun-111 | feat | 초안 편성표 검색 기능 — `SearchPanel.jsx` 신규(우측 패널). 편성 리스트(거래형태별·채널별 건수/가중분/비중/분당효율 표) + 미편성 리스트. ScheduleGrid 툴바 우상단 검색창 연동. `gridSearch` Zustand 상태 추가 |
+| 2026-05-23 | SeungHyun-111 | feat | 사이드바 필터 개선 — 영상구분(videoStatus) 셀렉트 추가. 가나다↑/↓ 정렬 토글. 사이드바 카드 우클릭 복사/삭제 컨텍스트 메뉴. `+ 추가` 버튼으로 상품 직접 추가 (`Sidebar.jsx`, `ProductCard.jsx`, `ProductFilters.jsx`) |
+| 2026-05-23 | SeungHyun-111 | feat | 멀티 세션 관리 — `activeSessions` Firebase 루트 경로 신설(세션 레지스트리). `SessionPickerScreen`(세션 선택 초기화면), `SessionSwitcher`(상단 세션 전환 드롭다운), `SessionDeleteModal`(플레이스홀더 확인 입력 후 삭제) 추가. 새 세션 생성 시 `sessions/` + `activeSessions/` 동시 등록, 삭제 시 동시 제거 |
+| 2026-05-23 | SeungHyun-111 | fix | lastWeekKey Firebase 검증 — 앱 진입 시 `sessions/{key}/gasData/meta` 존재 여부 먼저 확인. 삭제된 세션이면 lastWeekKey 자동 제거 후 SessionPickerScreen 표시 (`DraftSchedule.jsx`) |
+| 2026-05-23 | SeungHyun-111 | remove | `activeSession` 강제 전환 로직 제거 — 누군가 새 편성 시작 시 모든 팀원 화면이 강제 전환되는 문제. `onValue(activeSession)` 구독 및 resetSession 내 activeSession write 제거. 세션 전환은 개인이 명시적으로 선택하는 방식으로 변경 (`DraftSchedule.jsx`, `sessionActions.js`) |
+| 2026-05-23 | SeungHyun-111 | docs | 설명서 전면 개편 — 풀 페이지 레이아웃. 데이터 흐름·갱신 메뉴별 처리 범위·로컬 vs Firebase 저장 위치·협업 동기화 범위·Firebase 경로 구조(루트/세션 분리)·계산 로직·편성표 사용법·세션 관리·GAS 컬럼 사전 포함 (`HelpPage.jsx`) |
+| 2026-05-23 | SeungHyun-111 | chore | scripts/cleanup-sessions.mjs 추가 — Firebase sessions/activeSessions/activeSession 전체 삭제 Node.js 스크립트 |
 
 ---
 
 ## 주요 이슈 / 결정 기록
+
+### 2026-05-22 — activeSession 협업 동기화 (이후 제거됨)
+
+**문제**: `lastWeekKey`를 `localStorage`에 저장 → 브라우저 단위 저장이라 다른 팀원 기기에는 없음.
+
+**초기 해결 (2026-05-22)**: Firebase 루트에 `activeSession` 노드 추가. `onValue` 리스너로 세션 변경 시 전체 화면 자동 전환.
+
+**재문제 (2026-05-23)**: 팀원 A가 "새 편성 시작"을 누르면 작업 중인 팀원 B 화면도 강제 전환됨 → 기존 작업 맥락 단절.
+
+**최종 해결**: `activeSession` 강제 전환 완전 제거. 대신 `activeSessions`(복수) 레지스트리 + `SessionPickerScreen`으로 세션 선택권을 개인에게 부여.
+
+---
+
+### 2026-05-23 — 멀티 세션 관리 설계
+
+**구조**:
+- `activeSessions/{weekKey}` — 경량 레지스트리 (5개 필드). 세션 목록 표시에 사용.
+- `sessions/{weekKey}/` — 실제 편성 데이터 전체. 로드/삭제 시만 접근.
+
+**삭제 인증**: 플레이스홀더 문구(5종 랜덤) 직접 입력해야 삭제 버튼 활성화 → 실수 방지.
+
+**세션 전환**: `handleSwitch()` → localStorage `lastWeekKey` 업데이트 → `loadInitData()`. 자신만 전환, 다른 팀원 화면 영향 없음.
+
+---
 
 ### 2026-05-23 — [편성팀] 블록 isDefault 제거 경위
 
@@ -98,34 +116,7 @@ npm run lint     # ESLint
 **perfKey 주의**: `makePerfKey('', '[편성팀]')` = `normalizeDealType('') + '[편성팀]'` = `'[위][편성팀]'`.  
 manualInputs 조회 시 `'[편성팀]'`이 아닌 `pgmTeamRows[0]?.perfKey` 로 참조해야 함.
 
-### 2026-05-23 — 팀별 관점 차트 도메인 캡 설계
-
-**문제**: 문화서비스팀처럼 목표값이 전사 평균 대비 2~3배 이상인 팀이 있으면 XAxis가 늘어나 다른 팀 바가 모두 납작해짐.
-
-**해결**: `domain = [0, ceil(전사목표 × 1.5)]` + `allowDataOverflow={true}`.  
-- 캡 초과 바는 차트 끝에서 잘리고, 인사이드 레이블로 실제 값 표시
-- 목표 없는 팀(편성팀·미분류)은 전사 목표를 fallback 목표로 사용 (avgGroupSalesPerMin 아님)
-
 ---
-
-## 개발 규칙
-
-> **GAS·Firebase DB는 사전 확인 없이 건드리지 않는다.**
-> 데이터 구조 변경, Firebase 경로 추가·삭제, GAS 스크립트 수정이 필요해 보여도 먼저 팀에게 확인 후 진행한다.
-> 기능 문제는 최대한 프론트엔드(React/Zustand/컴포넌트 로직)에서 해결한다.
-
-| 2026-05-23 | SeungHyun-111 | feat | [편성팀] 아이템 사이드바 카드화 — 세션 초기화 시 `[편성팀]/[위]/[전사블록]` 아이템 10개를 proposalItems에 자동 추가(`PGM_TEAM_ITEMS`). 이후 일반 제안상품과 동일하게 드래그·편성·반환 가능. 기존 `buildDefaultBlocks`(빈 슬롯 자동 채움) 완전 제거 → 선편성 외 모든 슬롯 공란 (`sessionActions.js`) |
-| 2026-05-23 | SeungHyun-111 | feat | 사이드바 카드 우클릭 컨텍스트 메뉴 — "복사" / "삭제" 메뉴 추가. 복사: `duplicateProposalItem`(Firebase proposalItems 배열에 append + 로컬 state 반영). 삭제: `deleteProposalItem`(_fbIdx 기반 Firebase null 처리 + 로컬 state 제거). `useEffect`로 외부 클릭 시 메뉴 닫기 (`ProductCard.jsx`, `itemActions.js`) |
-| 2026-05-23 | SeungHyun-111 | fix | 시뮬레이션 페이지 하단 2섹션 미렌더링 — ①`DailyTeamTip` 내 `.map()` Fragment에 key 누락(`<>` → `<Fragment key={t.name}>`)으로 React 19 렌더 크래시. ②외부 div에 `display:flex + height:100% + overflowY:auto` 동시 적용으로 스크롤 불가. 외부(스크롤 컨테이너)·내부(flex 레이아웃) div 분리로 해결 (`PerformanceForecast.jsx`) |
-| 2026-05-23 | SeungHyun-111 | feat | 시뮬레이션 테이블 정렬·리사이즈 — 직전실적미확인·편성별 실적 상세 두 테이블에 컬럼 헤더 클릭 정렬(▲▼⇅), 컬럼 우측 드래그 핸들 너비 조절 추가. 첫 드래그 시 모든 컬럼 offsetWidth 스냅샷 → `table-layout:fixed` 전환. 기본 상태는 `table-layout:auto + width:100%`로 페이지 폭 자동 채움. `overflow:hidden + textOverflow:ellipsis`로 줄바꿈 없이 우측 클리핑 (`PerformanceForecast.jsx`) |
-| 2026-05-23 | SeungHyun-111 | remove | 팀별 분당 효율 요약 테이블 삭제 — 요청 없이 포함된 섹션. `groupCols`, `makeThStyle` 함께 제거 (`PerformanceForecast.jsx`) |
-| 2026-05-23 | SeungHyun-111 | fix | 직전실적미확인 섹션 항상 펼침 — 아코디언 토글(showMissing state) 제거, 항상 열린 상태 (`PerformanceForecast.jsx`) |
-| 2026-05-23 | SeungHyun-111 | feat | 시간 분할·삭제 기능 — Firebase `sessions/{weekKey}/customSlots` 경로 신설. GAS 원본 pgmSlots 보존하며 오버라이드 레이어로 관리. **시간 분할**: 시간 라벨 우클릭 → "시간 분할" → 새 시작시간 입력 모달(실시간 미리보기: 앞/뒤 분·WM). 확인 시 원본 슬롯 duration 단축 + customSlots에 새 슬롯 생성. **시간 삭제**: 해당 슬롯 제거, 앞 슬롯이 duration+WM 흡수. CA/IP 채널분리 슬롯도 동일 처리(블록 WM 재계산). `getEffectivePgmSlots` 유틸리티로 pgmSlots+customSlots 병합·시간순 정렬. customSlots Firebase 실시간 구독 추가. 커스텀 슬롯은 파란 점선·파란 시간으로 시각 구분 (`timeSlotActions.js`, `effectiveSlots.js`, `ScheduleGrid.jsx`, `sessionActions.js`, `firebaseSubscribe.js`, `useScheduleStore.js`) |
-| 2026-05-23 | SeungHyun-111 | fix | 시간 라벨 정렬·너비 — `TIME_COL_WIDTH` 34→36px, `justifyContent:flex-start+paddingLeft` → `center` 가운데 정렬, `overflow:hidden`으로 넘침 방지, `letterSpacing:-0.3px`으로 폰트 밀집 (`ScheduleGrid.jsx`) |
-
----
-
-## 주요 이슈 / 결정 기록
 
 ### 2026-05-23 — customSlots 설계 원칙
 
@@ -148,18 +139,71 @@ sessions/{weekKey}/customSlots/{id}: {
 
 `getEffectivePgmSlots(pgmSlots, customSlots)`: 원본에서 deleted 제거 → override 적용 → isCustom 슬롯 삽입 → dateKey+timeText 정렬.
 
-**Firebase undefined 제약**: Firebase는 `undefined` 값을 직렬화 거부. 조건부 스프레드(`prevOv.isCustom ? {...prevOv, ...} : {durationMin, weightedMin}`)로 undefined 필드 원천 차단.
+---
 
-| 2026-05-23 | SeungHyun-111 | feat | 편성비중 PGM건수 카드 3종 신설 — `RatioPgmCount.jsx` 신규. 채널별/거래형태별/영상구분별 피벗 테이블 카드를 세로 3장 배치. 각 셀: 건수/가중분/분당효율(취급·한익) 3줄 고정높이. 헤더: 실적입력 N건 기준/미입력 N건 표시. 합계행 accent 상단 경계+bg4, 팀명 열 우측 2px 경계선, 홀/짝 행 반전. 팀별/카테고리별 공유 토글. `ScheduleRatio.jsx`에 perfMap·manualInputs 전달 |
-| 2026-05-23 | SeungHyun-111 | feat | 초안 편성표 검색 기능 — `SearchPanel.jsx` 신규(우측 300px 패널). 편성 리스트(거래형태별·채널별 건수/가중분/비중/분당효율 표) + 미편성 리스트(dealType 뱃지·팀·효율). `ScheduleGrid` 툴바 우상단에 인라인 검색창(입력 시 SearchPanel 자동 오픈). `gridSearch` Zustand 상태로 관리(searchPanelOpen 연동). `SlotRow`에서 `isDimmed`에 gridSearch 검색어 매칭 추가 — 미매칭 블록 dim 처리 (`useScheduleStore.js`, `ScheduleGrid.jsx`, `SlotRow.jsx`, `SearchPanel.jsx`, `DraftSchedule.jsx`) |
-| 2026-05-23 | SeungHyun-111 | feat | 기본 사이드바 + 추가 버튼 — 헤더에 `+ 추가` 버튼 추가, 클릭 시 제안상품 추가 모달 팝업(SidebarExpanded와 동일 필드). `addProposalItem` 연결 (`Sidebar.jsx`) |
-| 2026-05-23 | SeungHyun-111 | feat | 사이드바 확장 행 우클릭 컨텍스트 메뉴 — `<tr>` onContextMenu → 복사/삭제 오버레이 메뉴. 복사: `duplicateProposalItem`, 삭제: `deleteProposalItem` (`SidebarExpanded.jsx`) |
-| 2026-05-23 | SeungHyun-111 | feat | 사이드바 필터 개선 — 실적 필터(hasPerf) 제거. 영상구분(videoStatus) 셀렉트 추가. 가나다↑/가나다↓ 정렬 토글 버튼 추가(활성 시 accent). `useFilterOptions`에 videoStatuses 반환 추가. `filteredItems` useMemo에서 videoStatus 필터·sort(asc/desc) 정렬 반영 (`ProductFilters.jsx`, `useFilterOptions.js`, `Sidebar.jsx`) |
+### 2026-05-23 — 팀별 관점 차트 도메인 캡 설계
+
+**문제**: 문화서비스팀처럼 목표값이 전사 평균 대비 2~3배 이상인 팀이 있으면 XAxis가 늘어나 다른 팀 바가 모두 납작해짐.
+
+**해결**: `domain = [0, ceil(전사목표 × 1.5)]` + `allowDataOverflow={true}`.  
+- 캡 초과 바는 차트 끝에서 잘리고, 인사이드 레이블로 실제 값 표시
+- 목표 없는 팀(편성팀·미분류)은 전사 목표를 fallback 목표로 사용
 
 ---
 
-## 향후 과제
+## 개발 규칙
 
-- [ ] 세션 히스토리 목록 UI (과거 주차 접근)
-- [ ] activeSession 변경 시 토스트 알림 ("새 편성이 시작되었습니다")
-- [ ] 오프라인 복구 처리
+> **GAS·Firebase DB는 사전 확인 없이 건드리지 않는다.**  
+> 데이터 구조 변경, Firebase 경로 추가·삭제, GAS 스크립트 수정이 필요해 보여도 먼저 팀에게 확인 후 진행한다.  
+> 기능 문제는 최대한 프론트엔드(React/Zustand/컴포넌트 로직)에서 해결한다.
+
+---
+
+## 개선 필요 항목 (2026-05-23 감사 결과)
+
+### [즉시] HIGH — 중복 함수 / 유지보수 위험
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| `decodeMapKeys()` 중복 | `sessionActions.js:17`, `firebaseSubscribe.js:17` | 동일 코드 2곳. `src/utils/` 하나로 통합 필요 |
+| Firebase 키 인코딩 분산 | `blockBuilders.js:193`, `itemActions.js:102` | `__LB__/__RB__` replace 로직 3곳 산재. `encodeDecodeUtils.js` 통합 권장 |
+
+### [즉시] MEDIUM — 이벤트 리스너 누적 버그
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| `useEffect` 의존 배열 오류 | `ProductCard.jsx:55-60` | 의존 배열 `[ctxMenu]`로 ctxMenu 변경마다 document click 리스너 재등록. `[]`로 변경 필요 |
+
+### [중기] HIGH — 협업 Race Condition
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| CA/IP 분리 3회 순차 write | `ScheduleGrid.jsx:157-183` | `toggleSplitSlot → removeBlock → saveBlock` 순차. 동시 사용자 interleave 위험 |
+| 채널 변경 다중 write | `blockActions.js:74-102` | 3-5회 분리 write. Firebase multi-path `update({})` 원자적 쓰기로 교체 필요 |
+| 시간 삭제 다중 write | `timeSlotActions.js:64-114` | 4회 분리 write. 동일 문제 |
+
+### [중기] HIGH — 그리드 렌더 성능
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| `ScheduleBlock` React.memo 미적용 | `ScheduleBlock.jsx` | Firebase onValue 발생 시 전체 블록 리렌더. 50+ 인라인 style 객체 재생성. `React.memo` + props 안정화 필요 |
+| `SlotRow` React.memo 미적용 | `SlotRow.jsx` | 동일 문제. scheduleBlocks 업데이트마다 모든 행 리렌더 |
+
+### [중기] MEDIUM — Firebase 구독 해제 패턴
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| `off(ref)` 패턴 | `firebaseSubscribe.js`, `usePresence.js`, `useChat.js` | 동일 경로에 다중 리스너 있을 때 1개만 제거 위험. `const unsub = onValue(ref, handler); return () => unsub()` 패턴으로 교체 권장 |
+
+### [중기] MEDIUM — 코드 구조
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| 순수 유틸이 hook 파일에 위치 | `usePerformanceMap.js` | `normalizeDealType()`, `makePerfKey()`는 Hook이 아닌 순수 함수. `src/utils/` 로 이동 권장 |
+| Optimistic update 롤백 없음 | `BlockEditModal.jsx:90-104` | Firebase write 전 setState → 실패 시 UI·DB 불일치. try/catch + 롤백 처리 필요 |
+
+### [장기] MEDIUM — 번들 최적화
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| 탭별 코드 분할 미적용 | `App.jsx:1-6` | 5개 페이지 전부 정적 import. `React.lazy + Suspense`로 탭 전환 시 지연 로드 권장 |

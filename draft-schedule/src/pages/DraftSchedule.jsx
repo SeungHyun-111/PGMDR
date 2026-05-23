@@ -5,9 +5,10 @@ import ScheduleGrid from '../components/schedule/ScheduleGrid'
 import Sidebar from '../components/sidebar/Sidebar'
 import SearchPanel from '../components/schedule/SearchPanel'
 import SetupModal from '../components/modal/SetupModal'
+import SessionPickerScreen from '../components/session/SessionPickerScreen'
 import { splitWeightedMin } from '../utils/weightedMin'
 import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
-import { db, ref, get, onValue } from '../api/firebase'
+import { db, ref, get } from '../api/firebase'
 
 export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   const {
@@ -16,50 +17,31 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   } = useScheduleStore()
 
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sessionChecking, setSessionChecking] = useState(true)
   const { setGridSearch, searchPanelOpen, setSearchPanelOpen } = useScheduleStore()
 
-  // 진입 시 세션 복구: localStorage → Firebase activeSession 순으로 fallback
+  // 진입 시 세션 복구: lastWeekKey 있으면 Firebase에 실제 존재하는지 먼저 확인
   useEffect(() => {
     const lastKey = localStorage.getItem('lastWeekKey')
-    if (lastKey) {
-      if (!useScheduleStore.getState().isLoaded && !useScheduleStore.getState().isLoading) {
+    if (!lastKey) { setSessionChecking(false); return }
+
+    get(ref(db, `sessions/${lastKey}/gasData/meta`)).then(snap => {
+      if (!snap.exists()) {
+        // 세션이 삭제됐거나 없음 → lastWeekKey 제거 후 SessionPickerScreen 표시
+        localStorage.removeItem('lastWeekKey')
+        setSessionChecking(false)
+        return
+      }
+      const state = useScheduleStore.getState()
+      if (!state.isLoaded && !state.isLoading) {
         const [date, pool] = lastKey.split('_')
         loadInitData(date, pool)
       }
-    } else {
-      // localStorage 없으면 Firebase activeSession 한 번 읽어 자동 합류
-      get(ref(db, 'activeSession')).then(snap => {
-        if (!snap.exists()) return
-        const { weekKey, startDate: sDate, poolType: pType } = snap.val()
-        const state = useScheduleStore.getState()
-        if (!state.isLoaded && !state.isLoading) {
-          localStorage.setItem('lastWeekKey', weekKey)
-          loadInitData(sDate, pType)
-        }
-      })
-    }
-  }, [])
-
-  // activeSession 실시간 구독: 누군가 새 편성 시작 시 모든 접속자 자동 전환
-  useEffect(() => {
-    let initialized = false
-    const unsubscribe = onValue(ref(db, 'activeSession'), snap => {
-      if (!snap.exists()) { initialized = true; return }
-      const { weekKey, startDate: sDate, poolType: pType } = snap.val()
-
-      if (!initialized) {
-        initialized = true
-        return // 초기 발화는 진입 useEffect에서 이미 처리
-      }
-
-      const { startDate: curDate, poolType: curPool } = useScheduleStore.getState()
-      const currentKey = curDate ? `${curDate}_${curPool}` : null
-      if (weekKey !== currentKey) {
-        localStorage.setItem('lastWeekKey', weekKey)
-        loadInitData(sDate, pType)
-      }
+      setSessionChecking(false)
+    }).catch(() => {
+      localStorage.removeItem('lastWeekKey')
+      setSessionChecking(false)
     })
-    return () => unsubscribe()
   }, [])
 
   const handleSetupComplete = async (startDate, poolType) => {
@@ -137,9 +119,11 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
       pgmCode: item.pgmCode || '',
       mdTeam: item.mdTeam || '',
       orgName: item.mdTeam || '',
-      dealType: dealTypeConverted,        // ← dealType에도 변환값 저장
-      dealTypeConverted,                  // ← dealTypeConverted 명시적 저장
-      ...(perfKey ? { perfKey } : {}),    // ← perfKey null 방지
+      mdCategory: item.mdCategory || '',
+      dealType: dealTypeConverted,
+      dealTypeConverted,
+      newProductType: item.newProductType || '',
+      ...(perfKey ? { perfKey } : {}),
       isDefault: false,
       assignedAt: Date.now(),
     })
@@ -166,13 +150,16 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   }
 
   if (!isLoaded) {
-    const lastKey = localStorage.getItem('lastWeekKey')
-    if (lastKey) return <LoadingScreen />
+    if (sessionChecking || isLoading) return <LoadingScreen />
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 12 }}>
-        <div style={{ fontSize: 14, color: 'var(--text2)', fontWeight: 600 }}>편성 데이터가 없습니다</div>
-        <div style={{ fontSize: 12, color: 'var(--text3)' }}>상단 메뉴 <strong style={{ color: 'var(--accent)' }}>편성 작업판 ▼</strong> → <strong style={{ color: 'var(--red)' }}>새 편성 시작</strong> 을 눌러 주세요.</div>
-      </div>
+      <SessionPickerScreen
+        onJoin={(startDate, poolType) => {
+          const weekKey = `${startDate}_${poolType}`
+          localStorage.setItem('lastWeekKey', weekKey)
+          loadInitData(startDate, poolType)
+        }}
+        onNew={() => setSetupPopup(true)}
+      />
     )
   }
 

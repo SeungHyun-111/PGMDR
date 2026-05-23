@@ -29,6 +29,9 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock, d
   const hasAnnotation = !!block.annotation
   const hasHash = !!(block.scheduleComment && block.scheduleComment.includes('#'))
 
+  const npt = block.newProductType || ''
+  const prodTypeChar = npt === '신상품' ? '(신)' : (npt === '재녹화' || npt === '재편집') ? '(재)' : ''
+
   const dealType  = block.dealTypeConverted || block.dealType || ''
   const isDirect  = dealType.includes('[직]') || dealType.includes('직매입')
   const isPurple  = dealType.includes('[모]') || dealType.includes('모바일광고')
@@ -136,6 +139,16 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock, d
             {dealChar}
           </span>
         )}
+        {prodTypeChar && !isCompeting && (
+          <span style={{ fontSize: badgeSz, fontWeight: 700, color: npt === '신상품' ? '#fef08a' : '#93c5fd', background: npt === '신상품' ? 'rgba(234,179,8,.25)' : 'rgba(59,130,246,.25)', padding: '0 3px', height: 14, borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+            {prodTypeChar}
+          </span>
+        )}
+        {(block.channel === 'CA' || block.channel === 'IP') && !isCompeting && (
+          <span style={{ fontSize: badgeSz, fontWeight: 700, color: block.channel === 'CA' ? 'var(--ca-t)' : 'var(--ip-t)', background: block.channel === 'CA' ? 'var(--ca)' : 'var(--ip)', padding: '0 3px', height: 14, borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+            {block.channel}
+          </span>
+        )}
         <span style={{ fontSize, fontWeight: 600, color: textColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
           {block.pgmCodeName}
         </span>
@@ -214,6 +227,7 @@ function BlockTooltip({ block, lastPerf, pos }) {
     ['팀',       block.mdTeam || block.orgName || '-'],
     ['채널',     block.channel || '-'],
     ['거래형태', block.dealType || '-'],
+    ['신상품구분', block.newProductType || '-'],
     ['카테고리', block.mdCategory || '-'],
     ['방송일시', `${block.dateKey} ${block.timeText}`],
     ['방송시간', `${block.durationMin}분`],

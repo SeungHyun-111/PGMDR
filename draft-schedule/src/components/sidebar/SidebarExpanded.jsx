@@ -1,13 +1,17 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
 import { buildDragGhost } from './ProductCard'
+import { DEAL_TYPES } from '../../constants/dealTypes'
+import { CATEGORIES } from '../../constants/categories'
+
+const NEW_PRODUCT_TYPES = ['기존', '신상품', '재녹화', '재편집']
 
 const COLS = [
   { key: 'pgmCodeName',           label: '편성코드명',   w: 200 },
   { key: 'mdTeam',                label: '팀',           w: 68 },
   { key: 'mdCategory',            label: '분류',         w: 72 },
   { key: 'dealTypeConverted',     label: '거래형태',     w: 60 },
-  { key: 'newProductType',        label: '신상품',       w: 46 },
+  { key: 'newProductType',        label: '신상품구분',   w: 58 },
   { key: 'mainPrice',             label: '메인가',       w: 76, fmt: v => v ? Number(v).toLocaleString() : '-' },
   { key: 'fixedFee',              label: '정액비',       w: 72, fmt: v => v ? Number(v).toLocaleString() : '-' },
   { key: '_sales',                label: '취급/분',      w: 76, perf: 'salesPerWeightedMin'  },
@@ -27,10 +31,10 @@ const EDITABLE = new Set([
 
 const ADD_FIELDS = [
   { key: 'pgmCodeName',           label: '편성코드명',   required: true },
-  { key: 'mdTeam',                label: '팀명' },
-  { key: 'mdCategory',            label: '분류' },
-  { key: 'dealTypeConverted',     label: '거래형태' },
-  { key: 'newProductType',        label: '신상품구분' },
+  { key: 'mdTeam',                label: '팀명',         select: 'teams' },
+  { key: 'mdCategory',            label: '분류',         options: CATEGORIES },
+  { key: 'dealTypeConverted',     label: '거래형태',     options: DEAL_TYPES },
+  { key: 'newProductType',        label: '신상품구분',   options: NEW_PRODUCT_TYPES },
   { key: 'mainPrice',             label: '메인가' },
   { key: 'fixedFee',              label: '정액비' },
   { key: 'preferredTime',         label: '희망시간' },
@@ -77,6 +81,11 @@ export default function SidebarExpanded({ items, onClose }) {
   const teams = useMemo(() => {
     const set = new Set(items.map(i => i.mdTeam || '').filter(Boolean))
     return ['전체', ...Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))]
+  }, [items])
+
+  const teamOptions = useMemo(() => {
+    const set = new Set(items.map(i => i.mdTeam || '').filter(Boolean))
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
   }, [items])
 
   const handleSort = key => {
@@ -455,6 +464,16 @@ export default function SidebarExpanded({ items, onClose }) {
                   {f.key === 'requestNote' ? (
                     <textarea value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))}
                       rows={2} style={{ ...inp, resize: 'vertical' }} />
+                  ) : f.options ? (
+                    <select value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))} style={inp}>
+                      <option value="">선택</option>
+                      {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : f.select === 'teams' ? (
+                    <select value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))} style={inp}>
+                      <option value="">선택</option>
+                      {teamOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
                   ) : (
                     <input value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))} style={inp} />
                   )}

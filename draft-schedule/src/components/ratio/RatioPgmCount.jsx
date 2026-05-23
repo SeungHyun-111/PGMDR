@@ -266,7 +266,7 @@ export default function RatioPgmCount({ enrichedBlocks, perfMap, manualInputs })
           <PgmCard title="거래형태별" colLabel={DT_ORDER}  colKeyFn={b => b.dealTypeConverted || b.dealType || '미지정'}
             colRenderer={null} blocks={blocks} rowType={rowType} perfMap={perfMap} manualInputs={manualInputs} />
 
-          <PgmCard title="영상구분별" colLabel={VS_ORDER}  colKeyFn={b => b.videoStatus || '기존'}
+          <PgmCard title="영상구분별" colLabel={VS_ORDER}  colKeyFn={b => b.newProductType || '기존'}
             colRenderer={null} blocks={blocks} rowType={rowType} perfMap={perfMap} manualInputs={manualInputs} />
         </div>
       )}

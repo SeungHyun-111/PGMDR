@@ -3,7 +3,7 @@ import useScheduleStore from '../../store/useScheduleStore'
 
 export default function ProductFilters({ filters, setFilters }) {
   const { proposalItems } = useScheduleStore()
-  const { teams, dealTypes, newTypes, videoStatuses } = useFilterOptions(proposalItems)
+  const { teams, dealTypes, newTypes } = useFilterOptions(proposalItems)
 
   const sel = (key, val) => setFilters(prev => ({ ...prev, [key]: val }))
 
@@ -46,11 +46,7 @@ export default function ProductFilters({ filters, setFilters }) {
           <option value="전체">신상품구분</option>
           {newTypes.map(n => <option key={n} value={n}>{n}</option>)}
         </select>
-        <select value={filters.videoStatus} onChange={e => sel('videoStatus', e.target.value)} style={selectStyle}>
-          <option value="전체">영상구분</option>
-          {videoStatuses.map(v => <option key={v} value={v}>{v}</option>)}
-        </select>
-        <button onClick={() => sel('starOnly', !filters.starOnly)}
+<button onClick={() => sel('starOnly', !filters.starOnly)}
           style={{ ...selectStyle, flex: 'none', padding: '4px 8px', background: filters.starOnly ? 'var(--yellow)' : 'var(--bg3)', color: filters.starOnly ? '#fff' : 'var(--text3)', border: '1px solid var(--border)', borderRadius: 4, cursor: 'pointer', fontWeight: 700 }}>
           ★
         </button>

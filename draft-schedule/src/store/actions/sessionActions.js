@@ -110,7 +110,6 @@ export function createSessionActions(setState, getState) {
 
     async resetSession(startDate, poolType) {
       unsubscribeAll()
-      // 먼저 UI를 완전 초기 상태로 리셋 (스토어 잔존 데이터 즉시 제거)
       setState({
         isLoading: true, isLoaded: false, error: null,
         startDate: '', endDate: '', poolType: 'A',
@@ -120,16 +119,24 @@ export function createSessionActions(setState, getState) {
         scheduledItemIds: {}, manualInputs: {}, lastUpdated: null,
         proposalItems: [], proposalLoaded: false,
       })
-      // Firebase 해당 세션 완전 삭제 → loadInitData가 GAS 강제 호출
-      await set(ref(db, `sessions/${startDate}_${poolType}`), null)
+      const weekKey = `${startDate}_${poolType}`
+      await set(ref(db, `sessions/${weekKey}`), null)
       await getState().loadInitData(startDate, poolType)
-      // 새 편성 시작 완료 → 협업 포인터 갱신 (다른 접속자 자동 합류 트리거)
-      await set(ref(db, 'activeSession'), {
-        weekKey: `${startDate}_${poolType}`,
-        startDate,
-        poolType,
-        setAt: Date.now(),
-      })
+
+      const { userName } = getState()
+      const sessionMeta = { weekKey, startDate, poolType, createdAt: Date.now(), createdBy: userName || '' }
+      await set(ref(db, `activeSessions/${weekKey}`), sessionMeta)
+    },
+
+    async deleteSession(weekKey) {
+      await Promise.all([
+        set(ref(db, `sessions/${weekKey}`), null),
+        set(ref(db, `activeSessions/${weekKey}`), null),
+      ])
+      const activeSnap = await get(ref(db, 'activeSession'))
+      if (activeSnap.exists() && activeSnap.val().weekKey === weekKey) {
+        await set(ref(db, 'activeSession'), null)
+      }
     },
   }
 }

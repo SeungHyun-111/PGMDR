@@ -81,6 +81,7 @@ export default function ScheduleRatio() {
 
       <RatioTable
         data={stats.group}
+        groupDm={stats.groupDm}
         stats={stats}
         targetMap={targetMap}
         totalSlotWeighted={totalSlotWeighted}

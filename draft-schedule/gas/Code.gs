@@ -20,7 +20,7 @@ const DRAFT_CONFIG = {
 
   TIMEZONE: 'Asia/Seoul'
 };
-
+ㄴㄴ ㅔ안
 /************************************
  * 컬럼 사전
  ************************************/
@@ -45,7 +45,8 @@ const PROPOSAL_COLUMNS = [
   { index: 17, key: 'videoStatus',           name: '방송영상상태' },
   { index: 18, key: 'targetQty1',            name: '목표수량' },
   { index: 19, key: 'partner1',              name: '협력사' },
-  { index: 20, key: 'availableWeightedMin1', name: '가용가중분' },
+  { index: 20, key: 'availableWeightedMin1', name: '가용가중분' }
+  ,
   { index: 21, key: 'operationStartDate1',   name: '운영시작일' },
   { index: 22, key: 'targetQty2',            name: '목표수량' },
   { index: 23, key: 'partner2',              name: '협력사' },

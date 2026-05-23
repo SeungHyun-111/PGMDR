@@ -21,23 +21,27 @@ function groupBlocks(blocks, keyFn, perfMap, manualInputs, totalWm) {
   blocks.forEach(b => {
     const k  = keyFn(b)
     const wm = b.weightedMin || 0
+    const dm = b.durationMin || 0
     const pk = b.perfKey
     const m  = pk ? (manualInputs?.[pk] || {}) : {}
     const p  = pk ? (perfMap?.[pk]      || {}) : {}
     const sp = Number(m.expectedSalesPerWeightedMin  ?? p.salesPerWeightedMin  ?? 0)
     const pp = Number(m.expectedProfitPerWeightedMin ?? p.profitPerWeightedMin ?? 0)
-    if (!map[k]) map[k] = { count: 0, wm: 0, perfWm: 0, sales: 0, profit: 0, perfCount: 0 }
+    if (!map[k]) map[k] = { count: 0, wm: 0, dm: 0, perfWm: 0, sales: 0, profit: 0, perfCount: 0 }
     map[k].count  += 1
     map[k].wm     += wm
+    map[k].dm     += dm
     if (sp > 0 || pp > 0) { map[k].perfWm += wm; map[k].sales += wm * sp; map[k].profit += wm * pp; map[k].perfCount += 1 }
   })
   return Object.entries(map).map(([key, v]) => ({
     key,
-    count:  v.count,
-    wm:     v.wm,
-    pct:    totalWm > 0 ? (v.wm / totalWm * 100).toFixed(1) : '0.0',
-    avgSp:  v.perfWm > 0 ? Math.round(v.sales  / v.perfWm) : 0,
-    avgPp:  v.perfWm > 0 ? Math.round(v.profit / v.perfWm) : 0,
+    count:   v.count,
+    wm:      v.wm,
+    dm:      v.dm,
+    avgRate: v.dm > 0 ? (v.wm / v.dm * 100).toFixed(1) + '%' : '-',
+    pct:     totalWm > 0 ? (v.wm / totalWm * 100).toFixed(1) : '0.0',
+    avgSp:   v.perfWm > 0 ? Math.round(v.sales  / v.perfWm) : 0,
+    avgPp:   v.perfWm > 0 ? Math.round(v.profit / v.perfWm) : 0,
     perfCount: v.perfCount,
   }))
 }
@@ -86,10 +90,14 @@ export default function SearchPanel({ isOpen, onToggle }) {
 
   const kw = gridSearch.trim().toLowerCase()
 
-  const { matchedBlocks, totalScheduledWm, dealRows, chRows } = useMemo(() => {
+  const { matchedBlocks, totalScheduledWm, dealRows, chRows, totalWm, totalDm, avgRate } = useMemo(() => {
     const allBlocks     = Object.values(scheduleBlocks).filter(b => b && !b.isDefault)
     const totalScheduledWm = allBlocks.reduce((s, b) => s + (b.weightedMin || 0), 0)
     const matchedBlocks = kw ? allBlocks.filter(b => blockMatches(b, kw)) : allBlocks
+
+    const totalWm = matchedBlocks.reduce((s, b) => s + (b.weightedMin || 0), 0)
+    const totalDm = matchedBlocks.reduce((s, b) => s + (b.durationMin || 0), 0)
+    const avgRate = totalDm > 0 ? (totalWm / totalDm * 100).toFixed(1) + '%' : '-'
 
     const dtPresent = new Set(matchedBlocks.map(b => b.dealTypeConverted || b.dealType || '미지정'))
     const dtExtra   = [...dtPresent].filter(k => !DT_ORDER.includes(k))
@@ -100,7 +108,7 @@ export default function SearchPanel({ isOpen, onToggle }) {
     const rawCh  = groupBlocks(matchedBlocks, b => CH_ORDER.includes(b.channel) ? b.channel : 'ALL', perfMap, manualInputs, totalScheduledWm)
     const chRows = CH_ORDER.map(k => rawCh.find(r => r.key === k)).filter(Boolean)
 
-    return { matchedBlocks, totalScheduledWm, dealRows, chRows }
+    return { matchedBlocks, totalScheduledWm, dealRows, chRows, totalWm, totalDm, avgRate }
   }, [scheduleBlocks, kw, perfMap, manualInputs])
 
   const matchedItems = useMemo(
@@ -119,7 +127,7 @@ export default function SearchPanel({ isOpen, onToggle }) {
   if (!isOpen) return null
 
   return (
-    <div style={{ width: 300, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ width: 'clamp(300px, 22vw, 440px)', flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* 헤더 */}
       <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -133,6 +141,22 @@ export default function SearchPanel({ isOpen, onToggle }) {
 
         {/* 편성 리스트 */}
         {sectionLabel('편성 리스트', matchedBlocks.length)}
+
+        {/* 단순분 / 가중률 요약 */}
+        <div style={{ margin: '4px 8px 6px', padding: '8px 12px', background: 'var(--bg3)', borderRadius: 6, border: '1px solid var(--border)', display: 'flex', gap: 16, alignItems: 'center' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 9, color: 'var(--text3)', marginBottom: 2 }}>가중분</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>{totalWm.toLocaleString()}</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 9, color: 'var(--text3)', marginBottom: 2 }}>단순분</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{totalDm > 0 ? totalDm.toLocaleString() : '-'}</div>
+          </div>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 9, color: 'var(--text3)', marginBottom: 2 }}>평균 가중률</div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text2)' }}>{avgRate}</div>
+          </div>
+        </div>
 
         <div style={{ padding: '0 0 4px' }}>
           <div style={{ padding: '4px 12px 2px', fontSize: 9, fontWeight: 700, color: 'var(--text3)', letterSpacing: '0.06em' }}>거래형태별</div>

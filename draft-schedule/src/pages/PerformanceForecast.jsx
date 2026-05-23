@@ -520,7 +520,7 @@ export default function PerformanceForecast() {
     { h: '팀',          align: 'left',   k: 'mdTeam',       dw: 66  },
     { h: '편성코드명 ✏', align: 'left',  k: 'pgmCodeName',  dw: 140 },
     { h: '거래형태 ✏',  align: 'left',   k: 'dealType',     dw: 66  },
-    { h: '영상구분 ✏',  align: 'left',   k: 'videoStatus',  dw: 66  },
+    { h: '신상품구분 ✏', align: 'left',   k: 'newProductType', dw: 66  },
     { h: '가중분',      align: 'right',  k: 'weightedMin',  dw: 56  },
     { h: '직전취급/분', align: 'right',  k: '_lastSales',   dw: 82  },
     { h: '직전한익/분', align: 'right',  k: '_lastProfit',  dw: 82  },
@@ -536,7 +536,7 @@ export default function PerformanceForecast() {
     { h: '팀',          align: 'left',   k: 'mdTeam',      dw: 66  },
     { h: '편성코드명 ✏', align: 'left',  k: 'pgmCodeName', dw: 140 },
     { h: '거래형태 ✏',  align: 'left',   k: 'dealType',    dw: 66  },
-    { h: '영상구분 ✏',  align: 'left',   k: 'videoStatus', dw: 66  },
+    { h: '신상품구분 ✏', align: 'left',   k: 'newProductType', dw: 66  },
     { h: '가중분',      align: 'right',  k: 'weightedMin', dw: 56  },
     { h: '예상취급/분 ✏', align: 'right', k: '_manualSales',  dw: 92 },
     { h: '예상한익/분 ✏', align: 'right', k: '_manualProfit', dw: 92 },
@@ -996,8 +996,8 @@ export default function PerformanceForecast() {
                         options={DEAL_TYPE_OPTIONS} onSave={v => handleBlockFieldSave(r, 'dealType', v)} />
                     </td>
                     <td style={td}>
-                      <BlockFieldEditor value={r.videoStatus || '기존'} type="select"
-                        options={VIDEO_STATUS_OPTIONS} onSave={v => handleBlockFieldSave(r, 'videoStatus', v)} />
+                      <BlockFieldEditor value={r.newProductType || '기존'} type="select"
+                        options={VIDEO_STATUS_OPTIONS} onSave={v => handleBlockFieldSave(r, 'newProductType', v)} />
                     </td>
                     <td style={{ ...td, textAlign: 'right' }}>{fmt(r.weightedMin)}</td>
                     <td style={{ ...td, textAlign: 'right' }}>
@@ -1054,8 +1054,8 @@ export default function PerformanceForecast() {
                         options={DEAL_TYPE_OPTIONS} onSave={v => handleBlockFieldSave(r, 'dealType', v)} />
                     </td>
                     <td style={td}>
-                      <BlockFieldEditor value={r.videoStatus || '기존'} type="select"
-                        options={VIDEO_STATUS_OPTIONS} onSave={v => handleBlockFieldSave(r, 'videoStatus', v)} />
+                      <BlockFieldEditor value={r.newProductType || '기존'} type="select"
+                        options={VIDEO_STATUS_OPTIONS} onSave={v => handleBlockFieldSave(r, 'newProductType', v)} />
                     </td>
                     <td style={{ ...td, textAlign: 'right' }}>{fmt(r.weightedMin)}</td>
                     <td style={{ ...td, textAlign: 'right', color: 'var(--text3)' }}>

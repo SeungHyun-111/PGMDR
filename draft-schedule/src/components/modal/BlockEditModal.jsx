@@ -29,6 +29,7 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
     dealType:          initDealType,
     dealTypeConverted: initDealType,
     channel:           block.channel           || 'ALL',
+    newProductType:    block.newProductType    || '',
     timeText:          block.timeText          || '',
     memoCode:          block.memoCode          || '',
     scheduleComment:   block.scheduleComment   || '',
@@ -96,6 +97,7 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
                   mdCategory:        form.mdCategory,
                   dealType:          dealTypeConverted,
                   dealTypeConverted: dealTypeConverted,
+                  newProductType:    form.newProductType,
                 }
               : p
           ),
@@ -161,6 +163,12 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
           <Field label="채널">
             <select value={form.channel} onChange={e => setField('channel', e.target.value)} style={inp}>
               {CHANNELS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+          <Field label="신상품구분">
+            <select value={form.newProductType} onChange={e => setField('newProductType', e.target.value)} style={inp}>
+              <option value="">선택</option>
+              {['기존', '신상품', '재녹화', '재편집'].map(o => <option key={o} value={o}>{o}</option>)}
             </select>
           </Field>
           <Field label="시작시간">
