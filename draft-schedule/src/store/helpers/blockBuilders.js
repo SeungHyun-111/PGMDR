@@ -1,5 +1,6 @@
 import { normalizeDealType, makePerfKey } from '../../hooks/usePerformanceMap'
 import { splitWeightedMin } from '../../utils/weightedMin'
+import { encodeKey, decodeKey } from '../../utils/firebaseKey'
 
 function normalizeTime(t) {
   if (!t) return ''
@@ -190,7 +191,7 @@ export function encodePerfMap(rawData) {
   if (!perfMap) return {}
   const encoded = {}
   Object.entries(perfMap).forEach(([k, v]) => {
-    encoded[k.replace(/\[/g, '__LB__').replace(/\]/g, '__RB__')] = { ...v, perfKey: k }
+    encoded[encodeKey(k)] = { ...v, perfKey: k }
   })
   return encoded
 }
@@ -199,8 +200,7 @@ export function decodePerfMap(encoded) {
   if (!encoded) return {}
   const result = {}
   Object.entries(encoded).forEach(([k, v]) => {
-    const decoded = k.replace(/__LB__/g, '[').replace(/__RB__/g, ']')
-    result[decoded] = v
+    result[decodeKey(k)] = v
   })
   return result
 }

@@ -1,5 +1,6 @@
 import { db, ref, set, update, get } from '../../api/firebase'
 import { buildProposalItem } from '../helpers/blockBuilders'
+import { encodeKey } from '../../utils/firebaseKey'
 
 export function createItemActions(setState, getState) {
   return {
@@ -98,8 +99,7 @@ export function createItemActions(setState, getState) {
     async saveManualInput(perfKey, data) {
       const { startDate, poolType } = getState()
       const weekKey = `${startDate}_${poolType}`
-      // Firebase 경로에 [ ] 불허 → 인코딩
-      const safeKey = perfKey.replace(/\[/g, '__LB__').replace(/\]/g, '__RB__')
+      const safeKey = encodeKey(perfKey)
       await update(ref(db, `sessions/${weekKey}/manualInputs/${safeKey}`), data)
     },
 

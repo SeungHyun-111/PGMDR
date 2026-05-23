@@ -73,24 +73,24 @@ export function createBlockActions(setState, getState) {
 
       if (newChannel !== 'ALL' && !isSplit) {
         // ── ALL → CA or IP : 슬롯 분리 ──────────────────
-        const otherCh = newChannel === 'CA' ? 'IP' : 'CA'
         const { caWeighted, ipWeighted } = splitWeightedMin(slot.weightedMin, slot.dateKey, slot.timeText)
         const wm     = newChannel === 'CA' ? caWeighted : ipWeighted
         const newKey = `${slotId}_${newChannel}`
-
-        await set(ref(db, `sessions/${weekKey}/splitSlots/${slotId}`), true)
-        await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${slotId}`), null)
-        await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${newKey}`),
-          { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false })
+        await update(ref(db, `sessions/${weekKey}`), {
+          [`splitSlots/${slotId}`]: true,
+          [`scheduleBlocks/${slotId}`]: null,
+          [`scheduleBlocks/${newKey}`]: { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false },
+        })
 
       } else if (newChannel === 'ALL' && isSplit) {
         // ── CA/IP → ALL : 슬롯 합치기 ───────────────────
         const otherCh = origChannel === 'CA' ? 'IP' : 'CA'
-        await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${slotId}_${otherCh}`), null)
-        await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${block.blockKey}`), null)
-        await set(ref(db, `sessions/${weekKey}/splitSlots/${slotId}`), null)
-        await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${slotId}`),
-          { ...block, ...patch, blockKey: slotId, channel: 'ALL', weightedMin: slot.weightedMin, isDefault: false })
+        await update(ref(db, `sessions/${weekKey}`), {
+          [`scheduleBlocks/${slotId}_${otherCh}`]: null,
+          [`scheduleBlocks/${block.blockKey}`]: null,
+          [`splitSlots/${slotId}`]: null,
+          [`scheduleBlocks/${slotId}`]: { ...block, ...patch, blockKey: slotId, channel: 'ALL', weightedMin: slot.weightedMin, isDefault: false },
+        })
 
       } else {
         // ── 구조 변경 없음 (이미 분리 상태에서 CA↔IP 등) ──

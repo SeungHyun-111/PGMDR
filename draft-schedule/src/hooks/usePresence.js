@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { db, ref, set, get, update, onValue, off } from '../api/firebase'
+import { db, ref, set, get, update, onValue } from '../api/firebase'
 import useScheduleStore from '../store/useScheduleStore'
 
 export default function usePresence() {
@@ -76,7 +76,7 @@ export function usePresenceUsers() {
       setUsers(list)
     })
 
-    return () => off(presenceRef)
+    return () => unsubscribe()
   }, [startDate, poolType])
 
   return users

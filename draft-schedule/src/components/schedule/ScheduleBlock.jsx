@@ -1,10 +1,10 @@
 // src/components/schedule/ScheduleBlock.jsx
-import { useState, useEffect } from 'react'
+import { useState, useEffect, memo } from 'react'
 import BlockEditModal from '../modal/BlockEditModal'
 import useScheduleStore from '../../store/useScheduleStore'
 import { getDealTypeChar } from '../../constants/dealTypes'
 
-export default function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }) {
+function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }) {
   const [hover, setHover]               = useState(false)
   const [tooltipPos, setTooltipPos]     = useState(null)
   const [contextMenu, setContextMenu]   = useState(null)
@@ -215,6 +215,8 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock, d
     </div>
   )
 }
+
+export default memo(ScheduleBlock)
 
 function BlockTooltip({ block, lastPerf, pos }) {
   // 화면 오른쪽/아래 잘림 방지

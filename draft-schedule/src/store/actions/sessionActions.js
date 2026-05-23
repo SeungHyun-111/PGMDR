@@ -1,6 +1,7 @@
 import { db, ref, set, get } from '../../api/firebase'
 import { buildSlot, buildPreScheduleBlocks, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
 import { subscribeRealtimePaths, unsubscribeAll } from '../helpers/firebaseSubscribe'
+import { decodeMapKeys } from '../../utils/firebaseKey'
 
 const PGM_TEAM_ITEMS = Array.from({ length: 10 }, (_, i) => ({
   itemId: `pgmteam_default_${i + 1}`,
@@ -13,13 +14,6 @@ const PGM_TEAM_ITEMS = Array.from({ length: 10 }, (_, i) => ({
   dealTypeChar: '위',
   memoCode: '[전사블록]',
 }))
-
-function decodeMapKeys(obj) {
-  if (!obj) return {}
-  return Object.fromEntries(
-    Object.entries(obj).map(([k, v]) => [k.replace(/__LB__/g, '[').replace(/__RB__/g, ']'), v])
-  )
-}
 
 export function createSessionActions(setState, getState) {
   return {

@@ -1,5 +1,5 @@
 // src/components/schedule/SlotRow.jsx  ← 신규 분리
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import ScheduleBlock from './ScheduleBlock'
 import useScheduleStore from '../../store/useScheduleStore'
 import { splitWeightedMin } from '../../utils/weightedMin'
@@ -18,7 +18,7 @@ function isDimmed(block, teamFilter, gridSearch) {
   return false
 }
 
-export default function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_IP, onDrop, saveBlock, removeBlock, teamFilter = '전체', gridSearch = '' }) {
+function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_IP, onDrop, saveBlock, removeBlock, teamFilter = '전체', gridSearch = '' }) {
   const [caHover, setCaHover] = useState(false)
   const [ipHover, setIpHover] = useState(false)
   const halfHeight = height / 2
@@ -97,7 +97,7 @@ export default function SlotRow({ slot, top, height, isSplit, block, splitBlock_
   }
 
   return (
-    <div style={{ position: 'absolute', top, left: 0, right: 0, height, borderBottom: '1px solid var(--border)' }}>
+    <div style={{ position: 'absolute', top, left: 0, right: 0, height, borderBottom: '1px solid var(--border)' }} data-slot-id={slot.slotId}>
       {isSplit ? (
         <>
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: halfHeight, background: caHover ? 'rgba(61,90,138,.2)' : 'transparent', borderBottom: '1px solid var(--border)', transition: 'background .1s' }}
@@ -121,3 +121,4 @@ export default function SlotRow({ slot, top, height, isSplit, block, splitBlock_
     </div>
   )
 }
+export default memo(SlotRow)

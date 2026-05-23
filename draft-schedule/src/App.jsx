@@ -1,9 +1,9 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, lazy, Suspense } from 'react'
 import DraftSchedule from './pages/DraftSchedule'
-import PerformanceForecast from './pages/PerformanceForecast'
-import ScheduleRatio from './pages/ScheduleRatio'
-import ScheduleStatus from './pages/ScheduleStatus'
-import HelpPage from './pages/HelpPage'
+const PerformanceForecast = lazy(() => import('./pages/PerformanceForecast'))
+const ScheduleRatio       = lazy(() => import('./pages/ScheduleRatio'))
+const ScheduleStatus      = lazy(() => import('./pages/ScheduleStatus'))
+const HelpPage            = lazy(() => import('./pages/HelpPage'))
 import ExportModal from './components/common/ExportModal'
 import ChatPanel from './components/common/ChatPanel'
 import PresenceBar from './components/common/PresenceBar'
@@ -205,11 +205,13 @@ export default function App() {
 
       {/* 페이지 */}
       <div style={{ flex: 1, overflow: 'hidden' }}>
-        {activeTab === 'draft'    && <DraftSchedule setupPopup={setupPopup} setSetupPopup={setSetupPopup} />}
-        {activeTab === 'forecast' && <PerformanceForecast />}
-        {activeTab === 'ratio'    && <ScheduleRatio />}
-        {activeTab === 'status'   && <ScheduleStatus />}
-        {activeTab === 'help'     && <HelpPage />}
+        <Suspense fallback={<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', fontSize: 12, color: 'var(--text3)' }}>로딩 중...</div>}>
+          {activeTab === 'draft'    && <DraftSchedule setupPopup={setupPopup} setSetupPopup={setSetupPopup} />}
+          {activeTab === 'forecast' && <PerformanceForecast />}
+          {activeTab === 'ratio'    && <ScheduleRatio />}
+          {activeTab === 'status'   && <ScheduleStatus />}
+          {activeTab === 'help'     && <HelpPage />}
+        </Suspense>
       </div>
 
       {exportModal  && <ExportModal onClose={() => setExportModal(false)} />}

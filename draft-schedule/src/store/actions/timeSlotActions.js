@@ -1,4 +1,4 @@
-import { db, ref, set } from '../../api/firebase'
+import { db, ref, set, update } from '../../api/firebase'
 import { timeToMin, minToTime } from '../../utils/weightedMin'
 import { splitWeightedMin } from '../../utils/weightedMin'
 import { getEffectivePgmSlots } from '../../utils/effectiveSlots'
@@ -32,32 +32,29 @@ export function createTimeSlotActions(setState, getState) {
       const slotEntry = prevOv.isCustom
         ? { ...prevOv, durationMin: firstDur, weightedMin: firstWm }  // 커스텀 슬롯: 기존 필드 유지
         : { durationMin: firstDur, weightedMin: firstWm }              // 원본 슬롯: override만 저장
-      await set(ref(db, `sessions/${weekKey}/customSlots/${slotId}`), slotEntry)
-
-      // 새 커스텀 슬롯 생성
-      await set(ref(db, `sessions/${weekKey}/customSlots/${customSlotId}`), {
-        slotId: customSlotId,
-        dateKey: slot.dateKey,
-        timeText: newTimeText,
-        durationMin: secondDur,
-        weightedMin: secondWm,
-        channel: 'ALL',
-        isCustom: true,
-        parentSlotId: slotId,
-      })
-
-      // 기존 블록 durationMin/weightedMin 업데이트
-      const block = scheduleBlocks[slotId]
-      if (block) {
-        await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${slotId}`), { ...block, durationMin: firstDur, weightedMin: firstWm })
+      const fbPatch = {
+        [`customSlots/${slotId}`]: slotEntry,
+        [`customSlots/${customSlotId}`]: {
+          slotId: customSlotId,
+          dateKey: slot.dateKey,
+          timeText: newTimeText,
+          durationMin: secondDur,
+          weightedMin: secondWm,
+          channel: 'ALL',
+          isCustom: true,
+          parentSlotId: slotId,
+        },
       }
+      const block = scheduleBlocks[slotId]
+      if (block) fbPatch[`scheduleBlocks/${slotId}`] = { ...block, durationMin: firstDur, weightedMin: firstWm }
       if (splitSlots[slotId]) {
         const { caWeighted, ipWeighted } = splitWeightedMin(firstWm, slot.dateKey, slot.timeText)
         const caBlock = scheduleBlocks[`${slotId}_CA`]
         const ipBlock = scheduleBlocks[`${slotId}_IP`]
-        if (caBlock) await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${slotId}_CA`), { ...caBlock, durationMin: firstDur, weightedMin: caWeighted })
-        if (ipBlock) await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${slotId}_IP`), { ...ipBlock, durationMin: firstDur, weightedMin: ipWeighted })
+        if (caBlock) fbPatch[`scheduleBlocks/${slotId}_CA`] = { ...caBlock, durationMin: firstDur, weightedMin: caWeighted }
+        if (ipBlock) fbPatch[`scheduleBlocks/${slotId}_IP`] = { ...ipBlock, durationMin: firstDur, weightedMin: ipWeighted }
       }
+      await update(ref(db, `sessions/${weekKey}`), fbPatch)
     },
 
     // 슬롯 시간 삭제: slotId 슬롯 제거 → 앞 슬롯이 그 시간을 흡수
@@ -77,40 +74,31 @@ export function createTimeSlotActions(setState, getState) {
       const newDur = prev.durationMin + slot.durationMin
       const newWm  = prev.weightedMin + slot.weightedMin
 
-      // 삭제 슬롯 처리
-      if (slot.isCustom) {
-        await set(ref(db, `sessions/${weekKey}/customSlots/${slotId}`), null)
-      } else {
-        await set(ref(db, `sessions/${weekKey}/customSlots/${slotId}`), { deleted: true })
-      }
-
-      // 앞 슬롯 duration 확장
       const prevOv = customSlots[prev.slotId] || {}
       const prevEntry = prevOv.isCustom
         ? { ...prevOv, durationMin: newDur, weightedMin: newWm }
         : { durationMin: newDur, weightedMin: newWm }
-      await set(ref(db, `sessions/${weekKey}/customSlots/${prev.slotId}`), prevEntry)
 
-      // 삭제 슬롯 블록 제거
-      await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${slotId}`), null)
+      const fbPatch = {
+        [`customSlots/${slotId}`]: slot.isCustom ? null : { deleted: true },
+        [`customSlots/${prev.slotId}`]: prevEntry,
+        [`scheduleBlocks/${slotId}`]: null,
+      }
       if (splitSlots[slotId]) {
-        await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${slotId}_CA`), null)
-        await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${slotId}_IP`), null)
-        await set(ref(db, `sessions/${weekKey}/splitSlots/${slotId}`), null)
+        fbPatch[`scheduleBlocks/${slotId}_CA`] = null
+        fbPatch[`scheduleBlocks/${slotId}_IP`] = null
+        fbPatch[`splitSlots/${slotId}`] = null
       }
-
-      // 앞 슬롯 블록 duration 업데이트
       const prevBlock = scheduleBlocks[prev.slotId]
-      if (prevBlock) {
-        await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${prev.slotId}`), { ...prevBlock, durationMin: newDur, weightedMin: newWm })
-      }
+      if (prevBlock) fbPatch[`scheduleBlocks/${prev.slotId}`] = { ...prevBlock, durationMin: newDur, weightedMin: newWm }
       if (splitSlots[prev.slotId]) {
         const { caWeighted, ipWeighted } = splitWeightedMin(newWm, prev.dateKey, prev.timeText)
         const ca = scheduleBlocks[`${prev.slotId}_CA`]
         const ip = scheduleBlocks[`${prev.slotId}_IP`]
-        if (ca) await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${prev.slotId}_CA`), { ...ca, durationMin: newDur, weightedMin: caWeighted })
-        if (ip) await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${prev.slotId}_IP`), { ...ip, durationMin: newDur, weightedMin: ipWeighted })
+        if (ca) fbPatch[`scheduleBlocks/${prev.slotId}_CA`] = { ...ca, durationMin: newDur, weightedMin: caWeighted }
+        if (ip) fbPatch[`scheduleBlocks/${prev.slotId}_IP`] = { ...ip, durationMin: newDur, weightedMin: ipWeighted }
       }
+      await update(ref(db, `sessions/${weekKey}`), fbPatch)
     },
   }
 }

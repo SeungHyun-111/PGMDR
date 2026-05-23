@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { db, ref, set, onValue, off } from '../api/firebase'
+import { db, ref, set, onValue } from '../api/firebase'
 import useScheduleStore from '../store/useScheduleStore'
 
 export default function useChat() {
@@ -12,7 +12,7 @@ export default function useChat() {
     const weekKey = `${startDate}_${poolType}`
     const r = ref(db, `chat/${weekKey}`)  // 루트 분리된 경로
 
-    onValue(r, snap => {
+    const unsub = onValue(r, snap => {
       if (!snap.exists()) { setMessages([]); return }
       const msgs = Object.values(snap.val())
         .sort((a, b) => a.timestamp - b.timestamp)
@@ -20,7 +20,7 @@ export default function useChat() {
       setMessages(msgs)
     })
 
-    return () => off(r)
+    return () => unsub()
   }, [startDate, poolType])
 
   const sendMessage = async () => {
