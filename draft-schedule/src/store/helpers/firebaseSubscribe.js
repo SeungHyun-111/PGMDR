@@ -26,6 +26,7 @@ export function subscribeRealtimePaths(weekKey, setState) {
   const paths = {
     [`sessions/${weekKey}/scheduleBlocks`]:   snap => setState({ scheduleBlocks:   snap.exists() ? snap.val() : {} }),
     [`sessions/${weekKey}/splitSlots`]:       snap => setState({ splitSlots:       snap.exists() ? snap.val() : {} }),
+    [`sessions/${weekKey}/customSlots`]:      snap => setState({ customSlots:      snap.exists() ? snap.val() : {} }),
     [`sessions/${weekKey}/starred`]:          snap => setState({ starred:          snap.exists() ? snap.val() : {} }),
     [`sessions/${weekKey}/scheduledItemIds`]: snap => setState({ scheduledItemIds: snap.exists() ? snap.val() : {} }),
     [`sessions/${weekKey}/manualInputs`]:     snap => setState({ manualInputs:     snap.exists() ? decodeMapKeys(snap.val()) : {} }),

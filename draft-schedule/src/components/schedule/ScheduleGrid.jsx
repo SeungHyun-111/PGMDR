@@ -1,27 +1,25 @@
 // src/components/schedule/ScheduleGrid.jsx
 import { useMemo, useState, useRef, useEffect } from 'react'
-import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
+import useScheduleStore from '../../store/useScheduleStore'
 import SlotRow from './SlotRow'
-import { splitWeightedMin } from '../../utils/weightedMin'
+import { splitWeightedMin, timeToMin, minToTime } from '../../utils/weightedMin'
+import { getEffectivePgmSlots } from '../../utils/effectiveSlots'
 
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
-const TIME_COL_WIDTH = 34
+const TIME_COL_WIDTH = 36
 const HEADER_HEIGHT = 36
 const TOOLBAR_HEIGHT = 32
 const MIN_ROW_HEIGHT = 28
 
-function timeToMin(timeText) {
-  if (!timeText) return 0
-  const [h, m] = String(timeText).split(':').map(Number)
-  return h * 60 + m
-}
-
 export default function ScheduleGrid({ onBlockDrop }) {
-  const { pgmSlots, scheduleBlocks, saveBlock, removeBlock, splitSlots, toggleSplitSlot } = useScheduleStore()
+  const { pgmSlots, customSlots, scheduleBlocks, saveBlock, removeBlock, splitSlots, toggleSplitSlot, splitSlotTime, deleteSlotTime } = useScheduleStore()
   const containerRef = useRef(null)
   const [containerWidth, setContainerWidth] = useState(1200)
   const [containerHeight, setContainerHeight] = useState(0)
-  const [splitPopup, setSplitPopup] = useState(null)
+  const [splitPopup, setSplitPopup]       = useState(null)  // CA/IP 분리
+  const [ctxMenu, setCtxMenu]             = useState(null)  // 시간 우클릭 메뉴
+  const [timeSplitModal, setTimeSplitModal] = useState(null) // 시간 분할 모달
+  const [timeSplitInput, setTimeSplitInput] = useState('')
   const [teamFilter, setTeamFilter] = useState('전체')
 
   // pgmSlots가 실제로 로드된 뒤 컨테이너가 DOM에 붙으므로 hasPgmSlots 변화 시 재실행
@@ -37,23 +35,29 @@ export default function ScheduleGrid({ onBlockDrop }) {
   }, [hasPgmSlots])
 
   useEffect(() => {
-    const handler = () => setSplitPopup(null)
+    const handler = () => { setSplitPopup(null); setCtxMenu(null) }
     document.addEventListener('click', handler)
     return () => document.removeEventListener('click', handler)
   }, [])
 
+  // GAS 원본 + customSlots 오버라이드/추가를 합산한 실효 슬롯
+  const effectivePgmSlots = useMemo(
+    () => getEffectivePgmSlots(pgmSlots, customSlots),
+    [pgmSlots, customSlots]
+  )
+
   const dates = useMemo(() => {
     const seen = new Set()
     const result = []
-    pgmSlots.forEach(slot => {
+    effectivePgmSlots.forEach(slot => {
       if (!seen.has(slot.dateKey)) { seen.add(slot.dateKey); result.push(slot.dateKey) }
     })
     return result.sort()
-  }, [pgmSlots])
+  }, [effectivePgmSlots])
 
   const slotsByDate = useMemo(() => {
     const map = {}
-    pgmSlots.forEach(slot => {
+    effectivePgmSlots.forEach(slot => {
       if (!map[slot.dateKey]) map[slot.dateKey] = []
       map[slot.dateKey].push(slot)
     })
@@ -61,9 +65,8 @@ export default function ScheduleGrid({ onBlockDrop }) {
       map[date].sort((a, b) => timeToMin(a.timeText) - timeToMin(b.timeText))
     })
     return map
-  }, [pgmSlots])
+  }, [effectivePgmSlots])
 
-  // 날짜별 슬롯 유닛 수(split=2, single=1)의 최대값 → 세로 높이 기준
   const maxSlotUnits = useMemo(() => {
     if (!dates.length) return 0
     return Math.max(...dates.map(date =>
@@ -89,14 +92,21 @@ export default function ScheduleGrid({ onBlockDrop }) {
     return (containerWidth - TIME_COL_WIDTH * dates.length) / dates.length
   }, [containerWidth, dates.length])
 
-  const handleTimeAxisRightClick = (e, slot) => {
+  const handleTimeAxisRightClick = (e, slot, dateSlots) => {
     e.preventDefault()
     e.stopPropagation()
+    const idx = dateSlots.findIndex(s => s.slotId === slot.slotId)
+    const x = Math.min(e.clientX, window.innerWidth  - 160)
+    const y = Math.min(e.clientY, window.innerHeight - 120)
+    setCtxMenu({ slot, idx, x, y })
+  }
+
+  const openCaIpPopup = slot => {
     const isSplit = !!splitSlots[slot.slotId]
-    const popupW = 276
-    const popupH = 120
-    const x = e.clientX + popupW > window.innerWidth  ? e.clientX - popupW : e.clientX
-    const y = e.clientY + popupH > window.innerHeight ? e.clientY - popupH : e.clientY
+    const popupW = 276, popupH = 120
+    const x = Math.min(ctxMenu?.x ?? 0, window.innerWidth  - popupW)
+    const y = Math.min((ctxMenu?.y ?? 0) + 10, window.innerHeight - popupH)
+    setCtxMenu(null)
     setSplitPopup({
       slotId: slot.slotId, slot,
       mode: isSplit ? 'merge' : 'split',
@@ -107,6 +117,43 @@ export default function ScheduleGrid({ onBlockDrop }) {
     })
   }
 
+  const openTimeSplitModal = slot => {
+    setCtxMenu(null)
+    setTimeSplitInput('')
+    setTimeSplitModal(slot)
+  }
+
+  const handleDeleteSlotTime = async slot => {
+    setCtxMenu(null)
+    await deleteSlotTime(slot.slotId)
+  }
+
+  const handleTimeSplitConfirm = async () => {
+    if (!timeSplitModal || !timeSplitInput.trim()) return
+    await splitSlotTime(timeSplitModal.slotId, timeSplitInput.trim())
+    setTimeSplitModal(null)
+    setTimeSplitInput('')
+  }
+
+  // 시간 분할 미리보기 계산
+  const timeSplitPreview = useMemo(() => {
+    if (!timeSplitModal || !timeSplitInput) return null
+    const slot = timeSplitModal
+    const origStart = timeToMin(slot.timeText)
+    const newStart  = timeToMin(timeSplitInput)
+    const origEnd   = origStart + slot.durationMin
+    if (newStart <= origStart || newStart >= origEnd) return null
+    const firstDur  = newStart - origStart
+    const secondDur = origEnd - newStart
+    const rate      = slot.durationMin > 0 ? slot.weightedMin / slot.durationMin : 0
+    return {
+      firstDur, secondDur,
+      firstWm:  Math.round(rate * firstDur),
+      secondWm: Math.round(rate * secondDur),
+      endTime:  minToTime(origEnd),
+    }
+  }, [timeSplitModal, timeSplitInput])
+
   const handleSplitConfirm = async choice => {
     const { slotId, slot, mode, singleBlock, caBlock, ipBlock } = splitPopup
     const { caWeighted, ipWeighted } = splitWeightedMin(slot.weightedMin, slot.dateKey, slot.timeText)
@@ -115,15 +162,10 @@ export default function ScheduleGrid({ onBlockDrop }) {
       await toggleSplitSlot(slotId)
       if (singleBlock && !singleBlock.isDefault) {
         await removeBlock(slotId)
-        const keepKey  = `${slotId}_${choice}`
-        const otherCh  = choice === 'CA' ? 'IP' : 'CA'
-        const otherKey = `${slotId}_${otherCh}`
+        const keepKey = `${slotId}_${choice}`
         await saveBlock(keepKey, { ...singleBlock, slotId, blockKey: keepKey, channel: choice, weightedMin: choice === 'CA' ? caWeighted : ipWeighted })
-        await saveBlock(otherKey, makeDefaultBlock(slot, otherCh))
       } else {
         await removeBlock(slotId)
-        await saveBlock(`${slotId}_CA`, makeDefaultBlock(slot, 'CA'))
-        await saveBlock(`${slotId}_IP`, makeDefaultBlock(slot, 'IP'))
       }
     } else {
       await toggleSplitSlot(slotId)
@@ -135,7 +177,6 @@ export default function ScheduleGrid({ onBlockDrop }) {
         await saveBlock(slotId, { ...keepBlock, slotId, blockKey: slotId, channel: choice, weightedMin: slot.weightedMin })
       } else {
         await removeBlock(`${slotId}_${choice}`)
-        await saveBlock(slotId, makeDefaultBlock(slot, 'ALL'))
       }
     }
     setSplitPopup(null)
@@ -160,7 +201,7 @@ export default function ScheduleGrid({ onBlockDrop }) {
       {/* 툴바 */}
       <div style={{ height: TOOLBAR_HEIGHT, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 10, borderBottom: '1px solid var(--border)', background: 'var(--bg2)', flexShrink: 0 }}>
         <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-          총 {pgmSlots.length}슬롯 · {dates.length}일 · 시간축 우클릭 → CA/IP 분리
+          총 {effectivePgmSlots.length}슬롯 · {dates.length}일 · 시간축 우클릭 → CA/IP 분리 · 시간 분할/삭제
         </div>
         <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)}
           style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '2px 6px', borderRadius: 4, fontSize: 11, outline: 'none', marginLeft: 4 }}>
@@ -203,21 +244,25 @@ export default function ScheduleGrid({ onBlockDrop }) {
                   const currentTop = timeTop
                   timeTop += rowH
                   const [h, m] = slot.timeText.split(':')
-                  const isSplit = !!splitSlots[slot.slotId]
+                  const isSplit   = !!splitSlots[slot.slotId]
+                  const isCustom  = !!slot.isCustom
                   return (
                     <div key={slot.slotId}
                       style={{
                         position: 'absolute', top: currentTop, left: 0, right: 0, height: rowH,
+                        overflow: 'hidden',
                         ...(isSplit
                           ? { border: '2px double var(--red)', background: 'rgba(220,38,38,.03)' }
+                          : isCustom
+                          ? { borderBottom: '1px dashed var(--accent)', background: 'rgba(74,108,247,.04)' }
                           : { borderBottom: '1px solid var(--border)', background: 'transparent' }
                         ),
-                        display: 'flex', alignItems: 'center', justifyContent: 'flex-start',
-                        paddingLeft: 3, cursor: 'context-menu',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'context-menu',
                       }}
-                      onContextMenu={e => handleTimeAxisRightClick(e, slot)}
+                      onContextMenu={e => handleTimeAxisRightClick(e, slot, slots)}
                     >
-                      <span style={{ fontSize: Math.min(12, Math.max(9, rowH * 0.3)), color: isSplit ? 'var(--red)' : 'var(--text2)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: Math.min(11, Math.max(8, rowH * 0.28)), color: isSplit ? 'var(--red)' : isCustom ? 'var(--accent)' : 'var(--text2)', fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '-0.3px' }}>
                         {String(h).padStart(2,'0')}:{String(m).padStart(2,'0')}
                       </span>
                     </div>
@@ -258,7 +303,100 @@ export default function ScheduleGrid({ onBlockDrop }) {
         })}
       </div>
 
-      {/* 분리 팝업 */}
+      {/* 시간축 우클릭 컨텍스트 메뉴 */}
+      {ctxMenu && (
+        <div onClick={e => e.stopPropagation()}
+          style={{ position: 'fixed', left: ctxMenu.x, top: ctxMenu.y, zIndex: 9999, background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 7, boxShadow: '0 8px 24px rgba(0,0,0,.45)', padding: '4px 0', minWidth: 148 }}>
+          {[
+            {
+              label: splitSlots[ctxMenu.slot.slotId] ? '일원 변경' : 'CA / IP 분리',
+              icon: '⇄',
+              action: () => openCaIpPopup(ctxMenu.slot),
+            },
+            { sep: true },
+            {
+              label: '시간 분할',
+              icon: '✂',
+              action: () => openTimeSplitModal(ctxMenu.slot),
+            },
+            {
+              label: '시간 삭제',
+              icon: '✕',
+              disabled: ctxMenu.idx === 0,
+              action: () => handleDeleteSlotTime(ctxMenu.slot),
+            },
+          ].map((item, i) =>
+            item.sep
+              ? <div key={i} style={{ height: 1, background: 'var(--border)', margin: '3px 0' }} />
+              : <button key={i} disabled={item.disabled} onClick={item.action}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '7px 14px', background: 'none', border: 'none', textAlign: 'left', fontSize: 12, color: item.disabled ? 'var(--text3)' : 'var(--text)', cursor: item.disabled ? 'default' : 'pointer' }}>
+                  <span style={{ fontSize: 10, opacity: 0.7 }}>{item.icon}</span>{item.label}
+                </button>
+          )}
+        </div>
+      )}
+
+      {/* 시간 분할 모달 */}
+      {timeSplitModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setTimeSplitModal(null)}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 12, padding: '20px 24px', minWidth: 300, boxShadow: '0 16px 48px rgba(0,0,0,.6)' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 16 }}>시간 분할</div>
+
+            <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 10 }}>
+              현재 슬롯: <strong style={{ color: 'var(--text)' }}>{timeSplitModal.timeText}</strong>
+              {' ~ '}
+              <strong style={{ color: 'var(--text)' }}>{minToTime(timeToMin(timeSplitModal.timeText) + timeSplitModal.durationMin)}</strong>
+              {' '}({timeSplitModal.durationMin}분 · WM {timeSplitModal.weightedMin})
+            </div>
+
+            <div style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 5 }}>새 시작시간 입력 (뒤 슬롯 시작)</div>
+              <input
+                autoFocus
+                value={timeSplitInput}
+                onChange={e => setTimeSplitInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleTimeSplitConfirm(); if (e.key === 'Escape') setTimeSplitModal(null) }}
+                placeholder="예: 03:41"
+                style={{ width: '100%', boxSizing: 'border-box', background: 'var(--bg4)', border: '1px solid var(--border2)', color: 'var(--text)', padding: '8px 10px', borderRadius: 6, fontSize: 13, outline: 'none' }}
+              />
+            </div>
+
+            {timeSplitPreview ? (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                {[
+                  { label: `앞 슬롯 (${timeSplitModal.timeText}~${timeSplitInput})`, dur: timeSplitPreview.firstDur, wm: timeSplitPreview.firstWm },
+                  { label: `뒤 슬롯 (${timeSplitInput}~${timeSplitPreview.endTime})`, dur: timeSplitPreview.secondDur, wm: timeSplitPreview.secondWm },
+                ].map((p, i) => (
+                  <div key={i} style={{ flex: 1, background: 'var(--bg3)', borderRadius: 7, padding: '8px 10px' }}>
+                    <div style={{ fontSize: 9, color: 'var(--text3)', marginBottom: 4 }}>{p.label}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{p.dur}분</div>
+                    <div style={{ fontSize: 10, color: 'var(--text3)' }}>WM {p.wm}</div>
+                  </div>
+                ))}
+              </div>
+            ) : timeSplitInput ? (
+              <div style={{ fontSize: 11, color: 'var(--red)', marginBottom: 16 }}>유효하지 않은 시간입니다</div>
+            ) : (
+              <div style={{ height: 16, marginBottom: 16 }} />
+            )}
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button onClick={() => setTimeSplitModal(null)}
+                style={{ flex: 1, padding: '8px 0', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>
+                취소
+              </button>
+              <button onClick={handleTimeSplitConfirm} disabled={!timeSplitPreview}
+                style={{ flex: 1, padding: '8px 0', background: timeSplitPreview ? 'var(--accent)' : 'var(--bg4)', border: 'none', color: timeSplitPreview ? '#fff' : 'var(--text3)', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: timeSplitPreview ? 'pointer' : 'default' }}>
+                분할
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CA/IP 분리 팝업 */}
       {splitPopup && (
         <div onClick={e => e.stopPropagation()}
           style={{ position: 'fixed', left: splitPopup.x, top: splitPopup.y, zIndex: 9999, background: 'var(--bg3)', border: '1px solid var(--border2)', borderRadius: 8, padding: '12px 16px', minWidth: 260, boxShadow: '0 8px 24px rgba(0,0,0,.5)' }}>

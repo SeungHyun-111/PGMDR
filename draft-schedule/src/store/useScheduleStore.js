@@ -1,9 +1,10 @@
 import { create } from 'zustand'
 import { db, ref, set } from '../api/firebase'
-import { createSessionActions } from './actions/sessionActions'
-import { createBlockActions }   from './actions/blockActions'
-import { createItemActions }    from './actions/itemActions'
-import { createRefreshActions } from './actions/refreshActions'
+import { createSessionActions }  from './actions/sessionActions'
+import { createBlockActions }    from './actions/blockActions'
+import { createItemActions }     from './actions/itemActions'
+import { createRefreshActions }  from './actions/refreshActions'
+import { createTimeSlotActions } from './actions/timeSlotActions'
 
 export { makeDefaultBlock } from './helpers/blockBuilders'
 
@@ -25,6 +26,7 @@ const useScheduleStore = create((setState, getState) => ({
 
   scheduleBlocks:   {},
   splitSlots:       {},
+  customSlots:      {},
   starred:          {},
   scheduledItemIds: {},
   manualInputs:     {},
@@ -55,6 +57,7 @@ const useScheduleStore = create((setState, getState) => ({
   ...createBlockActions(setState, getState),
   ...createItemActions(setState, getState),
   ...createRefreshActions(setState, getState),
+  ...createTimeSlotActions(setState, getState),
 }))
 
 export default useScheduleStore

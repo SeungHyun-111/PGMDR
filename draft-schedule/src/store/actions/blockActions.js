@@ -1,5 +1,5 @@
 import { db, ref, set, get, update } from '../../api/firebase'
-import { makeDefaultBlock, buildProposalItem } from '../helpers/blockBuilders'
+import { buildProposalItem } from '../helpers/blockBuilders'
 import { splitWeightedMin } from '../../utils/weightedMin'
 
 export function createBlockActions(setState, getState) {
@@ -16,7 +16,7 @@ export function createBlockActions(setState, getState) {
     },
 
     async removeBlock(blockKey) {
-      const { startDate, poolType, pgmSlots, scheduleBlocks } = getState()
+      const { startDate, poolType, scheduleBlocks } = getState()
       const weekKey = `${startDate}_${poolType}`
       const block = scheduleBlocks[blockKey]
 
@@ -56,16 +56,7 @@ export function createBlockActions(setState, getState) {
         getState()._writeLog('삭제', blockKey, block, null)
       }
 
-      const isCA   = blockKey.endsWith('_CA')
-      const isIP   = blockKey.endsWith('_IP')
-      const slotId = isCA || isIP ? blockKey.slice(0, -3) : blockKey
-      const ch     = isCA ? 'CA' : isIP ? 'IP' : 'ALL'
-      const slot   = pgmSlots.find(s => s.slotId === slotId)
-
-      await set(
-        ref(db, `sessions/${weekKey}/scheduleBlocks/${blockKey}`),
-        slot ? makeDefaultBlock(slot, ch) : null
-      )
+      await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${blockKey}`), null)
     },
 
     // 채널 변경 + 그리드 분리/합치기 동시 처리
@@ -91,8 +82,6 @@ export function createBlockActions(setState, getState) {
         await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${slotId}`), null)
         await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${newKey}`),
           { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false })
-        await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${slotId}_${otherCh}`),
-          makeDefaultBlock(slot, otherCh))
 
       } else if (newChannel === 'ALL' && isSplit) {
         // ── CA/IP → ALL : 슬롯 합치기 ───────────────────

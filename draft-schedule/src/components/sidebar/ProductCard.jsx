@@ -1,5 +1,5 @@
 // src/components/sidebar/ProductCard.jsx
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
 import ProductTooltip from './ProductTooltip'
 
@@ -46,10 +46,18 @@ export default function ProductCard({ item, perfMap }) {
   const [hover, setHover]           = useState(false)
   const [dragging, setDragging]     = useState(false)
   const [tooltipPos, setTooltipPos] = useState(null)
-  const { starred, toggleStarred } = useScheduleStore()
+  const [ctxMenu, setCtxMenu]       = useState(null)
+  const { starred, toggleStarred, deleteProposalItem, duplicateProposalItem } = useScheduleStore()
   const isStarred = !!starred[item.itemId]
   const lastPerf = item.perfKey ? (perfMap[item.perfKey] || null) : null
   const isNew = !!item.newProductType
+
+  useEffect(() => {
+    if (!ctxMenu) return
+    const close = () => setCtxMenu(null)
+    document.addEventListener('click', close)
+    return () => document.removeEventListener('click', close)
+  }, [ctxMenu])
 
   const handleDragStart = (e) => {
     setDragging(true)
@@ -75,13 +83,25 @@ export default function ProductCard({ item, perfMap }) {
     setTooltipPos(null)
   }
 
+  const handleContextMenu = (e) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setHover(false)
+    setTooltipPos(null)
+    const x = e.clientX + 130 > window.innerWidth ? e.clientX - 130 : e.clientX
+    const y = e.clientY + 80  > window.innerHeight ? e.clientY - 80  : e.clientY
+    setCtxMenu({ x, y })
+  }
+
   return (
+    <>
     <div
       draggable
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onContextMenu={handleContextMenu}
       data-item-id={item.itemId}
       style={{
         position: 'relative',
@@ -140,5 +160,23 @@ export default function ProductCard({ item, perfMap }) {
 
       {hover && tooltipPos && <ProductTooltip item={item} perfMap={perfMap} pos={tooltipPos} />}
     </div>
+
+    {ctxMenu && (
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 6, zIndex: 9999, boxShadow: '0 4px 16px rgba(0,0,0,.4)', padding: '4px 0', minWidth: 120 }}>
+        <button
+          onClick={() => { duplicateProposalItem(item.itemId); setCtxMenu(null) }}
+          style={{ display: 'block', width: '100%', padding: '7px 14px', background: 'none', border: 'none', textAlign: 'left', fontSize: 12, color: 'var(--text)', cursor: 'pointer' }}>
+          복사
+        </button>
+        <button
+          onClick={() => { deleteProposalItem(item.itemId); setCtxMenu(null) }}
+          style={{ display: 'block', width: '100%', padding: '7px 14px', background: 'none', border: 'none', textAlign: 'left', fontSize: 12, color: 'var(--red, #f55)', cursor: 'pointer' }}>
+          삭제
+        </button>
+      </div>
+    )}
+    </>
   )
 }

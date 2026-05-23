@@ -53,6 +53,29 @@ export function createItemActions(setState, getState) {
       }))
     },
 
+    async deleteProposalItem(itemId) {
+      const { startDate, poolType, proposalItems } = getState()
+      const weekKey = `${startDate}_${poolType}`
+      const item = proposalItems.find(p => p.itemId === itemId)
+      if (!item) return
+      if (item._fbIdx !== undefined && item._fbIdx !== null) {
+        await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${item._fbIdx}`), null)
+      }
+      setState(s => ({ proposalItems: s.proposalItems.filter(p => p.itemId !== itemId) }))
+    },
+
+    async duplicateProposalItem(itemId) {
+      const { startDate, poolType, proposalItems } = getState()
+      const weekKey = `${startDate}_${poolType}`
+      const orig = proposalItems.find(p => p.itemId === itemId)
+      if (!orig) return
+      const fbIdx = proposalItems.length
+      const { _fbIdx, ...rest } = orig
+      const newItem = { ...rest, itemId: `dup_${Date.now()}` }
+      await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${fbIdx}`), newItem)
+      setState(s => ({ proposalItems: [...s.proposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx })] }))
+    },
+
     async scheduleItem(itemId) {
       const { startDate, poolType } = getState()
       const weekKey = `${startDate}_${poolType}`

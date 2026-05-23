@@ -114,6 +114,42 @@ manualInputs 조회 시 `'[편성팀]'`이 아닌 `pgmTeamRows[0]?.perfKey` 로 
 > 데이터 구조 변경, Firebase 경로 추가·삭제, GAS 스크립트 수정이 필요해 보여도 먼저 팀에게 확인 후 진행한다.
 > 기능 문제는 최대한 프론트엔드(React/Zustand/컴포넌트 로직)에서 해결한다.
 
+| 2026-05-23 | SeungHyun-111 | feat | [편성팀] 아이템 사이드바 카드화 — 세션 초기화 시 `[편성팀]/[위]/[전사블록]` 아이템 10개를 proposalItems에 자동 추가(`PGM_TEAM_ITEMS`). 이후 일반 제안상품과 동일하게 드래그·편성·반환 가능. 기존 `buildDefaultBlocks`(빈 슬롯 자동 채움) 완전 제거 → 선편성 외 모든 슬롯 공란 (`sessionActions.js`) |
+| 2026-05-23 | SeungHyun-111 | feat | 사이드바 카드 우클릭 컨텍스트 메뉴 — "복사" / "삭제" 메뉴 추가. 복사: `duplicateProposalItem`(Firebase proposalItems 배열에 append + 로컬 state 반영). 삭제: `deleteProposalItem`(_fbIdx 기반 Firebase null 처리 + 로컬 state 제거). `useEffect`로 외부 클릭 시 메뉴 닫기 (`ProductCard.jsx`, `itemActions.js`) |
+| 2026-05-23 | SeungHyun-111 | fix | 시뮬레이션 페이지 하단 2섹션 미렌더링 — ①`DailyTeamTip` 내 `.map()` Fragment에 key 누락(`<>` → `<Fragment key={t.name}>`)으로 React 19 렌더 크래시. ②외부 div에 `display:flex + height:100% + overflowY:auto` 동시 적용으로 스크롤 불가. 외부(스크롤 컨테이너)·내부(flex 레이아웃) div 분리로 해결 (`PerformanceForecast.jsx`) |
+| 2026-05-23 | SeungHyun-111 | feat | 시뮬레이션 테이블 정렬·리사이즈 — 직전실적미확인·편성별 실적 상세 두 테이블에 컬럼 헤더 클릭 정렬(▲▼⇅), 컬럼 우측 드래그 핸들 너비 조절 추가. 첫 드래그 시 모든 컬럼 offsetWidth 스냅샷 → `table-layout:fixed` 전환. 기본 상태는 `table-layout:auto + width:100%`로 페이지 폭 자동 채움. `overflow:hidden + textOverflow:ellipsis`로 줄바꿈 없이 우측 클리핑 (`PerformanceForecast.jsx`) |
+| 2026-05-23 | SeungHyun-111 | remove | 팀별 분당 효율 요약 테이블 삭제 — 요청 없이 포함된 섹션. `groupCols`, `makeThStyle` 함께 제거 (`PerformanceForecast.jsx`) |
+| 2026-05-23 | SeungHyun-111 | fix | 직전실적미확인 섹션 항상 펼침 — 아코디언 토글(showMissing state) 제거, 항상 열린 상태 (`PerformanceForecast.jsx`) |
+| 2026-05-23 | SeungHyun-111 | feat | 시간 분할·삭제 기능 — Firebase `sessions/{weekKey}/customSlots` 경로 신설. GAS 원본 pgmSlots 보존하며 오버라이드 레이어로 관리. **시간 분할**: 시간 라벨 우클릭 → "시간 분할" → 새 시작시간 입력 모달(실시간 미리보기: 앞/뒤 분·WM). 확인 시 원본 슬롯 duration 단축 + customSlots에 새 슬롯 생성. **시간 삭제**: 해당 슬롯 제거, 앞 슬롯이 duration+WM 흡수. CA/IP 채널분리 슬롯도 동일 처리(블록 WM 재계산). `getEffectivePgmSlots` 유틸리티로 pgmSlots+customSlots 병합·시간순 정렬. customSlots Firebase 실시간 구독 추가. 커스텀 슬롯은 파란 점선·파란 시간으로 시각 구분 (`timeSlotActions.js`, `effectiveSlots.js`, `ScheduleGrid.jsx`, `sessionActions.js`, `firebaseSubscribe.js`, `useScheduleStore.js`) |
+| 2026-05-23 | SeungHyun-111 | fix | 시간 라벨 정렬·너비 — `TIME_COL_WIDTH` 34→36px, `justifyContent:flex-start+paddingLeft` → `center` 가운데 정렬, `overflow:hidden`으로 넘침 방지, `letterSpacing:-0.3px`으로 폰트 밀집 (`ScheduleGrid.jsx`) |
+
+---
+
+## 주요 이슈 / 결정 기록
+
+### 2026-05-23 — customSlots 설계 원칙
+
+**왜 GAS pgmSlots를 직접 수정하지 않나**: pgmSlots는 GAS 원본이며 세션 리셋 시 재로드 기준. 직접 수정하면 리셋 후 복구 불가.
+
+**customSlots 구조**:
+```
+sessions/{weekKey}/customSlots/{id}: {
+  // 원본 슬롯 override (durationMin/weightedMin 변경):
+  durationMin: number, weightedMin: number
+
+  // 원본 슬롯 삭제:
+  deleted: true
+
+  // 분할로 생성된 신규 슬롯:
+  slotId, dateKey, timeText, durationMin, weightedMin,
+  channel: 'ALL', isCustom: true, parentSlotId
+}
+```
+
+`getEffectivePgmSlots(pgmSlots, customSlots)`: 원본에서 deleted 제거 → override 적용 → isCustom 슬롯 삽입 → dateKey+timeText 정렬.
+
+**Firebase undefined 제약**: Firebase는 `undefined` 값을 직렬화 거부. 조건부 스프레드(`prevOv.isCustom ? {...prevOv, ...} : {durationMin, weightedMin}`)로 undefined 필드 원천 차단.
+
 ---
 
 ## 향후 과제

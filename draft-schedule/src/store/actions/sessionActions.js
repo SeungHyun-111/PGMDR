@@ -1,6 +1,18 @@
-import { db, ref, set, get, update } from '../../api/firebase'
-import { buildSlot, buildDefaultBlocks, buildPreScheduleBlocks, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
+import { db, ref, set, get } from '../../api/firebase'
+import { buildSlot, buildPreScheduleBlocks, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
 import { subscribeRealtimePaths, unsubscribeAll } from '../helpers/firebaseSubscribe'
+
+const PGM_TEAM_ITEMS = Array.from({ length: 10 }, (_, i) => ({
+  itemId: `pgmteam_default_${i + 1}`,
+  pgmCodeName: '[편성팀]',
+  mdTeam: '편성팀',
+  orgName: '편성팀',
+  mdCategory: '전사',
+  dealType: '[위]',
+  dealTypeConverted: '[위]',
+  dealTypeChar: '위',
+  memoCode: '[전사블록]',
+}))
 
 function decodeMapKeys(obj) {
   if (!obj) return {}
@@ -22,8 +34,10 @@ export function createSessionActions(setState, getState) {
           const { fetchInitData } = await import('../../api/gas')
           const gasData = await fetchInitData(startDate, poolType)
           const now = Date.now()
+          const proposalItems = [...(gasData.proposalItems || []), ...PGM_TEAM_ITEMS]
           await set(ref(db, `sessions/${weekKey}/gasData`), {
             ...gasData,
+            proposalItems,
             perfMap: encodePerfMap(gasData.perfMap || {}),
           })
           await set(ref(db, `sessions/${weekKey}/lastUpdated`), {
@@ -31,8 +45,7 @@ export function createSessionActions(setState, getState) {
           })
           const pgmSlots = (gasData.pgmSlots || []).map(buildSlot)
           const preBlocks = buildPreScheduleBlocks(pgmSlots, gasData.preScheduleRows || [], {})
-          const defaultBlocks = buildDefaultBlocks(pgmSlots, preBlocks)
-          await set(ref(db, `sessions/${weekKey}/scheduleBlocks`), { ...defaultBlocks, ...preBlocks })
+          await set(ref(db, `sessions/${weekKey}/scheduleBlocks`), { ...preBlocks })
         }
 
         await getState()._loadFromFirebase(startDate, poolType)
@@ -45,7 +58,7 @@ export function createSessionActions(setState, getState) {
       const weekKey = `${startDate}_${poolType}`
       const [
         metaSnap, pgmSnap, perfMapSnap, preSnap, weightedSnap, targetSnap,
-        blocksSnap, splitSnap, starredSnap, scheduledSnap, inputsSnap, updatedSnap
+        blocksSnap, splitSnap, customSlotsSnap, starredSnap, scheduledSnap, inputsSnap, updatedSnap
       ] = await Promise.all([
         get(ref(db, `sessions/${weekKey}/gasData/meta`)),
         get(ref(db, `sessions/${weekKey}/gasData/pgmSlots`)),
@@ -55,6 +68,7 @@ export function createSessionActions(setState, getState) {
         get(ref(db, `sessions/${weekKey}/gasData/targetMetrics`)),
         get(ref(db, `sessions/${weekKey}/scheduleBlocks`)),
         get(ref(db, `sessions/${weekKey}/splitSlots`)),
+        get(ref(db, `sessions/${weekKey}/customSlots`)),
         get(ref(db, `sessions/${weekKey}/starred`)),
         get(ref(db, `sessions/${weekKey}/scheduledItemIds`)),
         get(ref(db, `sessions/${weekKey}/manualInputs`)),
@@ -63,22 +77,9 @@ export function createSessionActions(setState, getState) {
 
       const meta = metaSnap.exists() ? metaSnap.val() : {}
       const pgmSlots = (pgmSnap.exists() ? pgmSnap.val() : []).map(buildSlot)
-      let scheduleBlocks = blocksSnap.exists() ? blocksSnap.val() : {}
-      const splitSlots = splitSnap.exists() ? splitSnap.val() : {}
-
-      // 분리 슬롯에 ghost default 블록(slotId 키)이 남아있으면 제거
-      const ghostKeys = Object.keys(splitSlots).filter(id => scheduleBlocks[id]?.pgmCodeName === '[편성팀]')
-      if (ghostKeys.length > 0) {
-        await update(ref(db, `sessions/${weekKey}/scheduleBlocks`),
-          Object.fromEntries(ghostKeys.map(id => [id, null])))
-        ghostKeys.forEach(id => delete scheduleBlocks[id])
-      }
-
-      const missing = buildDefaultBlocks(pgmSlots, scheduleBlocks, splitSlots)
-      if (Object.keys(missing).length > 0) {
-        await update(ref(db, `sessions/${weekKey}/scheduleBlocks`), missing)
-        scheduleBlocks = { ...scheduleBlocks, ...missing }
-      }
+      const scheduleBlocks = blocksSnap.exists() ? blocksSnap.val() : {}
+      const splitSlots     = splitSnap.exists()        ? splitSnap.val()        : {}
+      const customSlots    = customSlotsSnap.exists()  ? customSlotsSnap.val()  : {}
 
       const perfMap = perfMapSnap.exists() ? decodePerfMap(perfMapSnap.val()) : {}
 
@@ -91,6 +92,7 @@ export function createSessionActions(setState, getState) {
         targetMetrics:      targetSnap.exists()   ? targetSnap.val()                : null,
         scheduleBlocks,
         splitSlots,
+        customSlots,
         starred:            starredSnap.exists()  ? starredSnap.val()               : {},
         scheduledItemIds:   scheduledSnap.exists()? scheduledSnap.val()             : {},
         manualInputs:       inputsSnap.exists()   ? decodeMapKeys(inputsSnap.val()) : {},
@@ -114,7 +116,7 @@ export function createSessionActions(setState, getState) {
         startDate: '', endDate: '', poolType: 'A',
         pgmSlots: [], perfMap: {}, preScheduleRows: [],
         weightedMinTargets: [], targetMetrics: null,
-        scheduleBlocks: {}, splitSlots: {}, starred: {},
+        scheduleBlocks: {}, splitSlots: {}, customSlots: {}, starred: {},
         scheduledItemIds: {}, manualInputs: {}, lastUpdated: null,
         proposalItems: [], proposalLoaded: false,
       })

@@ -1,10 +1,11 @@
-import { useMemo, useState, useRef, useCallback, useEffect } from 'react'
+import { useMemo, useState, useRef, useCallback, useEffect, Fragment } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   ResponsiveContainer, ReferenceLine, Cell, LabelList,
 } from 'recharts'
 import useScheduleStore from '../store/useScheduleStore'
 import useCategoryMap from '../hooks/useCategoryMap'
+import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -113,18 +114,58 @@ function DailyTeamTip({ active, payload, dailyTeamData, metric }) {
         </span>
         <span style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, textAlign: 'right' }}>비중</span>
         {teams.map(t => (
-          <>
-            <span key={t.name + 'n'} style={{ color: 'var(--text2)' }}>{t.name}</span>
-            <span key={t.name + 'v'} style={{ color, fontWeight: 700, textAlign: 'right' }}>
+          <Fragment key={t.name}>
+            <span style={{ color: 'var(--text2)' }}>{t.name}</span>
+            <span style={{ color, fontWeight: 700, textAlign: 'right' }}>
               {(metric === 'sales' ? t.salesPerMin : t.profitPerMin).toLocaleString()}
             </span>
-            <span key={t.name + 's'} style={{ color: 'var(--text3)', textAlign: 'right' }}>
+            <span style={{ color: 'var(--text3)', textAlign: 'right' }}>
               {(metric === 'sales' ? t.salesShare : t.profitShare).toFixed(1)}%
             </span>
-          </>
+          </Fragment>
         ))}
       </div>
     </div>
+  )
+}
+
+// ── constants ─────────────────────────────────────────────────────────────
+
+const VIDEO_STATUS_OPTIONS = ['기존', '재녹화', '재편집', '신상품']
+const DEAL_TYPE_OPTIONS    = ['위탁', '직매입', '모바일광고', '혼합', '정액']
+
+// ── block field editor (편성코드명·거래형태·영상구분 인라인 수정) ─────────
+
+function BlockFieldEditor({ value, type, options, onSave, placeholder, minWidth = 80 }) {
+  const [editing, setEditing] = useState(false)
+  const [val, setVal]         = useState('')
+  const inputRef = useRef()
+
+  const open   = () => { setVal(value || ''); setEditing(true); setTimeout(() => inputRef.current?.focus(), 0) }
+  const commit = v => { setEditing(false); if (v !== (value ?? '')) onSave(v) }
+
+  if (editing && type === 'select') return (
+    <select ref={inputRef} value={val} autoFocus
+      onChange={e => commit(e.target.value)}
+      onBlur={() => setEditing(false)}
+      style={{ background: 'var(--bg4)', border: '1px solid var(--accent)', color: 'var(--text)', padding: '2px 4px', borderRadius: 4, fontSize: 11, cursor: 'pointer' }}>
+      {options.map(o => <option key={o} value={o}>{o}</option>)}
+    </select>
+  )
+
+  if (editing) return (
+    <input ref={inputRef} value={val} placeholder={placeholder} autoFocus
+      onChange={e => setVal(e.target.value)}
+      onBlur={() => commit(val)}
+      onKeyDown={e => { if (e.key === 'Enter') commit(val); if (e.key === 'Escape') setEditing(false) }}
+      style={{ width: '100%', minWidth, background: 'var(--bg4)', border: '1px solid var(--accent)', color: 'var(--text)', padding: '2px 6px', borderRadius: 4, fontSize: 11, outline: 'none' }} />
+  )
+
+  return (
+    <span onClick={open} title="클릭하여 수정"
+      style={{ cursor: 'pointer', color: value ? 'var(--text)' : 'var(--text3)', borderBottom: '1px dashed var(--border2)', display: 'inline-block' }}>
+      {value || '—'}
+    </span>
   )
 }
 
@@ -227,14 +268,17 @@ function ChartCard({ title, sub, right, children }) {
 // ── main ──────────────────────────────────────────────────────────────────
 
 export default function PerformanceForecast() {
-  const { scheduleBlocks, pgmSlots, proposalItems, perfMap, manualInputs, saveManualInput, weightedMinTargets, targetMetrics } = useScheduleStore()
+  const { scheduleBlocks, pgmSlots, proposalItems, perfMap, manualInputs, saveManualInput, saveBlock, weightedMinTargets, targetMetrics } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
-  const [groupBy, setGroupBy]       = useState('team')
-  const [showMissing, setShowMissing] = useState(true)
-  const [simSpm, setSimSpm] = useState('')
-  const [simPpm, setSimPpm] = useState('')
+  const [groupBy, setGroupBy]           = useState('team')
+  const [simSpm, setSimSpm]             = useState('')
+  const [simPpm, setSimPpm]             = useState('')
   const [excludePgmTeam, setExcludePgmTeam] = useState(false)
   const [selectedDate, setSelectedDate] = useState(null)
+  const [detailSort,   setDetailSort]   = useState({ key: null, dir: 'asc' })
+  const [missingSort,  setMissingSort]  = useState({ key: null, dir: 'asc' })
+  const [detailWidths, setDetailWidths] = useState({})
+  const [missingWidths, setMissingWidths] = useState({})
   const simDebounceRef = useRef(null)
 
   const { teamTargetMap, companyTotal } = useMemo(() => {
@@ -244,7 +288,7 @@ export default function PerformanceForecast() {
 
   const rows = useMemo(() =>
     Object.values(scheduleBlocks)
-      .filter(b => b && !b.isDefault && !(excludePgmTeam && b.mdTeam === '편성팀'))
+      .filter(b => b && !(excludePgmTeam && b.mdTeam === '편성팀'))
       .map(block => ({
         ...block,
         mdCategory: block.mdCategory || categoryMap[block.pgmCodeName] || '미분류',
@@ -386,6 +430,8 @@ export default function PerformanceForecast() {
 
   const missingRows = useMemo(() => displayRows.filter(r => r.missingPerf), [displayRows])
   const pgmTeamRows = useMemo(() => displayRows.filter(r => r.mdTeam === '편성팀'), [displayRows])
+  const sortedDetailRows  = useMemo(() => applySortRows(displayRows, detailSort),  [displayRows, detailSort])
+  const sortedMissingRows = useMemo(() => applySortRows(missingRows, missingSort), [missingRows, missingSort])
 
   // 팀/카테고리별 목표가 없는 항목(편성팀, 미분류 등)은 전사 평균으로 대체
   // 팀 목표 없으면 전사 목표(companyTotal)로 fallback, 그것도 없으면 편성 평균
@@ -408,7 +454,37 @@ export default function PerformanceForecast() {
     if (saved.expectedProfitPerWeightedMin != null) setSimPpm(String(Math.round(saved.expectedProfitPerWeightedMin)))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const handleSave  = async (perfKey, field, val) => { await saveManualInput(perfKey, { [field]: val }) }
+  const handleSave = async (perfKey, field, val) => { await saveManualInput(perfKey, { [field]: val }) }
+
+  // 블록 필드(편성코드명·거래형태·영상구분) 수정 → Firebase scheduleBlocks 반영
+  // pgmCodeName·dealType 변경 시 perfKey 재산출
+  const handleBlockFieldSave = useCallback(async (block, field, newVal) => {
+    const patch = { [field]: newVal }
+    if (field === 'pgmCodeName' || field === 'dealType') {
+      const newName = field === 'pgmCodeName' ? newVal : (block.pgmCodeName || '')
+      const newDeal = field === 'dealType'    ? newVal : (block.dealType    || '')
+      const newConverted = normalizeDealType(newDeal)
+      patch.dealTypeConverted = newConverted
+      patch.perfKey = newName ? makePerfKey(newConverted, newName) : null
+    }
+    await saveBlock(block.blockKey || block.slotId, patch)
+  }, [saveBlock])
+
+  const startResize = useCallback((e, setWidths, key) => {
+    e.preventDefault(); e.stopPropagation()
+    const th = e.currentTarget.parentElement
+    const allThs = [...th.closest('tr').querySelectorAll('th')]
+    const startX = e.clientX, startW = th.offsetWidth
+    // snapshot all column widths before switching to fixed layout
+    setWidths(prev => {
+      const snap = { ...prev }
+      allThs.forEach(el => { if (el.dataset.colH && !snap[el.dataset.colH]) snap[el.dataset.colH] = el.offsetWidth })
+      return snap
+    })
+    const onMove = ev => setWidths(p => ({ ...p, [key]: Math.max(40, startW + ev.clientX - startX) }))
+    const onUp   = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp) }
+    document.addEventListener('mousemove', onMove); document.addEventListener('mouseup', onUp)
+  }, [])
 
   const saveSimDebounced = useCallback((spmVal, ppmVal) => {
     if (simDebounceRef.current) clearTimeout(simDebounceRef.current)
@@ -436,41 +512,91 @@ export default function PerformanceForecast() {
     </div>
   )
 
-  const groupCols = [
-    { h: '#', align: 'center' },
-    { h: groupBy === 'team' ? '팀' : '카테고리', align: 'left' },
-    { h: '슬롯', align: 'right' },
-    { h: '편성비중', align: 'right' },
-    { h: '가중분', align: 'right' },
-    { h: '분당취급고', align: 'right' },
-    { h: '분당한익', align: 'right' },
-    { h: '취급고 효율', align: 'left' },
-    { h: '예상취급고', align: 'right' },
-    { h: '예상한익', align: 'right' },
-  ]
   const detailCols = [
-    { h: '일자', align: 'left' }, { h: '시간', align: 'left' }, { h: '채널', align: 'center' },
-    { h: '카테고리', align: 'left' }, { h: '팀', align: 'left' }, { h: '상품', align: 'left' },
-    { h: '거래형태', align: 'left' }, { h: '가중분', align: 'right' },
-    { h: '직전취급/분', align: 'right' }, { h: '직전한익/분', align: 'right' },
-    { h: '예상취급/분 ✏', align: 'right' }, { h: '예상한익/분 ✏', align: 'right' },
-    { h: '예상취급고', align: 'right' }, { h: '예상한익', align: 'right' },
+    { h: '일자',        align: 'left',   k: 'dateKey',      dw: 72  },
+    { h: '시간',        align: 'left',   k: 'timeText',     dw: 55  },
+    { h: '채널',        align: 'center', k: 'channel',      dw: 46  },
+    { h: '카테고리',    align: 'left',   k: 'mdCategory',   dw: 66  },
+    { h: '팀',          align: 'left',   k: 'mdTeam',       dw: 66  },
+    { h: '편성코드명 ✏', align: 'left',  k: 'pgmCodeName',  dw: 140 },
+    { h: '거래형태 ✏',  align: 'left',   k: 'dealType',     dw: 66  },
+    { h: '영상구분 ✏',  align: 'left',   k: 'videoStatus',  dw: 66  },
+    { h: '가중분',      align: 'right',  k: 'weightedMin',  dw: 56  },
+    { h: '직전취급/분', align: 'right',  k: '_lastSales',   dw: 82  },
+    { h: '직전한익/분', align: 'right',  k: '_lastProfit',  dw: 82  },
+    { h: '예상취급/분 ✏', align: 'right', k: '_estSales',  dw: 92  },
+    { h: '예상한익/분 ✏', align: 'right', k: '_estProfit', dw: 92  },
+    { h: '예상취급고',  align: 'right',  k: 'expectedSales',  dw: 78 },
+    { h: '예상한익',    align: 'right',  k: 'expectedProfit', dw: 72 },
   ]
   const missingCols = [
-    { h: '일자', align: 'left' }, { h: '시간', align: 'left' }, { h: '채널', align: 'center' },
-    { h: '팀', align: 'left' }, { h: '상품', align: 'left' }, { h: '가중분', align: 'right' },
-    { h: '예상취급/분 ✏', align: 'right' }, { h: '예상한익/분 ✏', align: 'right' },
+    { h: '일자',        align: 'left',   k: 'dateKey',     dw: 72  },
+    { h: '시간',        align: 'left',   k: 'timeText',    dw: 55  },
+    { h: '채널',        align: 'center', k: 'channel',     dw: 46  },
+    { h: '팀',          align: 'left',   k: 'mdTeam',      dw: 66  },
+    { h: '편성코드명 ✏', align: 'left',  k: 'pgmCodeName', dw: 140 },
+    { h: '거래형태 ✏',  align: 'left',   k: 'dealType',    dw: 66  },
+    { h: '영상구분 ✏',  align: 'left',   k: 'videoStatus', dw: 66  },
+    { h: '가중분',      align: 'right',  k: 'weightedMin', dw: 56  },
+    { h: '예상취급/분 ✏', align: 'right', k: '_manualSales',  dw: 92 },
+    { h: '예상한익/분 ✏', align: 'right', k: '_manualProfit', dw: 92 },
   ]
-  const makeTh = col => ({
-    padding: '8px 10px', textAlign: col.align || 'left', fontSize: 10,
-    color: 'var(--text3)', fontWeight: 700, background: 'var(--bg3)',
-    borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap',
-    position: 'sticky', top: 0, zIndex: 1,
-  })
-  const td = { padding: '6px 10px', fontSize: 11, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }
+
+  function getSortVal(r, k) {
+    switch (k) {
+      case '_lastSales':    return r.lastPerf?.salesPerWeightedMin  ?? -Infinity
+      case '_lastProfit':   return r.lastPerf?.profitPerWeightedMin ?? -Infinity
+      case '_estSales':     return r.manualSales  ?? r.salesPerMin  ?? 0
+      case '_estProfit':    return r.manualProfit ?? r.profitPerMin ?? 0
+      case '_manualSales':  return r.manualSales  ?? 0
+      case '_manualProfit': return r.manualProfit ?? 0
+      case 'dealType':      return r.dealTypeConverted || r.dealType || ''
+      default:              return r[k] ?? ''
+    }
+  }
+  function applySortRows(rows, sort) {
+    if (!sort.key) return rows
+    return [...rows].sort((a, b) => {
+      const av = getSortVal(a, sort.key), bv = getSortVal(b, sort.key)
+      const cmp = typeof av === 'number' ? av - bv : String(av).localeCompare(String(bv), 'ko')
+      return sort.dir === 'asc' ? cmp : -cmp
+    })
+  }
+
+  const makeTh = (col, sort, setSort, widths, setWidths, extraBg) => {
+    const isActive = sort.key === col.k
+    const hasExplicit = col.h in widths
+    const w = hasExplicit ? widths[col.h] : undefined
+    return (
+      <th key={col.h}
+        data-col-h={col.h}
+        onClick={() => col.k && setSort(s => ({ key: col.k, dir: s.key === col.k && s.dir === 'asc' ? 'desc' : 'asc' }))}
+        style={{
+          ...(w != null ? { width: w, minWidth: w, maxWidth: w } : { minWidth: col.dw }),
+          padding: '8px 10px', textAlign: col.align || 'left', fontSize: 10,
+          color: 'var(--text3)', fontWeight: 700,
+          background: extraBg || 'var(--bg3)',
+          borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap',
+          position: 'sticky', top: 0, zIndex: 1,
+          cursor: col.k ? 'pointer' : 'default', userSelect: 'none',
+          overflow: 'hidden',
+        }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+          {col.h}
+          {col.k && <span style={{ fontSize: 8, color: isActive ? 'var(--accent)' : 'var(--border2)', flexShrink: 0 }}>
+            {isActive ? (sort.dir === 'asc' ? '▲' : '▼') : '⇅'}
+          </span>}
+        </span>
+        <div onMouseDown={e => startResize(e, setWidths, col.h)}
+          style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 5, cursor: 'col-resize', zIndex: 2 }} />
+      </th>
+    )
+  }
+  const td = { padding: '6px 10px', fontSize: 11, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis' }
 
   return (
-    <div style={{ padding: 16, height: '100%', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div style={{ height: '100%', overflowY: 'auto' }}>
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* ── 상단 컨트롤 ──────────────────────────────────────── */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -834,118 +960,59 @@ export default function PerformanceForecast() {
         </div>
       </div>
 
-      {/* ── 그룹별 효율 테이블 ────────────────────────────────── */}
-      <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
-        <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
-            {groupBy === 'team' ? '팀별' : '카테고리별'} 분당 효율 요약
+
+      {/* ── 미입력 실적 ───────────────────────────────────────── */}
+      <div style={{ background: 'rgba(220,38,38,.05)', border: '1px solid rgba(220,38,38,.3)', borderRadius: 10, overflow: 'hidden' }}>
+        <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid rgba(220,38,38,.2)' }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--red)' }}>
+            ⚠ 직전 실적 미확인 {missingRows.length}건
           </span>
-          <span style={{ fontSize: 10, color: 'var(--text3)' }}>분당취급고 기준 내림차순</span>
-          <div style={{ marginLeft: 'auto' }}>{groupToggle}</div>
+          {missingRows.length === 0
+            ? <span style={{ fontSize: 10, color: 'var(--text3)' }}>없음</span>
+            : <span style={{ fontSize: 10, color: 'var(--text3)' }}>예상값이 0으로 계산됩니다 — 여기서 직접 입력 가능</span>
+          }
         </div>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <table style={{ borderCollapse: 'collapse', width: '100%', minWidth: missingCols.reduce((s, c) => s + (missingWidths[c.h] ?? c.dw), 0), tableLayout: Object.keys(missingWidths).length > 0 ? 'fixed' : 'auto' }}>
+            {Object.keys(missingWidths).length > 0 && <colgroup>{missingCols.map(c => <col key={c.h} style={{ width: missingWidths[c.h] ?? c.dw }} />)}</colgroup>}
             <thead>
-              <tr>{groupCols.map(col => <th key={col.h} style={makeTh(col)}>{col.h}</th>)}</tr>
+              <tr>{missingCols.map(col => makeTh(col, missingSort, setMissingSort, missingWidths, setMissingWidths, 'rgba(220,38,38,.08)'))}</tr>
             </thead>
             <tbody>
-              {groupData.map((g, i) => {
-                const aboveAvg = g.salesPerMin >= avgGroupSalesPerMin
-                return (
-                  <tr key={g.name} style={{ background: i % 2 === 0 ? 'transparent' : 'var(--bg3)' }}>
-                    <td style={{ ...td, color: 'var(--text3)', textAlign: 'center', width: 28 }}>
-                      {g.rank <= 3 ? ['🥇','🥈','🥉'][g.rank - 1] : g.rank}
+              {sortedMissingRows.length === 0
+                ? <tr><td colSpan={missingCols.length} style={{ ...td, textAlign: 'center', color: 'var(--text3)', padding: '12px' }}>미입력 실적 없음</td></tr>
+                : sortedMissingRows.map((r, i) => (
+                  <tr key={r.blockKey || i} style={{ borderBottom: '1px solid rgba(220,38,38,.15)' }}>
+                    <td style={td}>{r.dateKey}</td>
+                    <td style={td}>{r.timeText}</td>
+                    <td style={{ ...td, textAlign: 'center', color: 'var(--text3)' }}>{r.channel}</td>
+                    <td style={{ ...td, fontWeight: 600 }}>{r.mdTeam}</td>
+                    <td style={td}>
+                      <BlockFieldEditor value={r.pgmCodeName} type="text" minWidth={100}
+                        onSave={v => handleBlockFieldSave(r, 'pgmCodeName', v)} />
                     </td>
-                    <td style={{ ...td, fontWeight: 600 }}>{g.name}</td>
-                    <td style={{ ...td, textAlign: 'right', color: 'var(--text3)' }}>{g.count}</td>
+                    <td style={td}>
+                      <BlockFieldEditor value={r.dealTypeConverted || r.dealType || '위탁'} type="select"
+                        options={DEAL_TYPE_OPTIONS} onSave={v => handleBlockFieldSave(r, 'dealType', v)} />
+                    </td>
+                    <td style={td}>
+                      <BlockFieldEditor value={r.videoStatus || '기존'} type="select"
+                        options={VIDEO_STATUS_OPTIONS} onSave={v => handleBlockFieldSave(r, 'videoStatus', v)} />
+                    </td>
+                    <td style={{ ...td, textAlign: 'right' }}>{fmt(r.weightedMin)}</td>
                     <td style={{ ...td, textAlign: 'right' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <div style={{ flex: 1, height: 4, background: 'var(--bg4)', borderRadius: 2 }}>
-                          <div style={{ width: `${g.wmShare}%`, height: '100%', background: 'var(--text3)', borderRadius: 2, opacity: 0.5 }} />
-                        </div>
-                        <span style={{ minWidth: 30, textAlign: 'right', color: 'var(--text3)' }}>{g.wmShare.toFixed(1)}%</span>
-                      </div>
+                      <EditCell value={r.manualSales} perfKey={r.perfKey} field="expectedSalesPerWeightedMin" onSave={handleSave} />
                     </td>
-                    <td style={{ ...td, textAlign: 'right' }}>{fmt(g.wm)}</td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: aboveAvg ? 'var(--accent)' : 'var(--text2)' }}>
-                      {fmt(g.salesPerMin)}<span style={{ fontSize: 9, color: 'var(--text3)', marginLeft: 3 }}>원/분</span>
-                      {hasTargetData && g.targetSalesPerMin > 0 && (
-                        <span style={{ fontSize: 9, color: g.salesPerMin >= g.targetSalesPerMin ? 'var(--green)' : 'var(--red)', marginLeft: 4 }}>
-                          ({g.targetSalesPerMin > 0 ? `목표 ${fmt(g.targetSalesPerMin)}` : ''})
-                        </span>
-                      )}
+                    <td style={{ ...td, textAlign: 'right' }}>
+                      <EditCell value={r.manualProfit} perfKey={r.perfKey} field="expectedProfitPerWeightedMin" onSave={handleSave} />
                     </td>
-                    <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: 'var(--green)' }}>
-                      {fmt(g.profitPerMin)}<span style={{ fontSize: 9, color: 'var(--text3)', marginLeft: 3 }}>원/분</span>
-                    </td>
-                    <td style={{ ...td, minWidth: 120 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <EffBar pct={g.effPct} color={aboveAvg ? 'var(--accent)' : '#94a3b8'} height={6} />
-                        <span style={{ fontSize: 10, minWidth: 36, textAlign: 'right',
-                          color: aboveAvg ? 'var(--accent)' : 'var(--text3)', fontWeight: 700 }}>
-                          {Math.round(g.effPct)}%
-                        </span>
-                      </div>
-                    </td>
-                    <td style={{ ...td, textAlign: 'right', color: 'var(--accent)' }}>{fmtS(g.sales)}</td>
-                    <td style={{ ...td, textAlign: 'right', color: 'var(--green)' }}>{fmtS(g.profit)}</td>
                   </tr>
-                )
-              })}
-              <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--bg3)' }}>
-                <td style={td} /><td style={{ ...td, fontWeight: 700 }}>합계</td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{summary.count}</td>
-                <td style={td} />
-                <td style={{ ...td, textAlign: 'right', fontWeight: 700 }}>{fmt(summary.wm)}</td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: 'var(--accent)' }}>{fmt(summary.salesPerMin)}<span style={{ fontSize: 9, color: 'var(--text3)', marginLeft: 3 }}>원/분</span></td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: 'var(--green)' }}>{fmt(summary.profitPerMin)}<span style={{ fontSize: 9, color: 'var(--text3)', marginLeft: 3 }}>원/분</span></td>
-                <td style={td} />
-                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: 'var(--accent)' }}>{fmtS(summary.sales)}</td>
-                <td style={{ ...td, textAlign: 'right', fontWeight: 700, color: 'var(--green)' }}>{fmtS(summary.profit)}</td>
-              </tr>
+                ))
+              }
             </tbody>
           </table>
         </div>
       </div>
-
-      {/* ── 미입력 실적 ───────────────────────────────────────── */}
-      {missingRows.length > 0 && (
-        <div style={{ background: 'rgba(220,38,38,.05)', border: '1px solid rgba(220,38,38,.3)', borderRadius: 10, overflow: 'hidden' }}>
-          <button onClick={() => setShowMissing(v => !v)}
-            style={{ width: '100%', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--red)' }}>⚠ 직전 실적 미확인 {missingRows.length}건</span>
-            <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 4 }}>예상값이 0으로 계산됩니다 — 여기서 직접 입력 가능</span>
-            <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text3)' }}>{showMissing ? '▲' : '▼'}</span>
-          </button>
-          {showMissing && (
-            <div style={{ overflowX: 'auto', borderTop: '1px solid rgba(220,38,38,.2)' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                <thead>
-                  <tr>{missingCols.map(col => <th key={col.h} style={{ ...makeTh(col), background: 'rgba(220,38,38,.08)' }}>{col.h}</th>)}</tr>
-                </thead>
-                <tbody>
-                  {missingRows.map((r, i) => (
-                    <tr key={r.blockKey || i} style={{ borderBottom: '1px solid rgba(220,38,38,.15)' }}>
-                      <td style={td}>{r.dateKey}</td>
-                      <td style={td}>{r.timeText}</td>
-                      <td style={{ ...td, textAlign: 'center', color: 'var(--text3)' }}>{r.channel}</td>
-                      <td style={{ ...td, fontWeight: 600 }}>{r.mdTeam}</td>
-                      <td style={{ ...td, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.pgmCodeName}</td>
-                      <td style={{ ...td, textAlign: 'right' }}>{fmt(r.weightedMin)}</td>
-                      <td style={{ ...td, textAlign: 'right' }}>
-                        <EditCell value={r.manualSales} perfKey={r.perfKey} field="expectedSalesPerWeightedMin" onSave={handleSave} />
-                      </td>
-                      <td style={{ ...td, textAlign: 'right' }}>
-                        <EditCell value={r.manualProfit} perfKey={r.perfKey} field="expectedProfitPerWeightedMin" onSave={handleSave} />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
 
       {/* ── 전체 상세 테이블 ──────────────────────────────────── */}
       <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
@@ -954,12 +1021,18 @@ export default function PerformanceForecast() {
           <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 8 }}>예상취급/분 · 예상한익/분 셀 클릭하여 수정</span>
         </div>
         <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: 11, width: '100%', minWidth: detailCols.reduce((s, c) => s + (detailWidths[c.h] ?? c.dw), 0), tableLayout: Object.keys(detailWidths).length > 0 ? 'fixed' : 'auto' }}>
+            {Object.keys(detailWidths).length > 0 && <colgroup>{detailCols.map(c => <col key={c.h} style={{ width: detailWidths[c.h] ?? c.dw }} />)}</colgroup>}
             <thead>
-              <tr>{detailCols.map(col => <th key={col.h} style={makeTh(col)}>{col.h}</th>)}</tr>
+              <tr>{detailCols.map(col => makeTh(col, detailSort, setDetailSort, detailWidths, setDetailWidths))}</tr>
             </thead>
             <tbody>
-              {displayRows.map((r, i) => {
+              {sortedDetailRows.length === 0 && (
+                <tr><td colSpan={detailCols.length} style={{ ...td, textAlign: 'center', color: 'var(--text3)', padding: '20px' }}>
+                  편성된 블록이 없습니다 — scheduleBlocks: {Object.keys(scheduleBlocks).length}건
+                </td></tr>
+              )}
+              {sortedDetailRows.map((r, i) => {
                 const rowBg = r.missingPerf ? 'rgba(220,38,38,.05)' : i % 2 === 0 ? 'transparent' : 'var(--bg3)'
                 return (
                   <tr key={r.blockKey || i} style={{ background: rowBg, borderBottom: '1px solid var(--border)' }}>
@@ -968,12 +1041,22 @@ export default function PerformanceForecast() {
                     <td style={{ ...td, textAlign: 'center', color: r.channel === 'CA' ? 'var(--ca)' : r.channel === 'IP' ? 'var(--ip)' : 'var(--text3)' }}>{r.channel}</td>
                     <td style={{ ...td, color: 'var(--text2)' }}>{r.mdCategory || '-'}</td>
                     <td style={{ ...td, fontWeight: 600 }}>{r.mdTeam}</td>
-                    <td style={{ ...td, maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {r.missingPerf && <span style={{ fontSize: 9, background: 'var(--red)', color: '#fff', padding: '1px 4px', borderRadius: 3, marginRight: 4 }}>미입력</span>}
-                      {r.hasManual  && <span style={{ fontSize: 9, background: 'var(--accent)', color: '#fff', padding: '1px 4px', borderRadius: 3, marginRight: 4 }}>수동</span>}
-                      {r.pgmCodeName}
+                    <td style={td}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden' }}>
+                        {r.missingPerf && <span style={{ fontSize: 9, background: 'var(--red)', color: '#fff', padding: '1px 4px', borderRadius: 3, flexShrink: 0 }}>미입력</span>}
+                        {r.hasManual   && <span style={{ fontSize: 9, background: 'var(--accent)', color: '#fff', padding: '1px 4px', borderRadius: 3, flexShrink: 0 }}>수동</span>}
+                        <BlockFieldEditor value={r.pgmCodeName} type="text" minWidth={60}
+                          onSave={v => handleBlockFieldSave(r, 'pgmCodeName', v)} />
+                      </div>
                     </td>
-                    <td style={{ ...td, color: 'var(--text3)' }}>{r.dealTypeConverted || r.dealType || '-'}</td>
+                    <td style={td}>
+                      <BlockFieldEditor value={r.dealTypeConverted || r.dealType || '위탁'} type="select"
+                        options={DEAL_TYPE_OPTIONS} onSave={v => handleBlockFieldSave(r, 'dealType', v)} />
+                    </td>
+                    <td style={td}>
+                      <BlockFieldEditor value={r.videoStatus || '기존'} type="select"
+                        options={VIDEO_STATUS_OPTIONS} onSave={v => handleBlockFieldSave(r, 'videoStatus', v)} />
+                    </td>
                     <td style={{ ...td, textAlign: 'right' }}>{fmt(r.weightedMin)}</td>
                     <td style={{ ...td, textAlign: 'right', color: 'var(--text3)' }}>
                       {r.lastPerf ? fmt(r.lastPerf.salesPerWeightedMin) : <span style={{ color: 'var(--red)', fontSize: 10 }}>없음</span>}
@@ -999,6 +1082,7 @@ export default function PerformanceForecast() {
         </div>
       </div>
 
+    </div>
     </div>
   )
 }
