@@ -76,6 +76,11 @@ node scripts/cleanup-sessions.mjs  # Firebase 세션 전체 삭제
 | 2026-05-23 | SeungHyun-111 | remove | `activeSession` 강제 전환 로직 제거 — 누군가 새 편성 시작 시 모든 팀원 화면이 강제 전환되는 문제. `onValue(activeSession)` 구독 및 resetSession 내 activeSession write 제거. 세션 전환은 개인이 명시적으로 선택하는 방식으로 변경 (`DraftSchedule.jsx`, `sessionActions.js`) |
 | 2026-05-23 | SeungHyun-111 | docs | 설명서 전면 개편 — 풀 페이지 레이아웃. 데이터 흐름·갱신 메뉴별 처리 범위·로컬 vs Firebase 저장 위치·협업 동기화 범위·Firebase 경로 구조(루트/세션 분리)·계산 로직·편성표 사용법·세션 관리·GAS 컬럼 사전 포함 (`HelpPage.jsx`) |
 | 2026-05-23 | SeungHyun-111 | chore | scripts/cleanup-sessions.mjs 추가 — Firebase sessions/activeSessions/activeSession 전체 삭제 Node.js 스크립트 |
+| 2026-05-23 | SeungHyun-111 | refactor | Firebase 키 인코딩 유틸 통합 — `src/utils/firebaseKey.js` 신설(`encodeKey`, `decodeKey`, `decodeMapKeys`). sessionActions·firebaseSubscribe·blockBuilders·itemActions 4곳에 흩어진 `__LB__/__RB__` replace 로직 단일 모듈로 통합 |
+| 2026-05-23 | SeungHyun-111 | refactor | Firebase 구독 해제 패턴 교체 — `off(ref)` 대신 `onValue()` 반환 unsubscribe 함수 저장·호출 패턴으로 전환. `firebaseSubscribe.js`, `usePresence.js`, `useChat.js` 적용. off import 전체 제거 |
+| 2026-05-23 | SeungHyun-111 | refactor | Firebase 다중 write → 원자적 단일 update 전환 — `changeBlockChannel`(blockActions), `splitSlotTime`·`deleteSlotTime`(timeSlotActions) 에서 순차 set() 최대 9회를 `update(weekKey, { path: val, ... })` 1회로 교체. 동시 사용자 race condition 위험 제거 |
+| 2026-05-23 | SeungHyun-111 | refactor | React.memo 적용 — `ScheduleBlock.jsx`, `SlotRow.jsx`. teamFilter·gridSearch 변경 시 해당 블록만 재렌더, Firebase onValue 발생 시 변경된 슬롯만 갱신 |
+| 2026-05-23 | SeungHyun-111 | refactor | React.lazy 탭 코드 분할 — `App.jsx`에서 시뮬레이션·편성비중·편성현황·설명서 4개 탭 lazy import + Suspense 래퍼. 초기 번들에서 분리, 첫 탭 전환 시 로드 |
 
 ---
 
@@ -161,49 +166,43 @@ sessions/{weekKey}/customSlots/{id}: {
 
 ## 개선 필요 항목 (2026-05-23 감사 결과)
 
-### [즉시] HIGH — 중복 함수 / 유지보수 위험
+### [완료] HIGH — 중복 함수 / 유지보수 위험
 
 | 항목 | 파일 | 내용 |
 |------|------|------|
-| `decodeMapKeys()` 중복 | `sessionActions.js:17`, `firebaseSubscribe.js:17` | 동일 코드 2곳. `src/utils/` 하나로 통합 필요 |
-| Firebase 키 인코딩 분산 | `blockBuilders.js:193`, `itemActions.js:102` | `__LB__/__RB__` replace 로직 3곳 산재. `encodeDecodeUtils.js` 통합 권장 |
+| ~~`decodeMapKeys()` 중복~~ | ~~`sessionActions.js:17`, `firebaseSubscribe.js:17`~~ | ✅ `src/utils/firebaseKey.js`로 통합 완료 (2026-05-23) |
+| ~~Firebase 키 인코딩 분산~~ | ~~`blockBuilders.js:193`, `itemActions.js:102`~~ | ✅ `encodeKey`/`decodeKey` 단일 모듈로 통합 완료 (2026-05-23) |
 
-### [즉시] MEDIUM — 이벤트 리스너 누적 버그
-
-| 항목 | 파일 | 내용 |
-|------|------|------|
-| `useEffect` 의존 배열 오류 | `ProductCard.jsx:55-60` | 의존 배열 `[ctxMenu]`로 ctxMenu 변경마다 document click 리스너 재등록. `[]`로 변경 필요 |
-
-### [중기] HIGH — 협업 Race Condition
+### [완료] HIGH — 협업 Race Condition
 
 | 항목 | 파일 | 내용 |
 |------|------|------|
-| CA/IP 분리 3회 순차 write | `ScheduleGrid.jsx:157-183` | `toggleSplitSlot → removeBlock → saveBlock` 순차. 동시 사용자 interleave 위험 |
-| 채널 변경 다중 write | `blockActions.js:74-102` | 3-5회 분리 write. Firebase multi-path `update({})` 원자적 쓰기로 교체 필요 |
-| 시간 삭제 다중 write | `timeSlotActions.js:64-114` | 4회 분리 write. 동일 문제 |
+| ~~CA/IP 분리 3회 순차 write~~ | ~~`blockActions.js`~~ | ✅ `update(weekKey, {...})` 원자적 쓰기로 교체 완료 (2026-05-23) |
+| ~~채널 변경 다중 write~~ | ~~`blockActions.js:74-102`~~ | ✅ 동일 처리 완료 (2026-05-23) |
+| ~~시간 분할/삭제 다중 write~~ | ~~`timeSlotActions.js`~~ | ✅ 동일 처리 완료 (2026-05-23) |
 
-### [중기] HIGH — 그리드 렌더 성능
-
-| 항목 | 파일 | 내용 |
-|------|------|------|
-| `ScheduleBlock` React.memo 미적용 | `ScheduleBlock.jsx` | Firebase onValue 발생 시 전체 블록 리렌더. 50+ 인라인 style 객체 재생성. `React.memo` + props 안정화 필요 |
-| `SlotRow` React.memo 미적용 | `SlotRow.jsx` | 동일 문제. scheduleBlocks 업데이트마다 모든 행 리렌더 |
-
-### [중기] MEDIUM — Firebase 구독 해제 패턴
+### [완료] HIGH — 그리드 렌더 성능
 
 | 항목 | 파일 | 내용 |
 |------|------|------|
-| `off(ref)` 패턴 | `firebaseSubscribe.js`, `usePresence.js`, `useChat.js` | 동일 경로에 다중 리스너 있을 때 1개만 제거 위험. `const unsub = onValue(ref, handler); return () => unsub()` 패턴으로 교체 권장 |
+| ~~`ScheduleBlock` React.memo 미적용~~ | ~~`ScheduleBlock.jsx`~~ | ✅ `React.memo` 적용 완료 (2026-05-23) |
+| ~~`SlotRow` React.memo 미적용~~ | ~~`SlotRow.jsx`~~ | ✅ `React.memo` 적용 완료 (2026-05-23) |
 
-### [중기] MEDIUM — 코드 구조
+### [완료] MEDIUM — Firebase 구독 해제 패턴
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| ~~`off(ref)` 패턴~~ | ~~`firebaseSubscribe.js`, `usePresence.js`, `useChat.js`~~ | ✅ `onValue()` 반환 unsubscribe 함수 패턴으로 전환 완료 (2026-05-23) |
+
+### [완료] MEDIUM — 번들 최적화
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| ~~탭별 코드 분할 미적용~~ | ~~`App.jsx`~~ | ✅ `React.lazy + Suspense` 적용. 4개 탭 별도 청크 분리 완료 (2026-05-23) |
+
+### [미완료] MEDIUM — 코드 구조
 
 | 항목 | 파일 | 내용 |
 |------|------|------|
 | 순수 유틸이 hook 파일에 위치 | `usePerformanceMap.js` | `normalizeDealType()`, `makePerfKey()`는 Hook이 아닌 순수 함수. `src/utils/` 로 이동 권장 |
 | Optimistic update 롤백 없음 | `BlockEditModal.jsx:90-104` | Firebase write 전 setState → 실패 시 UI·DB 불일치. try/catch + 롤백 처리 필요 |
-
-### [장기] MEDIUM — 번들 최적화
-
-| 항목 | 파일 | 내용 |
-|------|------|------|
-| 탭별 코드 분할 미적용 | `App.jsx:1-6` | 5개 페이지 전부 정적 import. `React.lazy + Suspense`로 탭 전환 시 지연 로드 권장 |
