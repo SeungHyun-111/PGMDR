@@ -150,6 +150,12 @@ sessions/{weekKey}/customSlots/{id}: {
 
 **Firebase undefined 제약**: Firebase는 `undefined` 값을 직렬화 거부. 조건부 스프레드(`prevOv.isCustom ? {...prevOv, ...} : {durationMin, weightedMin}`)로 undefined 필드 원천 차단.
 
+| 2026-05-23 | SeungHyun-111 | feat | 편성비중 PGM건수 카드 3종 신설 — `RatioPgmCount.jsx` 신규. 채널별/거래형태별/영상구분별 피벗 테이블 카드를 세로 3장 배치. 각 셀: 건수/가중분/분당효율(취급·한익) 3줄 고정높이. 헤더: 실적입력 N건 기준/미입력 N건 표시. 합계행 accent 상단 경계+bg4, 팀명 열 우측 2px 경계선, 홀/짝 행 반전. 팀별/카테고리별 공유 토글. `ScheduleRatio.jsx`에 perfMap·manualInputs 전달 |
+| 2026-05-23 | SeungHyun-111 | feat | 초안 편성표 검색 기능 — `SearchPanel.jsx` 신규(우측 300px 패널). 편성 리스트(거래형태별·채널별 건수/가중분/비중/분당효율 표) + 미편성 리스트(dealType 뱃지·팀·효율). `ScheduleGrid` 툴바 우상단에 인라인 검색창(입력 시 SearchPanel 자동 오픈). `gridSearch` Zustand 상태로 관리(searchPanelOpen 연동). `SlotRow`에서 `isDimmed`에 gridSearch 검색어 매칭 추가 — 미매칭 블록 dim 처리 (`useScheduleStore.js`, `ScheduleGrid.jsx`, `SlotRow.jsx`, `SearchPanel.jsx`, `DraftSchedule.jsx`) |
+| 2026-05-23 | SeungHyun-111 | feat | 기본 사이드바 + 추가 버튼 — 헤더에 `+ 추가` 버튼 추가, 클릭 시 제안상품 추가 모달 팝업(SidebarExpanded와 동일 필드). `addProposalItem` 연결 (`Sidebar.jsx`) |
+| 2026-05-23 | SeungHyun-111 | feat | 사이드바 확장 행 우클릭 컨텍스트 메뉴 — `<tr>` onContextMenu → 복사/삭제 오버레이 메뉴. 복사: `duplicateProposalItem`, 삭제: `deleteProposalItem` (`SidebarExpanded.jsx`) |
+| 2026-05-23 | SeungHyun-111 | feat | 사이드바 필터 개선 — 실적 필터(hasPerf) 제거. 영상구분(videoStatus) 셀렉트 추가. 가나다↑/가나다↓ 정렬 토글 버튼 추가(활성 시 accent). `useFilterOptions`에 videoStatuses 반환 추가. `filteredItems` useMemo에서 videoStatus 필터·sort(asc/desc) 정렬 반영 (`ProductFilters.jsx`, `useFilterOptions.js`, `Sidebar.jsx`) |
+
 ---
 
 ## 향후 과제
