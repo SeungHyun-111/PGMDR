@@ -5,7 +5,7 @@ import useScheduleStore from '../../store/useScheduleStore'
 import { splitWeightedMin } from '../../utils/weightedMin'
 
 function isDimmed(block, teamFilter) {
-  if (!block || block.isDefault || teamFilter === '전체') return false
+  if (!block || teamFilter === '전체') return false
   const t = block.mdTeam || block.orgName || ''
   return t !== teamFilter
 }
@@ -14,7 +14,7 @@ export default function SlotRow({ slot, top, height, isSplit, block, splitBlock_
   const [caHover, setCaHover] = useState(false)
   const [ipHover, setIpHover] = useState(false)
   const halfHeight = height / 2
-  const fontSize = Math.min(10, halfHeight * 0.38)
+  const fontSize = Math.min(12, Math.max(9, halfHeight * 0.38))
   const prevent = e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }
 
   const handleDrop = (e, ch) => {
@@ -25,29 +25,64 @@ export default function SlotRow({ slot, top, height, isSplit, block, splitBlock_
 
     if (isBlock === 'true' && blockKey) {
       const { scheduleBlocks } = useScheduleStore.getState()
-      const existingBlock = scheduleBlocks[blockKey]
-      if (!existingBlock) return
+      const draggedBlock = scheduleBlocks[blockKey]
+      if (!draggedBlock) return
 
-      removeBlock(blockKey)
       const newKey = isSplit ? `${slot.slotId}_${ch}` : slot.slotId
+      const targetBlock = scheduleBlocks[newKey]
 
-      // split 상태에 따라 weightedMin 재계산 ← 버그 수정
       let targetWeightedMin = slot.weightedMin
       if (isSplit) {
         const { caWeighted, ipWeighted } = splitWeightedMin(slot.weightedMin, slot.dateKey, slot.timeText)
         targetWeightedMin = ch === 'CA' ? caWeighted : ipWeighted
       }
 
-      saveBlock(newKey, {
-        ...existingBlock,
-        slotId: slot.slotId,
-        blockKey: newKey,
-        dateKey: slot.dateKey,
-        timeText: slot.timeText,
-        durationMin: slot.durationMin,
-        weightedMin: targetWeightedMin,  // ← 수정된 부분
-        channel: ch,
-      })
+      if (targetBlock && !targetBlock.isCompeting && newKey !== blockKey) {
+        // 점유된 슬롯에 드래그 → 경쟁 블록 생성
+        const brand1 = (targetBlock.pgmCodeName || '').replace(/^\[(.+?)\].*/, '$1')
+        const brand2 = (draggedBlock.pgmCodeName || '').replace(/^\[(.+?)\].*/, '$1')
+        removeBlock(blockKey)
+        saveBlock(newKey, {
+          slotId: slot.slotId, blockKey: newKey,
+          dateKey: slot.dateKey, timeText: slot.timeText,
+          durationMin: slot.durationMin, weightedMin: targetWeightedMin,
+          channel: ch, isCompeting: true, isPreSchedule: false,
+          pgmCodeName: `[${brand1}*${brand2}]`,
+          item1: {
+            ...(targetBlock.itemId ? { itemId: targetBlock.itemId } : {}),
+            pgmCodeName: targetBlock.pgmCodeName,
+            mdTeam: targetBlock.mdTeam,
+            orgName: targetBlock.orgName,
+            dealType: targetBlock.dealType,
+            dealTypeConverted: targetBlock.dealTypeConverted || targetBlock.dealType || '',
+            ...(targetBlock.perfKey ? { perfKey: targetBlock.perfKey } : {}),
+            weightedMin: targetBlock.weightedMin,
+          },
+          item2: {
+            ...(draggedBlock.itemId ? { itemId: draggedBlock.itemId } : {}),
+            pgmCodeName: draggedBlock.pgmCodeName,
+            mdTeam: draggedBlock.mdTeam,
+            orgName: draggedBlock.orgName,
+            dealType: draggedBlock.dealType,
+            dealTypeConverted: draggedBlock.dealTypeConverted || draggedBlock.dealType || '',
+            ...(draggedBlock.perfKey ? { perfKey: draggedBlock.perfKey } : {}),
+            weightedMin: draggedBlock.weightedMin,
+          },
+          isDefault: false, assignedAt: Date.now(),
+        })
+      } else {
+        removeBlock(blockKey)
+        saveBlock(newKey, {
+          ...draggedBlock,
+          slotId: slot.slotId,
+          blockKey: newKey,
+          dateKey: slot.dateKey,
+          timeText: slot.timeText,
+          durationMin: slot.durationMin,
+          weightedMin: targetWeightedMin,
+          channel: ch,
+        })
+      }
     } else if (itemId) {
       onDrop(slot, ch, itemId, isSplit)
     }

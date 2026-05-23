@@ -71,6 +71,30 @@ const SECTIONS = [
   },
 ]
 
+const CACHE_ITEMS = [
+  {
+    kind: 'localStorage',
+    label: '브라우저 로컬 캐시',
+    color: '#d97706',
+    rows: [
+      { key: 'lastWeekKey',  desc: '마지막으로 열었던 세션 키 (예: 2026-06-02_A). 앱 재방문 시 직전 편성 자동 복귀에 사용.' },
+      { key: 'theme',        desc: '라이트/다크 테마 설정. 브라우저 단위 저장.' },
+      { key: 'userName',     desc: '접속자 이름. 편성 로그·채팅·Presence에 표시.' },
+    ],
+    note: '브라우저 단위 저장 — 팀원과 공유되지 않습니다. 직접 지워도 편성 데이터에는 영향 없음.',
+  },
+  {
+    kind: 'firebase',
+    label: 'Firebase DB (팀 공유)',
+    color: 'var(--accent)',
+    rows: [
+      { key: 'activeSession',            desc: '현재 활성 세션 키. 새 편성 시작 시 갱신 → 모든 접속자가 자동으로 같은 세션으로 전환됨.' },
+      { key: 'sessions/{weekKey}/...',   desc: '편성 블록·슬롯·제안상품·실적·로그 전체. 이 경로 아래 모든 데이터가 팀원 간 실시간 동기화됨.' },
+    ],
+    note: '수정 즉시 팀 전체에 반영됩니다. 잘못 수정 시 복구가 어려우므로 직접 Firebase 콘솔 조작은 지양하세요.',
+  },
+]
+
 const DB_PATHS = [
   { path: 'gasData/pgmSlots',       label: '편성 슬롯',       desc: '방송 날짜·시간·가중분 목록. 편성표 행 구조의 기반.', refresh: 'GAS 전체 재동기화' },
   { path: 'gasData/proposalItems',  label: '제안상품',         desc: '사이드바에 표시되는 MD 제안 상품 목록.', refresh: '제안상품 갱신 / GAS 전체 재동기화' },
@@ -182,6 +206,32 @@ export default function HelpPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+
+          {/* 로컬 캐시 vs Firebase */}
+          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 10 }}>로컬 캐시 vs Firebase DB — 무엇이 어디에 저장되나</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {CACHE_ITEMS.map(item => (
+                <div key={item.kind}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, background: item.kind === 'localStorage' ? 'rgba(217,119,6,.15)' : 'rgba(99,102,241,.15)', color: item.color, padding: '2px 8px', borderRadius: 4 }}>{item.label}</span>
+                    <span style={{ fontSize: 9, color: 'var(--text3)' }}>{item.kind === 'localStorage' ? '브라우저 개인 저장소' : '실시간 공유 저장소'}</span>
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 5, marginLeft: 8 }}>
+                    {item.rows.map(r => (
+                      <div key={r.key} style={{ display: 'flex', gap: 10, fontSize: 10 }}>
+                        <code style={{ background: 'var(--bg3)', padding: '1px 6px', borderRadius: 3, color: item.color, whiteSpace: 'nowrap', flexShrink: 0, minWidth: 200 }}>{r.key}</code>
+                        <span style={{ color: 'var(--text2)', lineHeight: 1.5 }}>{r.desc}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 9, color: 'var(--text3)', marginTop: 6, marginLeft: 8, padding: '5px 8px', background: item.kind === 'localStorage' ? 'rgba(217,119,6,.07)' : 'rgba(220,38,38,.07)', borderRadius: 4, borderLeft: `3px solid ${item.color}` }}>
+                    {item.note}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
           <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 18px', marginBottom: 16 }}>

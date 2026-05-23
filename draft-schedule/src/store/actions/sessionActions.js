@@ -64,8 +64,17 @@ export function createSessionActions(setState, getState) {
       const meta = metaSnap.exists() ? metaSnap.val() : {}
       const pgmSlots = (pgmSnap.exists() ? pgmSnap.val() : []).map(buildSlot)
       let scheduleBlocks = blocksSnap.exists() ? blocksSnap.val() : {}
+      const splitSlots = splitSnap.exists() ? splitSnap.val() : {}
 
-      const missing = buildDefaultBlocks(pgmSlots, scheduleBlocks)
+      // 분리 슬롯에 ghost default 블록(slotId 키)이 남아있으면 제거
+      const ghostKeys = Object.keys(splitSlots).filter(id => scheduleBlocks[id]?.pgmCodeName === '[편성팀]')
+      if (ghostKeys.length > 0) {
+        await update(ref(db, `sessions/${weekKey}/scheduleBlocks`),
+          Object.fromEntries(ghostKeys.map(id => [id, null])))
+        ghostKeys.forEach(id => delete scheduleBlocks[id])
+      }
+
+      const missing = buildDefaultBlocks(pgmSlots, scheduleBlocks, splitSlots)
       if (Object.keys(missing).length > 0) {
         await update(ref(db, `sessions/${weekKey}/scheduleBlocks`), missing)
         scheduleBlocks = { ...scheduleBlocks, ...missing }
@@ -81,7 +90,7 @@ export function createSessionActions(setState, getState) {
         weightedMinTargets: weightedSnap.exists() ? Object.values(weightedSnap.val()): [],
         targetMetrics:      targetSnap.exists()   ? targetSnap.val()                : null,
         scheduleBlocks,
-        splitSlots:         splitSnap.exists()    ? splitSnap.val()                 : {},
+        splitSlots,
         starred:            starredSnap.exists()  ? starredSnap.val()               : {},
         scheduledItemIds:   scheduledSnap.exists()? scheduledSnap.val()             : {},
         manualInputs:       inputsSnap.exists()   ? decodeMapKeys(inputsSnap.val()) : {},
@@ -112,6 +121,13 @@ export function createSessionActions(setState, getState) {
       // Firebase 해당 세션 완전 삭제 → loadInitData가 GAS 강제 호출
       await set(ref(db, `sessions/${startDate}_${poolType}`), null)
       await getState().loadInitData(startDate, poolType)
+      // 새 편성 시작 완료 → 협업 포인터 갱신 (다른 접속자 자동 합류 트리거)
+      await set(ref(db, 'activeSession'), {
+        weekKey: `${startDate}_${poolType}`,
+        startDate,
+        poolType,
+        setAt: Date.now(),
+      })
     },
   }
 }

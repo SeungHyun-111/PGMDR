@@ -13,7 +13,7 @@ import { applyTheme, getStoredTheme } from './styles/theme'
 
 const TABS = [
   { id: 'draft',    label: '초안 편성' },
-  { id: 'forecast', label: '실적 예상값' },
+  { id: 'forecast', label: '시뮬레이션' },
   { id: 'ratio',    label: '편성비중' },
   { id: 'status',   label: '편성현황' },
   { id: 'help',     label: '설명서' },

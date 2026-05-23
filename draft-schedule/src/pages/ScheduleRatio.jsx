@@ -27,13 +27,17 @@ export default function ScheduleRatio() {
 
   const targetMap = useMemo(() => {
     const map = {}
-    weightedMinTargets.forEach(t => { map[t.teamName] = t.weeklyTarget })
+    weightedMinTargets.forEach(t => {
+      const name = (t.teamName || '').trim()
+      map[name] = t.weeklyTarget
+      // "영업1팀" ↔ "영업1" 양방향 등록 — GAS teamName과 block.mdTeam 접미사 불일치 대응
+      const alt = name.endsWith('팀') ? name.slice(0, -1) : name + '팀'
+      map[alt] = t.weeklyTarget
+    })
     return map
   }, [weightedMinTargets])
 
-  const totalTarget = useMemo(() =>
-    weightedMinTargets.reduce((acc, t) => acc + (t.weeklyTarget || 0), 0)
-  , [weightedMinTargets])
+  const totalTarget = totalSlotWeighted
 
   const scheduledCount = useMemo(() =>
     Object.values(scheduleBlocks).filter(b => !b.isDefault).length

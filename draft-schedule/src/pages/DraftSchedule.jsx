@@ -6,22 +6,58 @@ import Sidebar from '../components/sidebar/Sidebar'
 import SetupModal from '../components/modal/SetupModal'
 import { splitWeightedMin } from '../utils/weightedMin'
 import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
+import { db, ref, get, onValue } from '../api/firebase'
 
 export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   const {
     isLoaded, isLoading, error,
-    scheduleBlocks, perfMap,
     loadInitData, resetSession, saveBlock, scheduleItem,
   } = useScheduleStore()
 
   const [sidebarOpen, setSidebarOpen] = useState(true)
 
+  // 진입 시 세션 복구: localStorage → Firebase activeSession 순으로 fallback
   useEffect(() => {
     const lastKey = localStorage.getItem('lastWeekKey')
-    if (lastKey && !isLoaded) {
-      const [date, pool] = lastKey.split('_')
-      loadInitData(date, pool)
+    if (lastKey) {
+      if (!useScheduleStore.getState().isLoaded && !useScheduleStore.getState().isLoading) {
+        const [date, pool] = lastKey.split('_')
+        loadInitData(date, pool)
+      }
+    } else {
+      // localStorage 없으면 Firebase activeSession 한 번 읽어 자동 합류
+      get(ref(db, 'activeSession')).then(snap => {
+        if (!snap.exists()) return
+        const { weekKey, startDate: sDate, poolType: pType } = snap.val()
+        const state = useScheduleStore.getState()
+        if (!state.isLoaded && !state.isLoading) {
+          localStorage.setItem('lastWeekKey', weekKey)
+          loadInitData(sDate, pType)
+        }
+      })
     }
+  }, [])
+
+  // activeSession 실시간 구독: 누군가 새 편성 시작 시 모든 접속자 자동 전환
+  useEffect(() => {
+    let initialized = false
+    const unsubscribe = onValue(ref(db, 'activeSession'), snap => {
+      if (!snap.exists()) { initialized = true; return }
+      const { weekKey, startDate: sDate, poolType: pType } = snap.val()
+
+      if (!initialized) {
+        initialized = true
+        return // 초기 발화는 진입 useEffect에서 이미 처리
+      }
+
+      const { startDate: curDate, poolType: curPool } = useScheduleStore.getState()
+      const currentKey = curDate ? `${curDate}_${curPool}` : null
+      if (weekKey !== currentKey) {
+        localStorage.setItem('lastWeekKey', weekKey)
+        loadInitData(sDate, pType)
+      }
+    })
+    return () => unsubscribe()
   }, [])
 
   const handleSetupComplete = async (startDate, poolType) => {
@@ -36,12 +72,12 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   }
 
   const handleBlockDrop = async (slot, channel, itemId, isSplit) => {
-    const { proposalItems } = useScheduleStore.getState()
+    const { proposalItems, scheduleBlocks: currentBlocks } = useScheduleStore.getState()
     const item = proposalItems.find(p => p.itemId === itemId)
     if (!item) return
 
     const blockKey = isSplit ? `${slot.slotId}_${channel}` : slot.slotId
-    const existingBlock = scheduleBlocks[blockKey]
+    const existingBlock = currentBlocks[blockKey]
 
     let weightedMin = slot.weightedMin
     if (isSplit) {
@@ -61,16 +97,16 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
         slotId: slot.slotId, blockKey,
         dateKey: slot.dateKey, timeText: slot.timeText,
         durationMin: slot.durationMin, weightedMin: slot.weightedMin,
-        channel, isCompeting: true,
+        channel, isCompeting: true, isPreSchedule: false,
         pgmCodeName: `[${brand1}*${brand2}]`,
         item1: {
-          itemId: existingBlock.itemId,
+          ...(existingBlock.itemId ? { itemId: existingBlock.itemId } : {}),
           pgmCodeName: existingBlock.pgmCodeName,
           mdTeam: existingBlock.mdTeam,
           orgName: existingBlock.orgName,
           dealType: existingBlock.dealType,
           dealTypeConverted: existingBlock.dealTypeConverted || existingBlock.dealType || '',
-          perfKey: existingBlock.perfKey || undefined,
+          ...(existingBlock.perfKey ? { perfKey: existingBlock.perfKey } : {}),
           weightedMin: existingBlock.weightedMin,
         },
         item2: {
@@ -116,7 +152,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
     </div>
   )
 
-  if (setupPopup || !isLoaded) {
+  if (setupPopup) {
     return (
       <SetupModal
         isLoading={isLoading}
@@ -124,6 +160,17 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
         onClose={() => setSetupPopup(false)}
         onSubmit={handleSetupComplete}
       />
+    )
+  }
+
+  if (!isLoaded) {
+    const lastKey = localStorage.getItem('lastWeekKey')
+    if (lastKey) return <LoadingScreen />
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', flexDirection: 'column', gap: 12 }}>
+        <div style={{ fontSize: 14, color: 'var(--text2)', fontWeight: 600 }}>편성 데이터가 없습니다</div>
+        <div style={{ fontSize: 12, color: 'var(--text3)' }}>상단 메뉴 <strong style={{ color: 'var(--accent)' }}>편성 작업판 ▼</strong> → <strong style={{ color: 'var(--red)' }}>새 편성 시작</strong> 을 눌러 주세요.</div>
+      </div>
     )
   }
 

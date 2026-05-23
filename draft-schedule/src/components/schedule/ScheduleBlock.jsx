@@ -42,28 +42,30 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock, d
 
   const dealChar = isCompeting ? '' : getDealTypeChar(block.dealType || block.dealTypeChar || '')
 
+  const isPgmTeam = block.pgmCodeName === '[편성팀]'
+
   const bgColor = isCompeting ? '#8b0000'
-    : isDefault  ? 'var(--bg3)'
+    : isPgmTeam  ? 'var(--bg3)'
     : isDirect   ? '#1d4ed8'
     : isPurple   ? '#7c3aed'
     : isGreenBg  ? '#166534'
     : 'var(--bg2)'
 
   const borderColor = isCompeting ? '#ff4444'
-    : isDefault  ? 'var(--border)'
+    : isPgmTeam  ? 'var(--text3)'
     : isDirect   ? 'rgba(59,130,246,.5)'
     : isPurple   ? 'rgba(139,92,246,.5)'
     : isGreenBg  ? 'rgba(34,197,94,.5)'
     : 'var(--border)'
 
-  const isColored = !isDefault && (isCompeting || isDirect || isPurple || isGreenBg)
+  const isColored = isCompeting || isDirect || isPurple || isGreenBg
   const textColor = isColored ? '#fff' : 'var(--text)'
   const fontSize  = height > 30 ? 10 : 9
   const badgeSz   = Math.max(7, fontSize - 1)
   const badgeBg   = isColored ? 'rgba(0,0,0,.25)' : 'rgba(0,0,0,.07)'
 
   const handleDragStart = (e) => {
-    if (isDefault || isCompeting) { e.preventDefault(); return }
+    if (isCompeting) { e.preventDefault(); return }
     setHover(false)
     setTooltipPos(null)
     e.stopPropagation()
@@ -93,7 +95,7 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock, d
   const menuItems = [
     { label: '수정', action: () => setEditModal(true) },
     { label: hasAnnotation ? '첨삭 수정' : '첨삭 추가', action: () => { setAnnotationText(block.annotation || ''); setAnnotationPopup(true) } },
-    ...(!isDefault && !isCompeting ? [
+    ...(!isCompeting ? [
       { label: '사이드바로 반환', action: () => returnBlockToSidebar(block) },
       { label: '삭제', action: () => removeBlock(block.blockKey || block.slotId), danger: true },
     ] : []),
@@ -110,7 +112,7 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock, d
       onMouseLeave={handleMouseLeave}
     >
       <div
-        draggable={!isDefault && !isCompeting}
+        draggable={!isCompeting}
         onDragStart={handleDragStart}
         onContextMenu={e => {
           e.preventDefault(); e.stopPropagation()
@@ -122,14 +124,14 @@ export default function ScheduleBlock({ block, height, saveBlock, removeBlock, d
           setContextMenu({ x, y })
         }}
         onDoubleClick={() => setEditModal(true)}
-        style={{ position: 'absolute', inset: 0, background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 3, overflow: 'hidden', cursor: isDefault ? 'default' : 'grab', display: 'flex', alignItems: 'center', padding: '0 4px', gap: 3 }}
+        style={{ position: 'absolute', inset: 0, background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 3, overflow: 'hidden', cursor: isCompeting ? 'default' : 'grab', display: 'flex', alignItems: 'center', padding: '0 4px', gap: 3 }}
       >
         {teamShort && (
           <span style={{ fontSize: badgeSz, fontWeight: 700, color: textColor, background: badgeBg, padding: '0 3px', height: 14, borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
             {teamShort}
           </span>
         )}
-        {dealChar && !isDefault && !isCompeting && (
+        {dealChar && !isCompeting && (
           <span style={{ fontSize: badgeSz, fontWeight: 700, color: textColor, background: badgeBg, padding: '0 3px', height: 14, borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
             {dealChar}
           </span>

@@ -130,7 +130,7 @@ export default function Sidebar({ isOpen, onToggle }) {
     setBlockDragOver(null)
     const { scheduleBlocks } = useScheduleStore.getState()
     const block = scheduleBlocks[blockKey]
-    if (!block || block.isDefault || block.isCompeting) return
+    if (!block || block.isCompeting) return
     const effectiveItemId = await returnBlockToSidebar(block)
     if (effectiveItemId) {
       setPinnedReturn({ itemId: effectiveItemId, insertBeforeId })

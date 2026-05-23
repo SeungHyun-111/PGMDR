@@ -114,7 +114,7 @@ export function createBlockActions(setState, getState) {
 
     // 반환된 아이템의 effectiveItemId를 리턴 (pinnedReturn 위치 지정에 사용)
     async returnBlockToSidebar(block) {
-      if (block.isDefault || block.isCompeting) return null
+      if (block.isCompeting) return null
       await getState().removeBlock(block.blockKey || block.slotId)
 
       const { startDate, poolType } = getState()

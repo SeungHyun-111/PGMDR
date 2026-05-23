@@ -1,4 +1,5 @@
 import { normalizeDealType, makePerfKey } from '../../hooks/usePerformanceMap'
+import { splitWeightedMin } from '../../utils/weightedMin'
 
 function normalizeTime(t) {
   if (!t) return ''
@@ -19,14 +20,22 @@ function safeNumber(v) {
 
 export function makeDefaultBlock(slot, channel = 'ALL') {
   const blockKey = channel === 'ALL' ? slot.slotId : `${slot.slotId}_${channel}`
+  const fullWm = slot.weightedMin || 0
+  let weightedMin = fullWm
+  if (channel === 'CA' || channel === 'IP') {
+    const { caWeighted, ipWeighted } = splitWeightedMin(fullWm, slot.dateKey, slot.timeText)
+    weightedMin = channel === 'CA' ? caWeighted : ipWeighted
+  }
   return {
     slotId: slot.slotId, blockKey,
     dateKey: slot.dateKey, timeText: slot.timeText,
     durationMin: slot.durationMin || 0,
-    weightedMin: slot.weightedMin || 0,
+    weightedMin,
     channel,
     pgmCodeName: '[편성팀]', orgName: '편성팀', mdTeam: '편성팀',
-    isDefault: true, assignedAt: Date.now(),
+    memoCode: '[전사블록]',
+    perfKey: makePerfKey('', '[편성팀]'),
+    isDefault: false, assignedAt: Date.now(),
   }
 }
 
@@ -84,10 +93,14 @@ export function buildPreScheduleBlocks(pgmSlots, preScheduleRows, existingBlocks
   return blocks
 }
 
-export function buildDefaultBlocks(pgmSlots, existingBlocks) {
+// splitSlots를 받아 분리된 슬롯에 default 블록 재생성하지 않음
+// (분리 슬롯은 slotId 키가 Firebase에 없어서 누락 판정되는 버그 방지)
+export function buildDefaultBlocks(pgmSlots, existingBlocks, splitSlots = {}) {
   const result = {}
   pgmSlots.forEach(slot => {
-    if (!existingBlocks[slot.slotId]) result[slot.slotId] = makeDefaultBlock(slot, 'ALL')
+    if (!existingBlocks[slot.slotId] && !splitSlots[slot.slotId]) {
+      result[slot.slotId] = makeDefaultBlock(slot, 'ALL')
+    }
   })
   return result
 }
@@ -112,7 +125,7 @@ function parseBroadcastDate(row) {
   }
 
   // "yyyy.m.d" / "yyyy-mm-dd" 형식
-  const parts = rawDate.split(/[.\-\/]/)
+  const parts = rawDate.split(/[.\-/]/)
   if (parts.length === 3) {
     const y = Number(parts[0]), m = Number(parts[1]), d = Number(parts[2])
     if (y > 2000 && m >= 1 && m <= 12 && d >= 1 && d <= 31) {

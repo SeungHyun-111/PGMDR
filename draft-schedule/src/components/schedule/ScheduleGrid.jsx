@@ -1,7 +1,6 @@
 // src/components/schedule/ScheduleGrid.jsx
 import { useMemo, useState, useRef, useEffect } from 'react'
 import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
-import ScheduleBlock from './ScheduleBlock'
 import SlotRow from './SlotRow'
 import { splitWeightedMin } from '../../utils/weightedMin'
 
@@ -9,7 +8,7 @@ const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
 const TIME_COL_WIDTH = 34
 const HEADER_HEIGHT = 36
 const TOOLBAR_HEIGHT = 32
-const ROW_HEIGHT = 28
+const MIN_ROW_HEIGHT = 28
 
 function timeToMin(timeText) {
   if (!timeText) return 0
@@ -21,15 +20,21 @@ export default function ScheduleGrid({ onBlockDrop }) {
   const { pgmSlots, scheduleBlocks, saveBlock, removeBlock, splitSlots, toggleSplitSlot } = useScheduleStore()
   const containerRef = useRef(null)
   const [containerWidth, setContainerWidth] = useState(1200)
+  const [containerHeight, setContainerHeight] = useState(0)
   const [splitPopup, setSplitPopup] = useState(null)
   const [teamFilter, setTeamFilter] = useState('전체')
 
+  // pgmSlots가 실제로 로드된 뒤 컨테이너가 DOM에 붙으므로 hasPgmSlots 변화 시 재실행
+  const hasPgmSlots = pgmSlots.length > 0
   useEffect(() => {
     if (!containerRef.current) return
-    const ro = new ResizeObserver(entries => setContainerWidth(entries[0].contentRect.width))
+    const ro = new ResizeObserver(entries => {
+      setContainerWidth(entries[0].contentRect.width)
+      setContainerHeight(entries[0].contentRect.height)
+    })
     ro.observe(containerRef.current)
     return () => ro.disconnect()
-  }, [])
+  }, [hasPgmSlots])
 
   useEffect(() => {
     const handler = () => setSplitPopup(null)
@@ -58,15 +63,26 @@ export default function ScheduleGrid({ onBlockDrop }) {
     return map
   }, [pgmSlots])
 
-  const getRowHeight = slotId => splitSlots[slotId] ? ROW_HEIGHT * 2 : ROW_HEIGHT
-
-  const totalHeight = useMemo(() => {
+  // 날짜별 슬롯 유닛 수(split=2, single=1)의 최대값 → 세로 높이 기준
+  const maxSlotUnits = useMemo(() => {
     if (!dates.length) return 0
-    return Math.max(...dates.map(date => {
-      const slots = slotsByDate[date] || []
-      return slots.reduce((acc, slot) => acc + getRowHeight(slot.slotId), 0)
-    }))
+    return Math.max(...dates.map(date =>
+      (slotsByDate[date] || []).reduce((sum, s) => sum + (splitSlots[s.slotId] ? 2 : 1), 0)
+    ))
   }, [slotsByDate, dates, splitSlots])
+
+  // 툴바·헤더를 뺀 실제 그리드 바디 가용 높이
+  const bodyAvailableHeight = Math.max(0, containerHeight - HEADER_HEIGHT - TOOLBAR_HEIGHT)
+
+  // 전체 그리드 높이: 최소 MIN_ROW_HEIGHT 보장, 남는 공간이 있으면 꽉 채움
+  const totalHeight = useMemo(() => {
+    const natural = maxSlotUnits * MIN_ROW_HEIGHT
+    return bodyAvailableHeight > 0 ? Math.max(natural, bodyAvailableHeight) : natural
+  }, [bodyAvailableHeight, maxSlotUnits])
+
+  // 슬롯 1유닛당 실제 픽셀 높이
+  const unitHeight = maxSlotUnits > 0 ? totalHeight / maxSlotUnits : MIN_ROW_HEIGHT
+  const getRowHeight = slotId => splitSlots[slotId] ? unitHeight * 2 : unitHeight
 
   const colWidth = useMemo(() => {
     if (!dates.length) return 0
@@ -201,7 +217,7 @@ export default function ScheduleGrid({ onBlockDrop }) {
                       }}
                       onContextMenu={e => handleTimeAxisRightClick(e, slot)}
                     >
-                      <span style={{ fontSize: Math.min(10, rowH * 0.38), color: isSplit ? 'var(--red)' : 'var(--text2)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                      <span style={{ fontSize: Math.min(12, Math.max(9, rowH * 0.3)), color: isSplit ? 'var(--red)' : 'var(--text2)', fontWeight: 600, whiteSpace: 'nowrap' }}>
                         {String(h).padStart(2,'0')}:{String(m).padStart(2,'0')}
                       </span>
                     </div>
