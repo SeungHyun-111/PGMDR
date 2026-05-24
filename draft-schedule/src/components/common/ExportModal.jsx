@@ -5,7 +5,7 @@ import { exportToExcel, printSchedule } from '../../utils/exportUtils'
 import HtmlSectionSelectModal from './HtmlSectionSelectModal'
 
 export default function ExportModal({ onClose }) {
-  const { scheduleBlocks, proposalItems, startDate, endDate } = useScheduleStore()
+  const { scheduleBlocks, proposalItems, startDate, endDate, pgmSlots, customSlots, splitSlots } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const [showHtmlModal, setShowHtmlModal] = useState(false)
 
@@ -13,7 +13,7 @@ export default function ExportModal({ onClose }) {
     .filter(b => b && !b.isDefault)
     .map(block => ({ ...block, mdCategory: block.mdCategory || categoryMap[block.pgmCodeName] || '' }))
 
-  const opts = { startDate, endDate }
+  const opts = { startDate, endDate, scheduleBlocks, pgmSlots: pgmSlots || [], customSlots: customSlots || {}, splitSlots: splitSlots || {}, categoryMap }
 
   if (showHtmlModal) {
     return (

@@ -21,35 +21,70 @@ function normalizeDealTypeForExcel(dt) {
   return d
 }
 
+function buildExcelRow(slot, block, ch, slotDuration) {
+  const empty = !block || block.isDefault
+  if (empty) {
+    return {
+      'DATE': slot.dateKey || '', 'TIME': slot.timeText || '',
+      '단순분': '', '가중분': '', '팀명': '', '다원방송': normalizeChannel(ch),
+      'MD분류': '', '상품명': '', '재/신상품': '', '혼합/직매입': '',
+      '대기업/수입여부': '', '메모코드': '', '편성C': '',
+    }
+  }
+  const isComp = block.isCompeting
+  const pgmName = isComp && block.item1 && block.item2
+    ? `${block.item1.pgmCodeName || ''}&${block.item2.pgmCodeName || ''}`
+    : (block.pgmCodeName || '')
+  return {
+    'DATE':            slot.dateKey || '',
+    'TIME':            slot.timeText || '',
+    '단순분':          block.durationMin ?? slotDuration ?? '',
+    '가중분':          block.weightedMin ?? '',
+    '팀명':            '',
+    '다원방송':        normalizeChannel(block.channel || ch),
+    'MD분류':          '',
+    '상품명':          pgmName,
+    '재/신상품':       (block.newProductType && block.newProductType !== '기존') ? block.newProductType : '',
+    '혼합/직매입':     isComp ? '' : normalizeDealTypeForExcel(block.dealTypeConverted || block.dealType),
+    '대기업/수입여부': '',
+    '메모코드':        block.memoCode || '',
+    '편성C':           block.scheduleComment || '',
+  }
+}
+
 export function exportToExcel(rows, opts = {}) {
-  const { startDate = '' } = opts
-  const data = rows
-    .filter(b => b && !b.isDefault)
-    .sort((a, b) => a.dateKey !== b.dateKey
+  const { startDate = '', scheduleBlocks = {}, pgmSlots = [], customSlots = {}, splitSlots = {} } = opts
+
+  const effectiveSlots = getEffectivePgmSlots(pgmSlots, customSlots)
+  effectiveSlots.sort((a, b) =>
+    a.dateKey !== b.dateKey
       ? a.dateKey.localeCompare(b.dateKey)
-      : (a.timeText || '').localeCompare(b.timeText || ''))
-    .map(b => ({
-      'DATE':          b.dateKey || '',
-      'TIME':          b.timeText || '',
-      '단순분':        b.durationMin || 0,
-      '가중분':        b.weightedMin || 0,
-      '팀명':          '',
-      '다원방송':      normalizeChannel(b.channel),
-      'MD분류':        '',
-      '상품명':        b.pgmCodeName || '',
-      '재/신상품':     (b.newProductType && b.newProductType !== '기존') ? b.newProductType : '',
-      '혼합/직매입':   normalizeDealTypeForExcel(b.dealTypeConverted || b.dealType),
-      '대기업/수입여부': '',
-      '메모코드':      b.memoCode || '',
-      '편성C':         b.scheduleComment || '',
-    }))
+      : (a.timeText || '').localeCompare(b.timeText || '')
+  )
+
+  const data = []
+  effectiveSlots.forEach(slot => {
+    const isSplit = !!(splitSlots[slot.slotId])
+    if (isSplit) {
+      const halfDur = slot.durationMin != null ? Math.round(slot.durationMin / 2) : ''
+      const caBlk   = scheduleBlocks[`${slot.slotId}_CA`]
+      const ipBlk   = scheduleBlocks[`${slot.slotId}_IP`]
+      data.push(buildExcelRow(slot, caBlk, 'CA', halfDur))
+      data.push(buildExcelRow(slot, ipBlk, 'IP', halfDur))
+    } else {
+      const blk = scheduleBlocks[slot.slotId]
+      data.push(buildExcelRow(slot, blk, 'ALL', slot.durationMin))
+    }
+  })
+
+  if (!data.length) return
 
   const ws = XLSX.utils.json_to_sheet(data)
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, '편성표')
 
-  const colWidths = Object.keys(data[0] || {}).map(key => ({
-    wch: Math.max(key.length, ...data.map(r => String(r[key] || '').length)) + 2
+  const colWidths = Object.keys(data[0]).map(key => ({
+    wch: Math.max(key.length, ...data.map(r => String(r[key] ?? '').length)) + 2
   }))
   ws['!cols'] = colWidths
 
