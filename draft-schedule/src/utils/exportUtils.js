@@ -2,6 +2,13 @@ import * as XLSX from 'xlsx'
 import { getGrade, getEffectiveProfit } from './grade'
 import { getEffectivePgmSlots } from './effectiveSlots'
 
+// ── 시간 비교 헬퍼 ────────────────────────────────────────────────────────
+function timeToMin(t) {
+  if (!t) return 0
+  const [h, m] = t.split(':').map(Number)
+  return (h || 0) * 60 + (m || 0)
+}
+
 // ── 엑셀 내보내기 ─────────────────────────────────────────────────────────
 function normalizeChannel(ch) {
   if (ch === 'CA') return 'CH1(CA)'
@@ -59,7 +66,7 @@ export function exportToExcel(rows, opts = {}) {
   effectiveSlots.sort((a, b) =>
     a.dateKey !== b.dateKey
       ? a.dateKey.localeCompare(b.dateKey)
-      : (a.timeText || '').localeCompare(b.timeText || '')
+      : timeToMin(a.timeText) - timeToMin(b.timeText)
   )
 
   const data = []
@@ -98,7 +105,7 @@ export function printSchedule(rows, opts = {}) {
     .filter(b => b && !b.isDefault)
     .sort((a, b) => a.dateKey !== b.dateKey
       ? a.dateKey.localeCompare(b.dateKey)
-      : (a.timeText || '').localeCompare(b.timeText || ''))
+      : timeToMin(a.timeText) - timeToMin(b.timeText))
 
   const tableRows = blocks.map(b => `
     <tr>
@@ -322,7 +329,7 @@ function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, p
   const dates = Object.keys(slotsByDate).sort()
   if (!dates.length) return '<div style="padding:24px;color:#8b90ab;font-size:12px">편성된 슬롯이 없습니다.</div>'
 
-  dates.forEach(d => slotsByDate[d].sort((a, b) => (a.timeText || '').localeCompare(b.timeText || '')))
+  dates.forEach(d => slotsByDate[d].sort((a, b) => timeToMin(a.timeText) - timeToMin(b.timeText)))
 
   const maxSlotUnits = Math.max(...dates.map(d =>
     slotsByDate[d].reduce((s, sl) => s + (splitSlots?.[sl.slotId] ? 2 : 1), 0)
@@ -552,7 +559,7 @@ function buildSimSection({ scheduleBlocks, pgmSlots, perfMap, manualInputs, cate
     }))
     .sort((a, b) => a.dateKey !== b.dateKey
       ? (a.dateKey || '').localeCompare(b.dateKey || '')
-      : (a.timeText || '').localeCompare(b.timeText || ''))
+      : timeToMin(a.timeText) - timeToMin(b.timeText))
 
   const totalSlotWm = (pgmSlots || []).reduce((a, sl) => a + (sl.weightedMin || 0), 0)
 
@@ -1105,7 +1112,7 @@ function buildStatusSection({ scheduleBlocks, proposalItems, perfMap, manualInpu
     }))
     .sort((a, b) => a.dateKey !== b.dateKey
       ? (a.dateKey || '').localeCompare(b.dateKey || '')
-      : (a.timeText || '').localeCompare(b.timeText || ''))
+      : timeToMin(a.timeText) - timeToMin(b.timeText))
 
   const competingBlocks = Object.values(scheduleBlocks)
     .filter(b => !b.isDefault && b.isCompeting)
