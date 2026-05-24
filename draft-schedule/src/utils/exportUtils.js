@@ -107,55 +107,64 @@ export function exportToExcel(rows, opts = {}) {
 
 // ── 인쇄 ─────────────────────────────────────────────────────────────────
 export function printSchedule(rows, opts = {}) {
-  const { startDate = '', endDate = '' } = opts
-  const blocks = rows
-    .filter(b => b && !b.isDefault)
-    .sort((a, b) => a.dateKey !== b.dateKey
-      ? a.dateKey.localeCompare(b.dateKey)
-      : timeToMin(a.timeText) - timeToMin(b.timeText))
+  const { startDate = '', endDate = '', scheduleBlocks = {}, pgmSlots = [], customSlots = {}, splitSlots = {} } = opts
 
-  const tableRows = blocks.map(b => `
-    <tr>
-      <td>${b.dateKey}</td>
-      <td>${b.timeText}</td>
-      <td>${b.channel}</td>
-      <td>${b.mdTeam || '-'}</td>
-      <td>${b.mdCategory || '미입력'}</td>
-      <td>${b.pgmCodeName}</td>
-      <td style="text-align:right">${(b.weightedMin || 0).toLocaleString()}</td>
-      <td>${b.dealType || '-'}</td>
-      <td>${b.memoCode || '-'}</td>
-      <td>${b.isCompeting ? '경쟁' : b.isPreSchedule ? '선편성' : '편성'}</td>
-    </tr>`).join('')
+  // 슬롯 수 계산 (높이 채우기용)
+  const effectiveSlots = getEffectivePgmSlots(pgmSlots, customSlots)
+  const slotsByDate = {}
+  effectiveSlots.forEach(s => {
+    if (!slotsByDate[s.dateKey]) slotsByDate[s.dateKey] = []
+    slotsByDate[s.dateKey].push(s)
+  })
+  const numDates = Object.keys(slotsByDate).length || 1
+  const maxSlotUnits = Math.max(...Object.values(slotsByDate).map(slots =>
+    slots.reduce((sum, sl) => sum + (splitSlots[sl.slotId] ? 2 : 1), 0)
+  ), 1)
+
+  // A4 가로 기준 (8mm 여백 적용) — 너비·높이 모두 꽉 채우도록 unitH 역산
+  const TIME_W = 36, COL_W = 160
+  const PAGE_W = 1046, PAGE_H = 700
+  const FIXED_H = 90  // 제목(~30) + 그리드헤더(36) + 여백·보더
+  const naturalW = numDates * (TIME_W + COL_W)
+  const zoom = Math.min(1, PAGE_W / naturalW)
+  const unitH = Math.max(20, Math.floor((PAGE_H / zoom - FIXED_H) / maxSlotUnits))
+
+  const scheduledCount = Object.values(scheduleBlocks).filter(b => b && !b.isDefault).length
+  const gridHtml = buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, perfMap: {}, unitH })
 
   const win = window.open('', '_blank')
   win.document.write(`<!DOCTYPE html>
-<html>
+<html lang="ko">
 <head>
   <meta charset="UTF-8">
   <title>편성표 ${startDate} ~ ${endDate}</title>
   <style>
-    @media print { @page { margin: 15mm; } }
-    body { font-family: 'Malgun Gothic', Arial, sans-serif; font-size: 10px; }
-    h2 { font-size: 13px; margin-bottom: 2px; }
-    .sub { font-size: 10px; color: #666; margin-bottom: 10px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #ccc; padding: 4px 6px; white-space: nowrap; }
-    th { background: #f0f0f0; font-weight: 600; }
-    tr:nth-child(even) td { background: #f9f9f9; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Malgun Gothic','Apple SD Gothic Neo',Arial,sans-serif;background:#fff;padding:6px 10px}
+    @page{size:A4 landscape;margin:8mm}
+    @media print{
+      html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      #_teamSel,label{display:none}
+    }
   </style>
 </head>
 <body>
-  <h2>편성표</h2>
-  <div class="sub">${startDate} ~ ${endDate} · 총 ${blocks.length}건</div>
-  <table>
-    <thead>
-      <tr><th>날짜</th><th>시간</th><th>채널</th><th>팀</th><th>카테고리</th>
-      <th>편성코드명</th><th>가중분</th><th>거래형태</th><th>메모코드</th><th>상태</th></tr>
-    </thead>
-    <tbody>${tableRows}</tbody>
-  </table>
-  <script>window.onload=()=>{window.print();window.close()}<\/script>
+  <div id="root">
+    <div style="display:flex;align-items:baseline;gap:10px;padding-bottom:6px;border-bottom:2px solid #1a1d2e;margin-bottom:8px">
+      <span style="font-size:13px;font-weight:800;color:#1a1d2e">초안 편성표</span>
+      <span style="font-size:10px;color:#8b90ab">${startDate} ~ ${endDate}</span>
+      <span style="font-size:10px;color:#4a4f6e;margin-left:auto">${scheduledCount}건 편성</span>
+    </div>
+    ${gridHtml}
+  </div>
+  <script>
+  window.onload=function(){
+    var root=document.getElementById('root');
+    var s=Math.min(1, 1046/root.scrollWidth);
+    if(s<1) root.style.zoom=s;
+    setTimeout(function(){window.print();window.close()},400);
+  };
+  <\/script>
 </body>
 </html>`)
   win.document.close()
@@ -317,8 +326,8 @@ ${body}
 
 // ── 편성표 그리드 ─────────────────────────────────────────────────────────
 
-function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, perfMap }) {
-  const UNIT_H = 44, TIME_W = 36, COL_W = 160
+function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, perfMap, unitH = 44 }) {
+  const UNIT_H = unitH, TIME_W = 36, COL_W = 160
   const effectiveSlots = getEffectivePgmSlots(pgmSlots, customSlots || {})
 
   const slotsByDate = {}
