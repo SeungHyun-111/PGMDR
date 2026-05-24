@@ -127,10 +127,6 @@ export function createSessionActions(setState, getState) {
         set(ref(db, `sessions/${weekKey}`), null),
         set(ref(db, `activeSessions/${weekKey}`), null),
       ])
-      const activeSnap = await get(ref(db, 'activeSession'))
-      if (activeSnap.exists() && activeSnap.val().weekKey === weekKey) {
-        await set(ref(db, 'activeSession'), null)
-      }
     },
   }
 }

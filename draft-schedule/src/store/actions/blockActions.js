@@ -148,11 +148,9 @@ export function createBlockActions(setState, getState) {
           dealTypeChar:      block.dealTypeChar       || '',
           perfKey:           block.perfKey            || null,
         }
-        const { proposalItems } = getState()
-        const fbIdx = proposalItems.length
-        await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${fbIdx}`), itemData)
+        await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${newItemId}`), itemData)
         setState(s => ({
-          proposalItems: [...s.proposalItems, buildProposalItem({ ...itemData, _fbIdx: fbIdx })],
+          proposalItems: [...s.proposalItems, buildProposalItem({ ...itemData, _fbIdx: newItemId })],
         }))
         return newItemId
       }

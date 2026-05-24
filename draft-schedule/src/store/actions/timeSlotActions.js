@@ -25,7 +25,7 @@ export function createTimeSlotActions(setState, getState) {
       const firstWm   = Math.round(rate * firstDur)
       const secondWm  = Math.round(rate * secondDur)
 
-      const customSlotId = `custom_${slotId}_${Date.now()}`
+      const customSlotId = `custom_${slotId}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`
 
       // 원본(또는 기존 커스텀) 슬롯 duration 단축
       const prevOv = customSlots[slotId] || {}

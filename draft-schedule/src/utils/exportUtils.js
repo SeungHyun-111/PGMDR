@@ -124,13 +124,13 @@ export function printSchedule(rows, opts = {}) {
   // A4 가로 기준 (8mm 여백 적용) — 너비·높이 모두 꽉 채우도록 unitH 역산
   const TIME_W = 36, COL_W = 160
   const PAGE_W = 1046, PAGE_H = 700
-  const FIXED_H = 90  // 제목(~30) + 그리드헤더(36) + 여백·보더
+  const FIXED_H = 85  // 제목(~44) + 그리드헤더(36) + 여백·보더 (toolbar 제외됨)
   const naturalW = numDates * (TIME_W + COL_W)
   const zoom = Math.min(1, PAGE_W / naturalW)
   const unitH = Math.max(20, Math.floor((PAGE_H / zoom - FIXED_H) / maxSlotUnits))
 
   const scheduledCount = Object.values(scheduleBlocks).filter(b => b && !b.isDefault).length
-  const gridHtml = buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, perfMap: {}, unitH })
+  const gridHtml = buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, perfMap: {}, unitH, forPrint: true })
 
   const win = window.open('', '_blank')
   win.document.write(`<!DOCTYPE html>
@@ -326,7 +326,7 @@ ${body}
 
 // ── 편성표 그리드 ─────────────────────────────────────────────────────────
 
-function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, perfMap, unitH = 44 }) {
+function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, perfMap, unitH = 44, forPrint = false }) {
   const UNIT_H = unitH, TIME_W = 36, COL_W = 160
   const effectiveSlots = getEffectivePgmSlots(pgmSlots, customSlots || {})
 
@@ -531,7 +531,7 @@ if(sel){
       .filter(Boolean)
   )].sort()
   const teamOptions = allTeams.map(t => `<option value="${t}">${t}</option>`).join('')
-  const toolbar = `<div style="height:36px;display:flex;align-items:center;padding:0 12px;gap:12px;border-bottom:1px solid #e2e4ef;background:#fff">
+  const toolbar = forPrint ? '' : `<div style="height:36px;display:flex;align-items:center;padding:0 12px;gap:12px;border-bottom:1px solid #e2e4ef;background:#fff">
 <span style="font-size:11px;color:#8b90ab">총 ${totalSlots}슬롯 · ${dates.length}일</span>
 <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
 <label style="font-size:11px;color:#4a4f6e">조직 필터</label>
@@ -550,7 +550,7 @@ ${toolbar}
 </div>
 </div>
 </div>
-${tipScript}`
+${forPrint ? '' : tipScript}`
 }
 
 // ── 시뮬레이션 ────────────────────────────────────────────────────────────

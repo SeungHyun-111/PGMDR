@@ -15,7 +15,7 @@ export function createItemActions(setState, getState) {
         const raw  = snap.exists() ? snap.val() : []
         const entries = Array.isArray(raw)
           ? raw.map((v, i) => ({ ...v, _fbIdx: i }))
-          : Object.entries(raw).map(([k, v]) => ({ ...v, _fbIdx: Number(k) }))
+          : Object.entries(raw).map(([k, v]) => ({ ...v, _fbIdx: k }))
         setState({
           proposalItems:      entries.map(buildProposalItem),
           proposalLoaded:     true,
