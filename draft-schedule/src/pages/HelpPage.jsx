@@ -163,9 +163,9 @@ const USAGE_SECTIONS = [
   {
     title: '내보내기',
     items: [
+      { label: '인쇄',            desc: '초안 편성표 그리드를 그대로 A4 가로 한 장으로 인쇄. 슬롯 수·날짜 수에 따라 행 높이와 zoom을 자동 계산해 한 페이지에 꽉 채움.' },
       { label: 'Excel',           desc: '편성표 전체를 .xlsx로 내보내기.' },
-      { label: 'HTML (Outlook)',  desc: '이메일 첨부 적합한 HTML 내보내기.' },
-      { label: '필터',            desc: '디폴트/경쟁/선편성/별표 포함 여부 선택 가능.' },
+      { label: 'HTML (Outlook)',  desc: '이메일 첨부 적합한 HTML 내보내기. 편성표·시뮬레이션·편성비중·편성현황 섹션 선택 가능.' },
     ]
   },
   {
