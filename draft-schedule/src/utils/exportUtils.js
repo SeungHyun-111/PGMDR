@@ -316,12 +316,6 @@ function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, p
 
   const slotsByDate = {}
   effectiveSlots.forEach(s => {
-    const isSplit = !!(splitSlots?.[s.slotId])
-    const hasBlock = isSplit
-      ? (scheduleBlocks[`${s.slotId}_CA`] && !scheduleBlocks[`${s.slotId}_CA`].isDefault)
-        || (scheduleBlocks[`${s.slotId}_IP`] && !scheduleBlocks[`${s.slotId}_IP`].isDefault)
-      : (scheduleBlocks[s.slotId] && !scheduleBlocks[s.slotId].isDefault)
-    if (!hasBlock) return
     if (!slotsByDate[s.dateKey]) slotsByDate[s.dateKey] = []
     slotsByDate[s.dateKey].push(s)
   })
