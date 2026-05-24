@@ -140,7 +140,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }
           </span>
         )}
         {prodTypeChar && !isCompeting && (
-          <span style={{ fontSize: badgeSz, fontWeight: 700, color: npt === '신상품' ? '#fef08a' : '#93c5fd', background: npt === '신상품' ? 'rgba(234,179,8,.25)' : 'rgba(59,130,246,.25)', padding: '0 3px', height: 14, borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+          <span style={{ fontSize: badgeSz, fontWeight: 700, color: npt === '신상품' ? (isColored ? '#fef08a' : '#92400e') : (isColored ? '#93c5fd' : '#1e40af'), background: npt === '신상품' ? 'rgba(234,179,8,.25)' : 'rgba(59,130,246,.25)', padding: '0 3px', height: 14, borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
             {prodTypeChar}
           </span>
         )}

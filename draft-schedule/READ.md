@@ -81,6 +81,9 @@ node scripts/cleanup-sessions.mjs  # Firebase 세션 전체 삭제
 | 2026-05-23 | SeungHyun-111 | refactor | Firebase 다중 write → 원자적 단일 update 전환 — `changeBlockChannel`(blockActions), `splitSlotTime`·`deleteSlotTime`(timeSlotActions) 에서 순차 set() 최대 9회를 `update(weekKey, { path: val, ... })` 1회로 교체. 동시 사용자 race condition 위험 제거 |
 | 2026-05-23 | SeungHyun-111 | refactor | React.memo 적용 — `ScheduleBlock.jsx`, `SlotRow.jsx`. teamFilter·gridSearch 변경 시 해당 블록만 재렌더, Firebase onValue 발생 시 변경된 슬롯만 갱신 |
 | 2026-05-23 | SeungHyun-111 | refactor | React.lazy 탭 코드 분할 — `App.jsx`에서 시뮬레이션·편성비중·편성현황·설명서 4개 탭 lazy import + Suspense 래퍼. 초기 번들에서 분리, 첫 탭 전환 시 로드 |
+| 2026-05-24 | SeungHyun-111 | feat | Excel 내보내기 컬럼 전면 개편 — 기존 범용 컬럼 제거, 샘플 양식 기준 13컬럼으로 재구성(DATE/TIME/단순분/가중분/팀명/다원방송/MD분류/상품명/재신상품/혼합직매입/대기업수입여부/메모코드/편성C). 팀명·MD분류·대기업수입여부 공란. 채널 정규화(ALL→공란, CA→CH1(CA), IP→CH2(IP)). 거래형태 정규화([위]·[률]→공란, [직]→직매입, [혼]→혼합, [모]→(광), [액]→정액). 재/신상품 기존→공란 (`exportUtils.js`) |
+| 2026-05-24 | SeungHyun-111 | refactor | 내보내기 모달 필터 전면 제거 — 기본블록포함/메모포함/실적정보포함/그룹기준 옵션 삭제. 모달은 건수·기간 표시 + 취소/인쇄/HTML/Excel 버튼만 유지 (`ExportModal.jsx`) |
+| 2026-05-24 | SeungHyun-111 | feat | HTML 내보내기 전 섹션 앱 화면 동기화 — 편성표·시뮬레이션·편성비중·편성현황 4개 섹션 전면 재작성. 편성표: 조직 필터 select(JS) + data-team 속성으로 클라이언트사이드 dim 필터 추가. 시뮬레이션: HeroCard(달성률 바)/StatCard(5개)/팀별볼륨바/일자별테이블/팀별관점테이블/미입력실적/상세15컬럼. 편성비중: RatioSummaryCards(5개)/RatioTable(팀별+카테고리별, 달성률바)/RatioPgmCount(채널별·거래형태별·영상구분별 피벗3개). 편성현황: 등급분포요약표/StatusScheduled(11컬럼)/StatusUnscheduled(8컬럼). targetMetrics HtmlSectionSelectModal 전달 추가 (`exportUtils.js`, `HtmlSectionSelectModal.jsx`) |
 
 ---
 
