@@ -19,13 +19,20 @@ function normalizeChannel(ch) {
 function normalizeDealTypeForExcel(dt) {
   if (!dt) return ''
   const d = dt.trim()
-  if (d.startsWith('[위]') || d.includes('위수탁')) return ''
-  if (d.startsWith('[률]') || d.includes('정률'))  return ''
-  if (d.startsWith('[직]') || d.includes('직매입')) return '직매입'
-  if (d.startsWith('[혼]') || d.includes('혼합'))  return '혼합'
-  if (d.startsWith('[모]') || d.includes('모바일광고')) return '(광)'
-  if (d.startsWith('[액]') || d.includes('정액'))  return '정액'
-  return d
+  if (d === '[위]' || d.includes('위수탁') || d.includes('기타')) return ''
+  if (d === '[률]' || d.includes('정률') || d.includes('효율'))  return ''
+  if (d === '[직]' || d.includes('직매입'))                       return '(직)'
+  if (d === '[혼]' || d.includes('혼합') || d.includes('특약'))   return '(혼)'
+  if (d === '[모]' || d.includes('모바일광고'))                    return '(광)'
+  if (d === '[액]' || d.includes('정액'))                         return '(정)'
+  return ''
+}
+
+function normalizeNewProductTypeForExcel(npt) {
+  if (!npt || npt === '기존') return ''
+  if (npt === '재녹화' || npt === '재편집') return '(재)'
+  if (npt === '신상품') return '(신)'
+  return ''
 }
 
 function buildExcelRow(slot, block, ch, slotDuration) {
@@ -51,7 +58,7 @@ function buildExcelRow(slot, block, ch, slotDuration) {
     '다원방송':        normalizeChannel(block.channel || ch),
     'MD분류':          '',
     '상품명':          pgmName,
-    '재/신상품':       (block.newProductType && block.newProductType !== '기존') ? block.newProductType : '',
+    '재/신상품':       normalizeNewProductTypeForExcel(block.newProductType),
     '혼합/직매입':     isComp ? '' : normalizeDealTypeForExcel(block.dealTypeConverted || block.dealType),
     '대기업/수입여부': '',
     '메모코드':        block.memoCode || '',
