@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { db, ref, set, get, update, onValue } from '../api/firebase'
+import { db, ref, set, get, update, onValue, onDisconnect } from '../api/firebase'
 import useScheduleStore from '../store/useScheduleStore'
 
 export default function usePresence() {
@@ -28,23 +28,23 @@ export default function usePresence() {
     const weekKey = `${startDate}_${poolType}`
     const uid = `${userName}_${Date.now()}`
     const presenceRef = ref(db, `presence/${weekKey}/${uid}`)
+    const connectedRef = ref(db, '.info/connected')
 
-    const data = {
-      userName,
-      poolType,
-      ts: Date.now()
-    }
+    // .info/connected: Firebase 소켓 연결 상태를 서버 측에서 실시간 감지
+    // 연결됐을 때 presence 기록 + onDisconnect 등록 → 소켓 끊기면 서버가 자동 삭제
+    const unsub = onValue(connectedRef, snap => {
+      if (!snap.val()) return
+      onDisconnect(presenceRef).remove()
+      set(presenceRef, { userName, poolType, ts: Date.now() })
+    })
 
-    set(presenceRef, data)
-
+    // heartbeat: ts 갱신 (마지막 활동 시간 유지)
     const interval = setInterval(() => {
-      set(presenceRef, {
-        ...data,
-        ts: Date.now()
-      })
+      set(presenceRef, { userName, poolType, ts: Date.now() })
     }, 30000)
 
     return () => {
+      unsub()
       clearInterval(interval)
       set(presenceRef, null)
     }
@@ -63,16 +63,12 @@ export function usePresenceUsers() {
     const unsubscribe = onValue(presenceRef, snapshot => {
       const val = snapshot.val() || {}
       const now = Date.now()
-
       const list = Object.values(val)
         .filter(u => u && now - u.ts < 90000)
         .reduce((acc, u) => {
-          if (!acc.find(x => x.userName === u.userName)) {
-            acc.push(u)
-          }
+          if (!acc.find(x => x.userName === u.userName)) acc.push(u)
           return acc
         }, [])
-
       setUsers(list)
     })
 

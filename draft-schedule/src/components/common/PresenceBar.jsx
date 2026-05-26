@@ -19,21 +19,28 @@ export default function PresenceBar() {
     if (!startDate) return
     const weekKey = `${startDate}_${poolType}`
     const r = ref(db, `presence/${weekKey}`)
+    let latest = {}
 
-    onValue(r, snap => {
-      if (!snap.exists()) { setUsers([]); return }
+    const filter = () => {
       const now = Date.now()
-      const active = Object.values(snap.val())
-        .filter(u => u && now - u.ts < 90000)          // ← lastSeen → ts
+      return Object.values(latest)
+        .filter(u => u && now - u.ts < 90000)
         .reduce((acc, u) => {
           if (!acc.find(x => x.userName === u.userName)) acc.push(u)
           return acc
         }, [])
         .sort((a, b) => (a.ts || 0) - (b.ts || 0))
-      setUsers(active)
+    }
+
+    onValue(r, snap => {
+      latest = snap.exists() ? snap.val() : {}
+      setUsers(filter())
     })
 
-    return () => off(r)
+    // 혼자 접속 중일 때 onValue 트리거 없이도 stale 항목 정리
+    const tick = setInterval(() => setUsers(filter()), 15000)
+
+    return () => { off(r); clearInterval(tick) }
   }, [startDate, poolType])
 
   if (users.length === 0) return null
