@@ -73,26 +73,27 @@ const DB_PATHS = [
   { path: 'gasData/proposalItems',   sync: false, label: '제안상품',          desc: '사이드바 상품 목록. 제안상품 갱신 또는 전체 재동기화로 갱신.' },
   { path: 'gasData/perfMap',         sync: false, label: '실적 DB',          desc: '거래형태+편성코드명 키 → 가중분당취급/한계이익. [→__LB__ 인코딩. 실적DB 갱신으로 갱신.' },
   { path: 'gasData/preScheduleRows', sync: false, label: '선편성 정보',      desc: '반영여부="반영" 행만. 선편성정보 갱신으로 갱신.' },
-  { path: 'scheduleBlocks',          sync: true,  label: '편성 블록',         desc: '드래그·수정·삭제 즉시 저장. onValue 실시간 구독 → 팀 전체 즉시 반영.' },
+  { path: 'scheduleBlocks',          sync: true,  label: '편성 블록',         desc: '드래그·수정·삭제 즉시 저장. onValue 실시간 구독. entityProps 머지 후 state 반영.' },
+  { path: 'entityProps/{uniqueKey}', sync: true,  label: '엔티티 속성',       desc: 'uniqueKey 기준 엔티티 속성 단일 저장소. pgmCodeName·mdTeam·memoCode·scheduleComment·annotation·newProductType·perfKey 등. 실시간 구독 → scheduleBlocks·proposalItems 자동 머지.' },
   { path: 'splitSlots',              sync: true,  label: 'CA/IP 분리 상태',  desc: '슬롯별 분리 여부. 시간축 우클릭 저장. 실시간 구독.' },
   { path: 'customSlots',             sync: true,  label: '커스텀 슬롯',      desc: '시간 분할로 생성된 사용자 정의 슬롯. durationMin·weightedMin 오버라이드. 실시간 구독.' },
   { path: 'starred',                 sync: true,  label: '별표',             desc: '상품별 별표 여부 {itemId: true}. 실시간 구독.' },
   { path: 'scheduledItemIds',        sync: true,  label: '편성완료 상품ID',  desc: '사이드바 제거 대상 ID 세트. 실시간 구독.' },
-  { path: 'manualInputs',            sync: true,  label: '수동 실적 입력',   desc: 'perfKey 기준 수동 입력값(취급/분·한익/분). 등급 계산 우선 적용. 실시간 구독.' },
+  { path: 'manualInputs',            sync: true,  label: '수기 실적 입력',   desc: 'uniqueKey 기준 수기 입력값(취급/분·한익/분). 블록별 독립 적용. 전사블록 시뮬레이션은 고정 키 sim_pgm_team 사용. 실시간 구독.' },
   { path: 'logs',                    sync: false, label: '편성 작업 로그',   desc: '편성·수정·삭제·채널변경 이력. _writeLog 자동 기록. 편성현황 변경이력 탭에서 조회.' },
   { path: 'refreshLogs',             sync: false, label: '갱신 이력',        desc: '갱신 메뉴 실행 시 자동 기록 (수정자·일시·결과건수). 설명서 페이지에서 조회.' },
-  { path: 'presence/{uid}',          sync: true,  label: 'Presence',         desc: '접속 중인 팀원 목록. 마운트/언마운트 시 write/delete. 실시간 구독.' },
+  { path: 'presence/{uid}',          sync: true,  label: 'Presence',         desc: '접속 중인 팀원 목록. .info/connected + onDisconnect().remove() 기반 — 탭 닫기·크래시·네트워크 단절 모두 Firebase 서버가 자동 삭제. 실시간 구독.' },
   { path: 'chat',                    sync: true,  label: '채팅',             desc: 'Firebase 기반 팀 채팅. 실시간 구독.' },
 ]
 
 // ── 협업 동기화 범위 ───────────────────────────────────────────────────────
 const COLLAB_ROWS = [
   { item: '편성 블록 드래그/이동/삭제',       scope: 'Firebase 즉시',  note: '모든 팀원에게 실시간 반영' },
-  { item: '블록 수정 (채널·메모코드·편성C 등)', scope: 'Firebase 즉시', note: '수정 저장 버튼 클릭 시' },
+  { item: '블록 수정 (채널·메모코드·편성C 등)', scope: 'Firebase 즉시', note: '엔티티 속성 → entityProps, 슬롯 속성 → scheduleBlocks 분리 저장' },
   { item: 'CA/IP 채널 분리·해제',            scope: 'Firebase 즉시',  note: 'splitSlots + 관련 블록 동시 갱신' },
   { item: '시간 분할/삭제',                  scope: 'Firebase 즉시',  note: 'customSlots 경로. 분할 슬롯의 durationMin·weightedMin 오버라이드 저장' },
   { item: '별표 토글',                       scope: 'Firebase 즉시',  note: '편성현황·실적예상값 필터 공유' },
-  { item: '수동 실적 입력',                  scope: 'Firebase 즉시',  note: 'manualInputs 경로. 등급 계산에 즉시 반영' },
+  { item: '수기 실적 입력',                  scope: 'Firebase 즉시',  note: 'manualInputs/{uniqueKey}. 블록별 독립 적용. 같은 편성코드라도 슬롯별 별도 관리' },
   { item: '첨삭(Annotation) 추가',           scope: 'Firebase 즉시',  note: '블록 필드로 저장' },
   { item: 'GAS 데이터 갱신',                 scope: 'Firebase 즉시',  note: 'gasData 경로 덮어씀 → 팀 전체 갱신 트리거' },
   { item: '새 편성 시작 (세션 생성)',         scope: 'Firebase 즉시',  note: 'activeSessions/{weekKey} 등록. 팀 전체 SessionSwitcher 목록 갱신.' },
@@ -105,20 +106,22 @@ const COLLAB_ROWS = [
 
 // ── 계산 로직 ─────────────────────────────────────────────────────────────
 const CALC_ROWS = [
-  { name: 'perfKey',          formula: 'dealTypeConverted + pgmCodeName', note: '실적 조회 키. GAS에서 생성, React에서도 동일 로직으로 구성.' },
-  { name: 'getEffectiveProfit', formula: 'manualInputs[perfKey].expectedProfitPerWeightedMin\n  ?? perfMap[perfKey].profitPerWeightedMin', note: '수동 입력이 있으면 우선 적용. 없으면 실적DB 값 사용.' },
-  { name: '등급(Grade)',       formula: '≥50만: S  ≥45만: A  ≥40만: B  ≥35만: C  미만: D', note: 'getGrade(getEffectiveProfit(...)). 실적 미입력 시 항상 D.' },
-  { name: '가중률',            formula: 'weightedMin ÷ durationMin × 100 (%)',              note: '단순분(방송시간) 대비 가중분 비율. 시간대·채널 프리미엄 반영.' },
-  { name: 'CA/IP 가중분 분배', formula: 'caWeighted = round(weightedMin × caRatio/100)\nipWeighted = weightedMin - caWeighted', note: 'splitWeightedMin(). 시간대별 CA:IP 비율 테이블로 분배.' },
+  { name: 'uniqueKey',         formula: '0_블록키 (기본/선편성)\n1_xxx (제안상품·복귀)\n2_slotId (선편성)\n3_xxx (경쟁/복사)', note: '모든 카드의 불변 고유 식별자. 세션 생성 시 부여, 이동/변환 시 유지. entityProps·manualInputs 조회 키.' },
+  { name: 'entityProps 머지',  formula: '{ ...block, ...(entityProps[block.uniqueKey] || {}) }', note: 'firebaseSubscribe에서 scheduleBlocks 구독 시 자동 적용. 컴포넌트에서 별도 처리 불필요.' },
+  { name: 'perfKey',           formula: 'dealTypeConverted + pgmCodeName', note: '실적 조회 키. GAS에서 생성, React에서도 동일 로직으로 구성.' },
+  { name: 'getEffectiveProfit', formula: 'manualInputs[item.uniqueKey].expectedProfitPerWeightedMin\n  ?? perfMap[item.perfKey].profitPerWeightedMin', note: 'uniqueKey로 수기 입력 조회, perfKey로 실적DB 조회. 수기 입력 우선 적용.' },
+  { name: '등급(Grade)',        formula: '≥50만: S  ≥45만: A  ≥40만: B  ≥35만: C  미만: D', note: 'getGrade(getEffectiveProfit(...)). 실적 미입력 시 항상 D.' },
+  { name: '가중률',             formula: 'weightedMin ÷ durationMin × 100 (%)',              note: '단순분(방송시간) 대비 가중분 비율. 시간대·채널 프리미엄 반영.' },
+  { name: 'CA/IP 가중분 분배',  formula: 'caWeighted = round(weightedMin × caRatio/100)\nipWeighted = weightedMin - caWeighted', note: 'splitWeightedMin(). 시간대별 CA:IP 비율 테이블로 분배.' },
   { name: 'Firebase 키 인코딩', formula: 'perfKey의 [ → __LB__  ] → __RB__',                note: 'Firebase는 키에 [] 금지. encodePerfMap/decodePerfMap 사용.' },
   { name: 'itemId / slotId / preScheduleId', formula: 'MD5(parts.join("|")).slice(0,12) 앞에 타입 접두어', note: 'makeHashId_(). 동일 조건이면 항상 같은 ID → 중복 방지.' },
-  { name: 'editedBlocks 판정', formula: 'scheduleBlocks에서 !isDefault && !isCompeting', note: '사용자가 직접 편성한 블록만 필터. 갱신 시 보호 대상.' },
+  { name: 'editedBlocks 판정', formula: 'scheduleBlocks에서 !isPreSchedule && !isCompeting', note: '사용자가 직접 편성한 블록만 필터. 갱신 시 보호 대상.' },
 ]
 
 // ── 갱신 메뉴 ─────────────────────────────────────────────────────────────
 const REFRESH_TABLE = [
-  { action: 'GAS 전체 재동기화', scope: 'pgmSlots · proposalItems · perfMap · preScheduleRows · targetMetrics · weightedMinTargets', note: '사용자 편성 블록 보호. 선편성·디폴트 블록만 최신 데이터로 덮어씀.' },
-  { action: '선편성정보 갱신',   scope: 'preScheduleRows',    note: '사용자 편성 블록 보호. 기존 선편성·디폴트 블록만 덮어씀.' },
+  { action: 'GAS 전체 재동기화', scope: 'pgmSlots · proposalItems · perfMap · preScheduleRows · targetMetrics · weightedMinTargets', note: '사용자 편성 블록 보호. 선편성 블록만 최신 데이터로 덮어씀.' },
+  { action: '선편성정보 갱신',   scope: 'preScheduleRows',    note: '사용자 편성 블록 보호. 기존 선편성 블록만 덮어씀.' },
   { action: '제안상품 갱신',     scope: 'proposalItems',      note: '이미 편성된 상품은 사이드바에서 제외 유지.' },
   { action: '실적DB 갱신',       scope: 'perfMap',            note: '갱신 후 Firebase perfMap에 __LB__/__RB__ 인코딩으로 저장.' },
 ]
@@ -130,7 +133,7 @@ const USAGE_SECTIONS = [
     items: [
       { label: '블록 편성',   desc: '사이드바 카드를 슬롯으로 드래그. 편성 즉시 Firebase 저장 → 팀원 실시간 반영.' },
       { label: '블록 이동',   desc: '편성된 블록을 다른 슬롯으로 드래그.' },
-      { label: '블록 삭제',   desc: '우클릭 → 삭제. 디폴트([편성팀]) 블록으로 복원.' },
+      { label: '블록 삭제',   desc: '우클릭 → 삭제. 슬롯이 비워지며 삭제된 블록은 제안상품으로 복귀.' },
       { label: '블록 수정',   desc: '더블클릭 또는 우클릭 → 수정. 채널·메모코드·편성C·신상품구분·수동실적 편집 가능.' },
       { label: '사이드바 복귀', desc: '우클릭 → 사이드바로 복귀. 사이드바에서 블록 재사용 가능.' },
     ]
@@ -355,7 +358,7 @@ export default function HelpPage() {
               루트: <code style={{ fontSize: 10, color: '#f5a623' }}>activeSessions/{'{weekKey}'}</code> — 세션 목록 공유.<br/>
               세션 데이터: <code style={{ fontSize: 10, color: 'var(--accent)' }}>sessions/{'{weekKey}'}/</code> 경로 아래.<br/>
               수정 즉시 팀 전체에 반영됩니다.<br/>
-              실시간 구독(onValue) 경로 6개: <span style={{ color: 'var(--text2)' }}>scheduleBlocks · splitSlots · customSlots · starred · scheduledItemIds · manualInputs</span>
+              실시간 구독(onValue) 경로 7개: <span style={{ color: 'var(--text2)' }}>scheduleBlocks · entityProps · splitSlots · customSlots · starred · scheduledItemIds · manualInputs</span>
             </div>
           </Card>
         </div>
