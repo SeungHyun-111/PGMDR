@@ -131,17 +131,19 @@ export function createBlockActions(setState, getState) {
 
         setState(s => {
           if (s.proposalItems.some(p => p.itemId === block.itemId)) return s
-          // orig 못 찾으면 블록 데이터로 fallback (수동 추가/편집된 아이템)
+          // orig 못 찾으면 블록 데이터로 fallback — 고정속성(memoCode 등) 유실 방지
           const item = orig ?? {
             itemId:            block.itemId,
             uniqueKey:         block.uniqueKey          || genKey('1'),
-            pgmCodeName:       block.pgmCodeName       || '',
+            pgmCodeName:       block.pgmCodeName        || '',
             mdTeam:            block.mdTeam             || block.orgName || '',
             orgName:           block.orgName            || block.mdTeam  || '',
             mdCategory:        block.mdCategory         || '',
             dealType:          block.dealTypeConverted  || block.dealType || '',
             dealTypeConverted: block.dealTypeConverted  || block.dealType || '',
             dealTypeChar:      block.dealTypeChar       || '',
+            memoCode:          block.memoCode           || '',
+            newProductType:    block.newProductType     || '',
             perfKey:           block.perfKey            || null,
           }
           return { proposalItems: [...s.proposalItems, buildProposalItem(item)] }
@@ -153,13 +155,15 @@ export function createBlockActions(setState, getState) {
         const itemData = {
           itemId:            newItemId,
           uniqueKey:         genKey('1'),
-          pgmCodeName:       block.pgmCodeName       || '',
+          pgmCodeName:       block.pgmCodeName        || '',
           mdTeam:            block.mdTeam             || block.orgName || '',
           orgName:           block.orgName            || block.mdTeam  || '',
           mdCategory:        block.mdCategory         || '',
           dealType:          block.dealTypeConverted  || block.dealType || '',
           dealTypeConverted: block.dealTypeConverted  || block.dealType || '',
           dealTypeChar:      block.dealTypeChar       || '',
+          memoCode:          block.memoCode           || '',
+          newProductType:    block.newProductType     || '',
           perfKey:           block.perfKey            || null,
         }
         await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${newItemId}`), itemData)
