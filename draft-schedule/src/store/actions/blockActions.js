@@ -1,7 +1,9 @@
 import { db, ref, set, get, update } from '../../api/firebase'
-import { buildProposalItem } from '../helpers/blockBuilders'
+import { buildProposalItem, makeDefaultBlock } from '../helpers/blockBuilders'
 import { splitWeightedMin } from '../../utils/weightedMin'
 import { normalizeTeamName } from '../../utils/teamName'
+import { genKey } from '../../utils/uniqueKey'
+import { getEffectivePgmSlots } from '../../utils/effectiveSlots'
 
 export function createBlockActions(setState, getState) {
   return {
@@ -63,6 +65,15 @@ export function createBlockActions(setState, getState) {
       }
 
       await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${blockKey}`), null)
+
+      // 슬롯을 비운 뒤 default 블록으로 복원
+      const slotId = blockKey.replace(/_(CA|IP)$/, '')
+      const ch = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
+      const { pgmSlots, customSlots } = getState()
+      const slot = getEffectivePgmSlots(pgmSlots, customSlots).find(s => s.slotId === slotId)
+      if (slot) {
+        await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${blockKey}`), makeDefaultBlock(slot, ch))
+      }
     },
 
     // 채널 변경 + 그리드 분리/합치기 동시 처리
@@ -133,6 +144,7 @@ export function createBlockActions(setState, getState) {
           // orig 못 찾으면 블록 데이터로 fallback (수동 추가/편집된 아이템)
           const item = orig ?? {
             itemId:            block.itemId,
+            uniqueKey:         block.uniqueKey          || genKey('1'),
             pgmCodeName:       block.pgmCodeName       || '',
             mdTeam:            block.mdTeam             || block.orgName || '',
             orgName:           block.orgName            || block.mdTeam  || '',
@@ -150,6 +162,7 @@ export function createBlockActions(setState, getState) {
         const newItemId = `pre_${block.slotId}_${Date.now()}`
         const itemData = {
           itemId:            newItemId,
+          uniqueKey:         genKey('1'),
           pgmCodeName:       block.pgmCodeName       || '',
           mdTeam:            block.mdTeam             || block.orgName || '',
           orgName:           block.orgName            || block.mdTeam  || '',

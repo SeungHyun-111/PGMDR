@@ -165,7 +165,7 @@ export default function ScheduleStatus() {
       .map(b => ({
         ...b,
         mdCategory: b.mdCategory || categoryMap[b.pgmCodeName] || '미분류',
-        _grade: getGrade(getEffectiveProfit(b.perfKey, perfMap, manualInputs)),
+        _grade: getGrade(getEffectiveProfit(b, perfMap, manualInputs)),
         _team:  b.mdTeam || b.orgName || '미지정',
       }))
   , [scheduleBlocks, categoryMap, perfMap, manualInputs])
@@ -179,7 +179,7 @@ export default function ScheduleStatus() {
   const enrichedItems = useMemo(() =>
     proposalItems.map(i => ({
       ...i,
-      _grade: getGrade(getEffectiveProfit(i.perfKey, perfMap, manualInputs)),
+      _grade: getGrade(getEffectiveProfit(i, perfMap, manualInputs)),
       _team:  i.mdTeam || i.team || '미지정',
     }))
   , [proposalItems, perfMap, manualInputs])

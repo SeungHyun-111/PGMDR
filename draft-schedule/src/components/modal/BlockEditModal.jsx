@@ -43,7 +43,7 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
   const currentPerfKey = makePerfKey(form.dealTypeConverted || form.dealType, form.pgmCodeName)
   const lastPerf = currentPerfKey ? (perfMap[currentPerfKey] || null) : null
 
-  const manualKey = block.perfKey || currentPerfKey || null
+  const manualKey = block.uniqueKey || null
   const manual = manualKey ? (manualInputs[manualKey] || {}) : {}
   const [manualSales,  setManualSales]  = useState(manual.expectedSalesPerWeightedMin  ?? '')
   const [manualProfit, setManualProfit] = useState(manual.expectedProfitPerWeightedMin ?? '')

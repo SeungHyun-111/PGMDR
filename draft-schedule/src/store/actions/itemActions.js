@@ -1,6 +1,6 @@
 import { db, ref, set, update, get } from '../../api/firebase'
 import { buildProposalItem } from '../helpers/blockBuilders'
-import { encodeKey } from '../../utils/firebaseKey'
+import { genKey } from '../../utils/uniqueKey'
 
 export function createItemActions(setState, getState) {
   return {
@@ -47,7 +47,7 @@ export function createItemActions(setState, getState) {
       const weekKey = `${startDate}_${poolType}`
       const fbIdx = proposalItems.length
       // _fbIdx는 내부 메타 — Firebase에는 저장하지 않음
-      const newItem = { ...itemData, itemId: `manual_${Date.now()}` }
+      const newItem = { ...itemData, itemId: `manual_${Date.now()}`, uniqueKey: genKey('1') }
       await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${fbIdx}`), newItem)
       setState(s => ({
         proposalItems: [...s.proposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx })],
@@ -72,7 +72,7 @@ export function createItemActions(setState, getState) {
       if (!orig) return
       const fbIdx = proposalItems.length
       const { _fbIdx, ...rest } = orig
-      const newItem = { ...rest, itemId: `dup_${Date.now()}` }
+      const newItem = { ...rest, itemId: `dup_${Date.now()}`, uniqueKey: genKey('1') }
       await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${fbIdx}`), newItem)
       setState(s => ({ proposalItems: [...s.proposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx })] }))
     },
@@ -96,11 +96,10 @@ export function createItemActions(setState, getState) {
       await set(ref(db, `sessions/${weekKey}/starred/${itemId}`), starred[itemId] ? null : true)
     },
 
-    async saveManualInput(perfKey, data) {
+    async saveManualInput(uniqueKey, data) {
       const { startDate, poolType } = getState()
       const weekKey = `${startDate}_${poolType}`
-      const safeKey = encodeKey(perfKey)
-      await update(ref(db, `sessions/${weekKey}/manualInputs/${safeKey}`), data)
+      await update(ref(db, `sessions/${weekKey}/manualInputs/${uniqueKey}`), data)
     },
 
     setUserName(name) {

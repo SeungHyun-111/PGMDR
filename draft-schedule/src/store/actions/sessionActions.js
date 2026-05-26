@@ -1,11 +1,13 @@
 import { db, ref, set, get } from '../../api/firebase'
-import { buildSlot, buildPreScheduleBlocks, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
+import { buildSlot, buildPreScheduleBlocks, buildDefaultBlocks, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
 import { subscribeRealtimePaths, unsubscribeAll } from '../helpers/firebaseSubscribe'
 import { decodeMapKeys } from '../../utils/firebaseKey'
 import { normalizeBlocksTeamNames } from '../../utils/teamName'
+import { genKey } from '../../utils/uniqueKey'
 
 const PGM_TEAM_ITEMS = Array.from({ length: 10 }, (_, i) => ({
   itemId: `pgmteam_default_${i + 1}`,
+  uniqueKey: `0_pgmteam_${i + 1}`,
   pgmCodeName: '[편성팀]',
   mdTeam: '편성팀',
   orgName: '편성팀',
@@ -29,7 +31,10 @@ export function createSessionActions(setState, getState) {
           const { fetchInitData } = await import('../../api/gas')
           const gasData = await fetchInitData(startDate, poolType)
           const now = Date.now()
-          const proposalItems = [...(gasData.proposalItems || []), ...PGM_TEAM_ITEMS]
+          const proposalItems = [
+            ...(gasData.proposalItems || []).map(item => ({ ...item, uniqueKey: genKey('1') })),
+            ...PGM_TEAM_ITEMS,
+          ]
           await set(ref(db, `sessions/${weekKey}/gasData`), {
             ...gasData,
             proposalItems,
@@ -40,7 +45,8 @@ export function createSessionActions(setState, getState) {
           })
           const pgmSlots = (gasData.pgmSlots || []).map(buildSlot)
           const preBlocks = buildPreScheduleBlocks(pgmSlots, gasData.preScheduleRows || [], {})
-          await set(ref(db, `sessions/${weekKey}/scheduleBlocks`), { ...preBlocks })
+          const defBlocks = buildDefaultBlocks(pgmSlots, preBlocks)
+          await set(ref(db, `sessions/${weekKey}/scheduleBlocks`), { ...preBlocks, ...defBlocks })
         }
 
         await getState()._loadFromFirebase(startDate, poolType)
@@ -91,7 +97,7 @@ export function createSessionActions(setState, getState) {
         customSlots,
         starred:            starredSnap.exists()  ? starredSnap.val()               : {},
         scheduledItemIds:   scheduledSnap.exists()? scheduledSnap.val()             : {},
-        manualInputs:       inputsSnap.exists()   ? decodeMapKeys(inputsSnap.val()) : {},
+        manualInputs:       inputsSnap.exists()   ? inputsSnap.val() : {},
         lastUpdated:        updatedSnap.exists()  ? updatedSnap.val()               : null,
         isLoaded: true, isLoading: false, proposalLoaded: false,
       })

@@ -18,10 +18,10 @@ function getRowKey(b, rowType) {
 }
 
 function getExpected(b, perfMap, manualInputs) {
-  const key = b.perfKey
-  if (!key) return { sp: 0, pp: 0, hasPerf: false }
-  const m  = manualInputs?.[key] || {}
-  const p  = perfMap?.[key]      || {}
+  const isDefaultPgmTeam = b.pgmCodeName === '[편성팀]' && b.memoCode === '[전사블록]'
+  const manualKey = isDefaultPgmTeam ? 'sim_pgm_team' : b.uniqueKey
+  const m  = manualKey ? (manualInputs?.[manualKey] || {}) : {}
+  const p  = b.perfKey ? (perfMap?.[b.perfKey]      || {}) : {}
   const sp = Number(m.expectedSalesPerWeightedMin  ?? p.salesPerWeightedMin  ?? 0)
   const pp = Number(m.expectedProfitPerWeightedMin ?? p.profitPerWeightedMin ?? 0)
   return { sp, pp, hasPerf: sp > 0 || pp > 0 }

@@ -18,20 +18,18 @@ export function getGrade(profitPerMin) {
   return 'D'
 }
 
-export function getEffectiveProfit(perfKey, perfMap, manualInputs) {
-  if (!perfKey) return null
-  const manual = (manualInputs || {})[perfKey] || {}
-  const perf   = (perfMap || {})[perfKey]      || {}
+export function getEffectiveProfit(item, perfMap, manualInputs) {
+  if (!item) return null
+  const manual = item.uniqueKey ? ((manualInputs || {})[item.uniqueKey] || {}) : {}
+  const perf   = item.perfKey   ? ((perfMap     || {})[item.perfKey]   || {}) : {}
   const v = manual.expectedProfitPerWeightedMin ?? perf.profitPerWeightedMin ?? null
   return v === null ? null : Number(v)
 }
 
-export function calcGradeDist(items, getKey, perfMap, manualInputs) {
+export function calcGradeDist(items, perfMap, manualInputs) {
   const counts = { S: 0, A: 0, B: 0, C: 0, D: 0 }
   items.forEach(item => {
-    const perfKey = getKey(item)
-    const profit  = getEffectiveProfit(perfKey, perfMap, manualInputs)
-    counts[getGrade(profit)]++
+    counts[getGrade(getEffectiveProfit(item, perfMap, manualInputs))]++
   })
   return counts
 }

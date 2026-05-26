@@ -56,8 +56,10 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
           durationMin: slot.durationMin, weightedMin: targetWeightedMin,
           channel: ch, isCompeting: true, isPreSchedule: false,
           pgmCodeName: `[${brand1}*${brand2}]`,
+          uniqueKey: `3_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
           item1: {
-            ...(targetBlock.itemId ? { itemId: targetBlock.itemId } : {}),
+            ...(targetBlock.itemId    ? { itemId:    targetBlock.itemId    } : {}),
+            ...(targetBlock.uniqueKey ? { uniqueKey: targetBlock.uniqueKey } : {}),
             pgmCodeName: targetBlock.pgmCodeName,
             mdTeam: targetBlock.mdTeam,
             orgName: targetBlock.orgName,
@@ -67,7 +69,8 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
             weightedMin: targetBlock.weightedMin,
           },
           item2: {
-            ...(draggedBlock.itemId ? { itemId: draggedBlock.itemId } : {}),
+            ...(draggedBlock.itemId    ? { itemId:    draggedBlock.itemId    } : {}),
+            ...(draggedBlock.uniqueKey ? { uniqueKey: draggedBlock.uniqueKey } : {}),
             pgmCodeName: draggedBlock.pgmCodeName,
             mdTeam: draggedBlock.mdTeam,
             orgName: draggedBlock.orgName,

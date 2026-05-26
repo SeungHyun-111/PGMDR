@@ -22,9 +22,10 @@ function groupBlocks(blocks, keyFn, perfMap, manualInputs, totalWm) {
     const k  = keyFn(b)
     const wm = b.weightedMin || 0
     const dm = b.durationMin || 0
-    const pk = b.perfKey
-    const m  = pk ? (manualInputs?.[pk] || {}) : {}
-    const p  = pk ? (perfMap?.[pk]      || {}) : {}
+    const isDefaultPgmTeam = b.pgmCodeName === '[편성팀]' && b.memoCode === '[전사블록]'
+    const manualKey = isDefaultPgmTeam ? 'sim_pgm_team' : b.uniqueKey
+    const m  = manualKey ? (manualInputs?.[manualKey] || {}) : {}
+    const p  = b.perfKey  ? (perfMap?.[b.perfKey]     || {}) : {}
     const sp = Number(m.expectedSalesPerWeightedMin  ?? p.salesPerWeightedMin  ?? 0)
     const pp = Number(m.expectedProfitPerWeightedMin ?? p.profitPerWeightedMin ?? 0)
     if (!map[k]) map[k] = { count: 0, wm: 0, dm: 0, perfWm: 0, sales: 0, profit: 0, perfCount: 0 }

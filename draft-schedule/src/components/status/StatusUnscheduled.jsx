@@ -65,7 +65,7 @@ export default function StatusUnscheduled({ rows, perfMap, manualInputs }) {
         </thead>
         <tbody>
           {sorted.map((item, i) => {
-            const grade = item._grade || getGrade(getEffectiveProfit(item.perfKey, perfMap, manualInputs))
+            const grade = item._grade || getGrade(getEffectiveProfit(item, perfMap, manualInputs))
             return (
               <tr key={item.itemId || i} style={{ borderBottom: '1px solid var(--border)', background: i % 2 === 0 ? 'transparent' : 'var(--bg3)' }}>
                 <td style={{ padding: '7px 12px' }}>

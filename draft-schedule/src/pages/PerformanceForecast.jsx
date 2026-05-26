@@ -11,9 +11,10 @@ import { getEffectivePgmSlots } from '../utils/effectiveSlots'
 // ── helpers ───────────────────────────────────────────────────────────────
 
 function calcForecast(block, perfMap, manualInputs) {
-  const key = block.perfKey
-  const manual = key ? (manualInputs[key] || {}) : {}
-  const lastPerf = key ? (perfMap[key] || null) : null
+  const isDefaultPgmTeam = block.pgmCodeName === '[편성팀]' && block.memoCode === '[전사블록]'
+  const manualKey = isDefaultPgmTeam ? 'sim_pgm_team' : block.uniqueKey
+  const manual = manualKey ? (manualInputs[manualKey] || {}) : {}
+  const lastPerf = block.perfKey ? (perfMap[block.perfKey] || null) : null
 
   const manualSales  = manual.expectedSalesPerWeightedMin  ?? null
   const manualProfit = manual.expectedProfitPerWeightedMin ?? null
@@ -174,20 +175,20 @@ function BlockFieldEditor({ value, type, options, onSave, placeholder, minWidth 
 
 // ── inline edit cell ──────────────────────────────────────────────────────
 
-function EditCell({ value, perfKey, field, onSave, dim }) {
+function EditCell({ value, uniqueKey, field, onSave, dim }) {
   const [editing, setEditing] = useState(false)
   const [val, setVal] = useState('')
   const iref = useRef()
 
   const open = () => {
-    if (!perfKey) return
+    if (!uniqueKey) return
     setVal(value != null ? String(Math.round(value)) : '')
     setEditing(true)
     setTimeout(() => iref.current?.select(), 0)
   }
   const commit = async () => {
     setEditing(false)
-    await onSave(perfKey, field, val === '' ? null : Number(val))
+    await onSave(uniqueKey, field, val === '' ? null : Number(val))
   }
 
   if (editing) return (
@@ -202,11 +203,11 @@ function EditCell({ value, perfKey, field, onSave, dim }) {
 
   const display = value != null ? fmt(value) : null
   return (
-    <span onClick={open} title={perfKey ? '클릭 수정' : ''}
-      style={{ display: 'inline-block', minWidth: 60, textAlign: 'right', cursor: perfKey ? 'pointer' : 'default',
+    <span onClick={open} title={uniqueKey ? '클릭 수정' : ''}
+      style={{ display: 'inline-block', minWidth: 60, textAlign: 'right', cursor: uniqueKey ? 'pointer' : 'default',
         color: dim ? 'var(--text3)' : display != null ? 'var(--text)' : 'var(--text3)',
-        borderBottom: perfKey ? '1px dashed var(--border)' : 'none', fontSize: 11 }}>
-      {display ?? (perfKey ? '입력' : '-')}
+        borderBottom: uniqueKey ? '1px dashed var(--border)' : 'none', fontSize: 11 }}>
+      {display ?? (uniqueKey ? '입력' : '-')}
     </span>
   )
 }
@@ -452,15 +453,13 @@ export default function PerformanceForecast() {
 
   // 탭 전환 후 재마운트 시 저장된 시뮬레이션 값 복원
   useEffect(() => {
-    const block = Object.values(scheduleBlocks).find(b => b?.pgmCodeName === '[편성팀]' && b?.memoCode === '[전사블록]')
-    if (!block?.perfKey) return
-    const saved = manualInputs[block.perfKey]
+    const saved = manualInputs['sim_pgm_team']
     if (!saved) return
     if (saved.expectedSalesPerWeightedMin  != null) setSimSpm(String(Math.round(saved.expectedSalesPerWeightedMin)))
     if (saved.expectedProfitPerWeightedMin != null) setSimPpm(String(Math.round(saved.expectedProfitPerWeightedMin)))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
-  const handleSave = async (perfKey, field, val) => { await saveManualInput(perfKey, { [field]: val }) }
+  const handleSave = async (uniqueKey, field, val) => { await saveManualInput(uniqueKey, { [field]: val }) }
 
   // 블록 필드(편성코드명·거래형태·영상구분) 수정 → Firebase scheduleBlocks 반영
   // pgmCodeName·dealType 변경 시 perfKey 재산출
@@ -499,11 +498,9 @@ export default function PerformanceForecast() {
       if (spmVal !== '') patch.expectedSalesPerWeightedMin  = Number(spmVal)
       if (ppmVal !== '') patch.expectedProfitPerWeightedMin = Number(ppmVal)
       if (Object.keys(patch).length === 0) return
-      Object.values(scheduleBlocks)
-        .filter(b => b?.pgmCodeName === '[편성팀]' && b?.memoCode === '[전사블록]')
-        .forEach(b => { if (b.perfKey) saveManualInput(b.perfKey, patch) })
+      saveManualInput('sim_pgm_team', patch)
     }, 500)
-  }, [scheduleBlocks, saveManualInput])
+  }, [saveManualInput])
 
   const groupToggle = (
     <div style={{ display: 'flex', gap: 4 }}>
@@ -1008,10 +1005,10 @@ export default function PerformanceForecast() {
                     </td>
                     <td style={{ ...td, textAlign: 'right' }}>{fmt(r.weightedMin)}</td>
                     <td style={{ ...td, textAlign: 'right' }}>
-                      <EditCell value={r.manualSales} perfKey={r.perfKey} field="expectedSalesPerWeightedMin" onSave={handleSave} />
+                      <EditCell value={r.manualSales} uniqueKey={r.uniqueKey} field="expectedSalesPerWeightedMin" onSave={handleSave} />
                     </td>
                     <td style={{ ...td, textAlign: 'right' }}>
-                      <EditCell value={r.manualProfit} perfKey={r.perfKey} field="expectedProfitPerWeightedMin" onSave={handleSave} />
+                      <EditCell value={r.manualProfit} uniqueKey={r.uniqueKey} field="expectedProfitPerWeightedMin" onSave={handleSave} />
                     </td>
                   </tr>
                 ))
@@ -1072,11 +1069,11 @@ export default function PerformanceForecast() {
                       {r.lastPerf ? fmt(r.lastPerf.profitPerWeightedMin) : <span style={{ color: 'var(--red)', fontSize: 10 }}>없음</span>}
                     </td>
                     <td style={{ ...td, textAlign: 'right' }}>
-                      <EditCell value={r.manualSales ?? r.salesPerMin} perfKey={r.perfKey}
+                      <EditCell value={r.manualSales ?? r.salesPerMin} uniqueKey={r.uniqueKey}
                         field="expectedSalesPerWeightedMin" onSave={handleSave} dim={r.manualSales == null} />
                     </td>
                     <td style={{ ...td, textAlign: 'right' }}>
-                      <EditCell value={r.manualProfit ?? r.profitPerMin} perfKey={r.perfKey}
+                      <EditCell value={r.manualProfit ?? r.profitPerMin} uniqueKey={r.uniqueKey}
                         field="expectedProfitPerWeightedMin" onSave={handleSave} dim={r.manualProfit == null} />
                     </td>
                     <td style={{ ...td, textAlign: 'right', color: 'var(--accent)', fontWeight: 600 }}>{fmtS(r.expectedSales)}</td>

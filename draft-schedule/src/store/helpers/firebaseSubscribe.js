@@ -27,7 +27,7 @@ export function subscribeRealtimePaths(weekKey, setState, getState) {
     [`sessions/${weekKey}/customSlots`]:      snap => setState({ customSlots:      snap.exists() ? snap.val() : {} }),
     [`sessions/${weekKey}/starred`]:          snap => setState({ starred:          snap.exists() ? snap.val() : {} }),
     [`sessions/${weekKey}/scheduledItemIds`]: snap => setState({ scheduledItemIds: snap.exists() ? snap.val() : {} }),
-    [`sessions/${weekKey}/manualInputs`]:     snap => setState({ manualInputs:     snap.exists() ? decodeMapKeys(snap.val()) : {} }),
+    [`sessions/${weekKey}/manualInputs`]:     snap => setState({ manualInputs:     snap.exists() ? snap.val() : {} }),
   }
   Object.entries(paths).forEach(([path, handler]) => subscribePath(path, handler))
 }

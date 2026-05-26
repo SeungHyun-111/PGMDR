@@ -83,8 +83,10 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
         durationMin: slot.durationMin, weightedMin: slot.weightedMin,
         channel, isCompeting: true, isPreSchedule: false,
         pgmCodeName: `[${brand1}*${brand2}]`,
+        uniqueKey: `3_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
         item1: {
-          ...(existingBlock.itemId ? { itemId: existingBlock.itemId } : {}),
+          ...(existingBlock.itemId    ? { itemId:    existingBlock.itemId    } : {}),
+          ...(existingBlock.uniqueKey ? { uniqueKey: existingBlock.uniqueKey } : {}),
           pgmCodeName: existingBlock.pgmCodeName,
           mdTeam: existingBlock.mdTeam,
           orgName: existingBlock.orgName,
@@ -95,6 +97,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
         },
         item2: {
           itemId: item.itemId,
+          ...(item.uniqueKey ? { uniqueKey: item.uniqueKey } : {}),
           pgmCodeName: item.pgmCodeName,
           mdTeam: item.mdTeam,
           orgName: item.mdTeam,
@@ -115,6 +118,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
       durationMin: slot.durationMin, weightedMin,
       channel,
       itemId: item.itemId,
+      ...(item.uniqueKey ? { uniqueKey: item.uniqueKey } : {}),
       pgmCodeName: item.pgmCodeName,
       pgmCode: item.pgmCode || '',
       mdTeam: item.mdTeam || '',

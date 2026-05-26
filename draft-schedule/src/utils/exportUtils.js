@@ -203,9 +203,10 @@ const gBadge = g => {
 }
 
 function calcForecastLocal(block, perfMap, manualInputs) {
-  const key    = block.perfKey
-  const manual = key ? (manualInputs[key] || {}) : {}
-  const lastPerf = key ? (perfMap[key] || null) : null
+  const isDefaultPgmTeam = block.pgmCodeName === '[편성팀]' && block.memoCode === '[전사블록]'
+  const manualKey = isDefaultPgmTeam ? 'sim_pgm_team' : block.uniqueKey
+  const manual = manualKey ? (manualInputs[manualKey] || {}) : {}
+  const lastPerf = block.perfKey ? (perfMap[block.perfKey] || null) : null
   const ms = manual.expectedSalesPerWeightedMin  ?? null
   const mp = manual.expectedProfitPerWeightedMin ?? null
   const sp = ms ?? lastPerf?.salesPerWeightedMin  ?? null
@@ -1121,7 +1122,7 @@ function buildStatusSection({ scheduleBlocks, proposalItems, perfMap, manualInpu
     .map(b => ({
       ...b,
       mdCategory: b.mdCategory || categoryMap[b.pgmCodeName] || '미분류',
-      _grade: getGrade(getEffectiveProfit(b.perfKey, perfMap, manualInputs)),
+      _grade: getGrade(getEffectiveProfit(b, perfMap, manualInputs)),
       _team:  b.mdTeam || b.orgName || '미지정',
     }))
     .sort((a, b) => a.dateKey !== b.dateKey
@@ -1133,7 +1134,7 @@ function buildStatusSection({ scheduleBlocks, proposalItems, perfMap, manualInpu
 
   const enrichedItems = (proposalItems || []).map(i => ({
     ...i,
-    _grade: getGrade(getEffectiveProfit(i.perfKey, perfMap, manualInputs)),
+    _grade: getGrade(getEffectiveProfit(i, perfMap, manualInputs)),
     _team:  i.mdTeam || i.team || '미지정',
   }))
 
@@ -1171,7 +1172,7 @@ function buildStatusSection({ scheduleBlocks, proposalItems, perfMap, manualInpu
   const allScheduled = [...enrichedBlocks, ...competingBlocks]
   const scheduledRows = allScheduled.map((block, i) => {
     const isCompeting = block.isCompeting
-    const grade = block._grade || getGrade(getEffectiveProfit(block.perfKey, perfMap, manualInputs))
+    const grade = block._grade || getGrade(getEffectiveProfit(block, perfMap, manualInputs))
     const statusBadge = isCompeting
       ? `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#fef2f2;color:#dc2626;font-weight:700">경쟁</span>`
       : block.isPreSchedule
