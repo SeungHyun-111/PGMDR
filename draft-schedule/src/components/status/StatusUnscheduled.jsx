@@ -13,7 +13,7 @@ function GradeBadge({ grade }) {
 const GRADE_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 }
 const COLS = [
   { key: '_grade',               label: '등급',      sort: (a, b) => (GRADE_ORDER[a._grade || 'D'] ?? 4) - (GRADE_ORDER[b._grade || 'D'] ?? 4) },
-  { key: 'mdTeam',               label: '팀',        sort: (a, b) => (a.mdTeam || a.team || '').localeCompare(b.mdTeam || b.team || '') },
+  { key: 'mdTeam',               label: '팀',        sort: (a, b) => (a.mdTeam || '').localeCompare(b.mdTeam || '') },
   { key: 'mdCategory',           label: '카테고리',   sort: (a, b) => (a.mdCategory || '').localeCompare(b.mdCategory || '') },
   { key: 'pgmCodeName',          label: '편성코드명', sort: (a, b) => (a.pgmCodeName || '').localeCompare(b.pgmCodeName || '', 'ko') },
   { key: 'dealTypeConverted',    label: '거래형태',   sort: (a, b) => (a.dealTypeConverted || '').localeCompare(b.dealTypeConverted || '') },
@@ -71,7 +71,7 @@ export default function StatusUnscheduled({ rows, perfMap, manualInputs }) {
                 <td style={{ padding: '7px 12px' }}>
                   <GradeBadge grade={grade} />
                 </td>
-                <td style={{ padding: '7px 12px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{item.mdTeam || item.team || '-'}</td>
+                <td style={{ padding: '7px 12px', color: 'var(--text2)', whiteSpace: 'nowrap' }}>{item.mdTeam || '-'}</td>
                 <td style={{ padding: '7px 12px', color: 'var(--text3)', fontSize: 11 }}>{item.mdCategory || '-'}</td>
                 <td style={{ padding: '7px 12px', fontWeight: 500, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.pgmCodeName || '-'}</td>
                 <td style={{ padding: '7px 12px', color: 'var(--text3)', fontSize: 11 }}>{item.dealTypeConverted || item.dealType || '-'}</td>

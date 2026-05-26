@@ -1,6 +1,7 @@
 import { db, ref, set, update, get } from '../../api/firebase'
 import { buildProposalItem } from '../helpers/blockBuilders'
 import { genKey } from '../../utils/uniqueKey'
+import { normalizeItemsTeamNames } from '../../utils/teamName'
 
 export function createItemActions(setState, getState) {
   return {
@@ -16,8 +17,9 @@ export function createItemActions(setState, getState) {
         const entries = Array.isArray(raw)
           ? raw.map((v, i) => ({ ...v, _fbIdx: i }))
           : Object.entries(raw).map(([k, v]) => ({ ...v, _fbIdx: k }))
+        const { weightedMinTargets } = getState()
         setState({
-          proposalItems:      entries.map(buildProposalItem),
+          proposalItems:      normalizeItemsTeamNames(entries.map(buildProposalItem), weightedMinTargets),
           proposalLoaded:     true,
           isLoadingProposals: false,
         })

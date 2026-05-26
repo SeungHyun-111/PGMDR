@@ -166,7 +166,7 @@ export default function ScheduleStatus() {
         ...b,
         mdCategory: b.mdCategory || categoryMap[b.pgmCodeName] || '미분류',
         _grade: getGrade(getEffectiveProfit(b, perfMap, manualInputs)),
-        _team:  b.mdTeam || b.orgName || '미지정',
+        _team:  b.mdTeam || '미지정',
       }))
   , [scheduleBlocks, categoryMap, perfMap, manualInputs])
 
@@ -180,7 +180,7 @@ export default function ScheduleStatus() {
     proposalItems.map(i => ({
       ...i,
       _grade: getGrade(getEffectiveProfit(i, perfMap, manualInputs)),
-      _team:  i.mdTeam || i.team || '미지정',
+      _team:  i.mdTeam || '미지정',
     }))
   , [proposalItems, perfMap, manualInputs])
 

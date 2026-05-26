@@ -21,3 +21,13 @@ export function normalizeBlocksTeamNames(scheduleBlocks, weightedMinTargets) {
   })
   return result
 }
+
+// proposalItems 배열의 팀명 단일화 (mdTeam || orgName || team → mdTeam 정규화)
+export function normalizeItemsTeamNames(items, weightedMinTargets) {
+  if (!items?.length) return items
+  return items.map(item => {
+    const raw = item.mdTeam || item.orgName || item.team || ''
+    const mdTeam = normalizeTeamName(raw, weightedMinTargets)
+    return mdTeam !== item.mdTeam ? { ...item, mdTeam } : item
+  })
+}

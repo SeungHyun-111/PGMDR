@@ -2,6 +2,7 @@
 import { db, ref, set, update } from '../../api/firebase'
 import { buildPreScheduleBlocks, buildDefaultBlocks, buildSlot, buildProposalItem, encodePerfMap, buildPerfMapFromGas } from '../helpers/blockBuilders'
 import { genKey } from '../../utils/uniqueKey'
+import { normalizeItemsTeamNames } from '../../utils/teamName'
 
 export function createRefreshActions(setState, getState) {
   return {
@@ -41,8 +42,9 @@ export function createRefreshActions(setState, getState) {
         const now = Date.now()
         await update(ref(db, `sessions/${weekKey}/gasData`), { proposalItems: data.proposalItems })
         await update(ref(db, `sessions/${weekKey}/lastUpdated`), { proposal: now })
+        const { weightedMinTargets } = getState()
         setState(s => ({
-          proposalItems:      data.proposalItems.map((item, i) => buildProposalItem({ ...item, _fbIdx: i, uniqueKey: genKey('1') })),
+          proposalItems:      normalizeItemsTeamNames(data.proposalItems.map((item, i) => buildProposalItem({ ...item, _fbIdx: i, uniqueKey: genKey('1') })), weightedMinTargets),
           proposalLoaded:     true,
           isLoadingProposals: false,
           lastUpdated: { ...s.lastUpdated, proposal: now },
@@ -89,7 +91,10 @@ export function createRefreshActions(setState, getState) {
         const defBlocks = buildDefaultBlocks(pgmSlotsNew, { ...protectedBlocks, ...preBlocks })
         await update(ref(db, `sessions/${weekKey}/scheduleBlocks`), { ...defBlocks, ...preBlocks })
 
-        const proposalItems = (gasData.proposalItems || []).map((item, i) => buildProposalItem({ ...item, _fbIdx: i, uniqueKey: genKey('1') }))
+        const proposalItems = normalizeItemsTeamNames(
+          (gasData.proposalItems || []).map((item, i) => buildProposalItem({ ...item, _fbIdx: i, uniqueKey: genKey('1') })),
+          getState().weightedMinTargets
+        )
 
         const perfMap = buildPerfMapFromGas(gasData.perfMap || {})
         setState(s => ({

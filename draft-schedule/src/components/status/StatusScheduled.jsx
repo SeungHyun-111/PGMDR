@@ -18,7 +18,7 @@ const COLS = [
   { key: 'dateKey',      label: '날짜',    sort: (a, b) => (a.dateKey || '').localeCompare(b.dateKey) },
   { key: 'timeText',     label: '시간',    sort: (a, b) => (a.timeText || '').localeCompare(b.timeText) },
   { key: 'channel',      label: '채널',    sort: (a, b) => (a.channel || '').localeCompare(b.channel) },
-  { key: 'mdTeam',       label: '팀',      sort: (a, b) => (a.mdTeam || a.orgName || '').localeCompare(b.mdTeam || b.orgName || '') },
+  { key: 'mdTeam',       label: '팀',      sort: (a, b) => (a.mdTeam || '').localeCompare(b.mdTeam || '') },
   { key: 'mdCategory',   label: '카테고리', sort: (a, b) => (a.mdCategory || '').localeCompare(b.mdCategory) },
   { key: 'pgmCodeName',  label: '편성코드명', sort: (a, b) => (a.pgmCodeName || '').localeCompare(b.pgmCodeName, 'ko') },
   { key: 'weightedMin',  label: '가중분',  sort: (a, b) => (a.weightedMin || 0) - (b.weightedMin || 0) },
@@ -98,7 +98,7 @@ export default function StatusScheduled({ rows, competing = [], perfMap, manualI
                     {block.channel}
                   </span>
                 </td>
-                <td style={{ padding: '7px 12px', color: 'var(--text2)' }}>{block.mdTeam || block.orgName || '-'}</td>
+                <td style={{ padding: '7px 12px', color: 'var(--text2)' }}>{block.mdTeam || '-'}</td>
                 <td style={{ padding: '7px 12px', color: 'var(--text3)', fontSize: 11 }}>{block.mdCategory || '-'}</td>
                 <td style={{ padding: '7px 12px', fontWeight: isCompeting ? 700 : 400, color: isCompeting ? 'var(--red)' : 'var(--text)', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {isCompeting ? '⚔ ' : ''}{block.pgmCodeName}
