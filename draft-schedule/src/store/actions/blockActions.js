@@ -1,9 +1,8 @@
 import { db, ref, set, get, update } from '../../api/firebase'
-import { buildProposalItem, makeDefaultBlock } from '../helpers/blockBuilders'
+import { buildProposalItem } from '../helpers/blockBuilders'
 import { splitWeightedMin } from '../../utils/weightedMin'
 import { normalizeTeamName } from '../../utils/teamName'
 import { genKey } from '../../utils/uniqueKey'
-import { getEffectivePgmSlots } from '../../utils/effectiveSlots'
 
 export function createBlockActions(setState, getState) {
   return {
@@ -65,15 +64,6 @@ export function createBlockActions(setState, getState) {
       }
 
       await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${blockKey}`), null)
-
-      // 슬롯을 비운 뒤 default 블록으로 복원
-      const slotId = blockKey.replace(/_(CA|IP)$/, '')
-      const ch = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
-      const { pgmSlots, customSlots } = getState()
-      const slot = getEffectivePgmSlots(pgmSlots, customSlots).find(s => s.slotId === slotId)
-      if (slot) {
-        await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${blockKey}`), makeDefaultBlock(slot, ch))
-      }
     },
 
     // 채널 변경 + 그리드 분리/합치기 동시 처리

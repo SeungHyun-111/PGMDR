@@ -1,5 +1,5 @@
 import { db, ref, set, get } from '../../api/firebase'
-import { buildSlot, buildPreScheduleBlocks, buildDefaultBlocks, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
+import { buildSlot, buildPreScheduleBlocks, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
 import { subscribeRealtimePaths, unsubscribeAll } from '../helpers/firebaseSubscribe'
 import { decodeMapKeys } from '../../utils/firebaseKey'
 import { normalizeBlocksTeamNames } from '../../utils/teamName'
@@ -45,8 +45,7 @@ export function createSessionActions(setState, getState) {
           })
           const pgmSlots = (gasData.pgmSlots || []).map(buildSlot)
           const preBlocks = buildPreScheduleBlocks(pgmSlots, gasData.preScheduleRows || [], {})
-          const defBlocks = buildDefaultBlocks(pgmSlots, preBlocks)
-          await set(ref(db, `sessions/${weekKey}/scheduleBlocks`), { ...preBlocks, ...defBlocks })
+          await set(ref(db, `sessions/${weekKey}/scheduleBlocks`), preBlocks)
         }
 
         await getState()._loadFromFirebase(startDate, poolType)
