@@ -127,6 +127,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
       dealType: dealTypeConverted,
       dealTypeConverted,
       newProductType: item.newProductType || '',
+      memoCode: item.memoCode || '',
       ...(perfKey ? { perfKey } : {}),
       isDefault: false,
       assignedAt: Date.now(),
