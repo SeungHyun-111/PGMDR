@@ -11,7 +11,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }
   const [editModal, setEditModal]       = useState(false)
   const [annotationPopup, setAnnotationPopup] = useState(false)
   const [annotationText, setAnnotationText]   = useState('')
-  const { returnBlockToSidebar, perfMap } = useScheduleStore()
+  const { returnBlockToSidebar, perfMap, manualInputs } = useScheduleStore()
 
   // 클릭 시 context menu 닫기 + hover 상태도 함께 초기화 (tooltip 잔류 방지)
   useEffect(() => {
@@ -108,6 +108,9 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }
   ]
 
   const lastPerf = block.perfKey ? (perfMap[block.perfKey] || null) : null
+  const isDefaultPgmTeam = block.pgmCodeName === '[편성팀]' && block.memoCode === '[전사블록]'
+  const manualKey = isDefaultPgmTeam ? 'sim_pgm_team' : block.uniqueKey
+  const manual = manualKey ? (manualInputs[manualKey] || {}) : {}
 
   return (
     <div style={{ position: 'absolute', inset: '1px', opacity: dimmed ? 0.12 : 1, transition: 'opacity .15s' }}
@@ -167,7 +170,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }
 
       {/* 툴팁: contextMenu/editModal/annotationPopup 없을 때만 표시 */}
       {hover && tooltipPos && !contextMenu && !editModal && !annotationPopup && (
-        <BlockTooltip block={block} lastPerf={lastPerf} pos={tooltipPos} />
+        <BlockTooltip block={block} lastPerf={lastPerf} manual={manual} pos={tooltipPos} />
       )}
 
       {contextMenu && (
@@ -218,10 +221,11 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }
 
 export default memo(ScheduleBlock)
 
-function BlockTooltip({ block, lastPerf, pos }) {
+function BlockTooltip({ block, lastPerf, manual, pos }) {
   // 화면 오른쪽/아래 잘림 방지
   const tooltipW = 230
-  const approxH  = block.isCompeting ? 150 : (block.annotation ? 290 : 220)
+  const hasManual = manual && (manual.expectedSalesPerWeightedMin != null || manual.expectedProfitPerWeightedMin != null)
+  const approxH  = block.isCompeting ? 150 : (block.annotation ? 290 : 220) + (hasManual ? 60 : 0)
   const left = pos.x + tooltipW > window.innerWidth ? pos.x - tooltipW - 12 : pos.x
   const top  = Math.min(pos.y, window.innerHeight - approxH - 8)
 
@@ -275,6 +279,21 @@ function BlockTooltip({ block, lastPerf, pos }) {
                 <div key={label} style={{ display: 'flex', gap: 8, fontSize: 10, marginBottom: 2 }}>
                   <span style={{ color: 'var(--text3)', minWidth: 52, flexShrink: 0 }}>{label}</span>
                   <span style={{ color, fontWeight: 700 }}>{val}</span>
+                </div>
+              ))}
+            </>
+          )}
+          {hasManual && (
+            <>
+              <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>수기 입력값</div>
+              {[
+                ['취급/분', manual.expectedSalesPerWeightedMin,  'var(--accent)'],
+                ['한익/분', manual.expectedProfitPerWeightedMin, 'var(--green)'],
+              ].filter(([, v]) => v != null).map(([label, val, color]) => (
+                <div key={label} style={{ display: 'flex', gap: 8, fontSize: 10, marginBottom: 2 }}>
+                  <span style={{ color: 'var(--text3)', minWidth: 52, flexShrink: 0 }}>{label}</span>
+                  <span style={{ color, fontWeight: 700 }}>{Number(val).toLocaleString()}</span>
                 </div>
               ))}
             </>
