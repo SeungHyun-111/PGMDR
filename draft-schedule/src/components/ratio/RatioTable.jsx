@@ -1,5 +1,9 @@
 export default function RatioTable({ data, groupDm = {}, stats, targetMap, totalSlotWeighted, totalTarget, showTarget, chartData }) {
-  const sorted = Object.entries(data).sort((a, b) => b[1] - a[1])
+  const sorted = Object.entries(data).sort((a, b) => {
+    if (a[0] === '편성팀') return 1
+    if (b[0] === '편성팀') return -1
+    return b[1] - a[1]
+  })
 
   const getTeamColor = (name) => chartData?.find(d => d.name === name)?.color || 'var(--text3)'
 

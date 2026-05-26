@@ -1,15 +1,21 @@
 import { db, ref, set, get, update } from '../../api/firebase'
 import { buildProposalItem } from '../helpers/blockBuilders'
 import { splitWeightedMin } from '../../utils/weightedMin'
+import { normalizeTeamName } from '../../utils/teamName'
 
 export function createBlockActions(setState, getState) {
   return {
 
     async saveBlock(blockKey, patch) {
-      const { startDate, poolType, scheduleBlocks } = getState()
+      const { startDate, poolType, scheduleBlocks, weightedMinTargets } = getState()
       const weekKey = `${startDate}_${poolType}`
       const before = scheduleBlocks[blockKey] || null
-      await update(ref(db, `sessions/${weekKey}/scheduleBlocks/${blockKey}`), patch)
+      const normalizedPatch = {
+        ...patch,
+        ...(patch.mdTeam  !== undefined && { mdTeam:  normalizeTeamName(patch.mdTeam,  weightedMinTargets) }),
+        ...(patch.orgName !== undefined && { orgName: normalizeTeamName(patch.orgName, weightedMinTargets) }),
+      }
+      await update(ref(db, `sessions/${weekKey}/scheduleBlocks/${blockKey}`), normalizedPatch)
       if (patch.isDefault !== true) {
         getState()._writeLog(before ? '수정' : '편성', blockKey, before, { ...before, ...patch })
       }
@@ -61,7 +67,12 @@ export function createBlockActions(setState, getState) {
 
     // 채널 변경 + 그리드 분리/합치기 동시 처리
     async changeBlockChannel(block, newChannel, patch) {
-      const { startDate, poolType, splitSlots, pgmSlots } = getState()
+      const { startDate, poolType, splitSlots, pgmSlots, weightedMinTargets } = getState()
+      patch = {
+        ...patch,
+        ...(patch.mdTeam  !== undefined && { mdTeam:  normalizeTeamName(patch.mdTeam,  weightedMinTargets) }),
+        ...(patch.orgName !== undefined && { orgName: normalizeTeamName(patch.orgName, weightedMinTargets) }),
+      }
       const weekKey = `${startDate}_${poolType}`
       const slotId  = block.slotId
       const slot    = pgmSlots.find(s => s.slotId === slotId)

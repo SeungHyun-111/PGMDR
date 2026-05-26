@@ -866,7 +866,11 @@ function buildRatioSection({ scheduleBlocks, pgmSlots, weightedMinTargets, categ
   const TEAM_COLORS_HTML = ['#818cf8','#34d399','#fb923c','#60a5fa','#f472b6','#a78bfa','#4ade80','#f87171','#fbbf24','#2dd4bf']
 
   function buildRatioTable(stats, showTarget) {
-    const sorted = Object.entries(stats.group).sort((a, b) => b[1] - a[1])
+    const sorted = Object.entries(stats.group).sort((a, b) => {
+      if (a[0] === '편성팀') return 1
+      if (b[0] === '편성팀') return -1
+      return b[1] - a[1]
+    })
     const colorMap = {}
     sorted.forEach(([name], i) => {
       colorMap[name] = name === '편성팀' ? '#94a3b8' : name === '경쟁' ? '#dc2626' : TEAM_COLORS_HTML[i % TEAM_COLORS_HTML.length]

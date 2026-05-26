@@ -77,10 +77,12 @@ function PgmCard({ title, colLabel, colKeyFn, colRenderer, blocks, rowType, perf
     const extra   = [...present].filter(k => !colLabel.includes(k))
     const allCols = [...colLabel.filter(c => present.has(c)), ...extra]
 
-    const rowOrder = Object.keys(piv).sort((a, b) =>
-      Object.values(piv[b]).reduce((s, v) => s + v.count, 0) -
-      Object.values(piv[a]).reduce((s, v) => s + v.count, 0)
-    )
+    const rowOrder = Object.keys(piv).sort((a, b) => {
+      if (a === '편성팀') return 1
+      if (b === '편성팀') return -1
+      return Object.values(piv[b]).reduce((s, v) => s + v.count, 0) -
+             Object.values(piv[a]).reduce((s, v) => s + v.count, 0)
+    })
 
     const sum = (col, key) => rowOrder.reduce((s, r) => s + (piv[r]?.[col]?.[key] || 0), 0)
     const colTotals = allCols.map(c => {

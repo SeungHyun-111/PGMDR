@@ -46,7 +46,11 @@ export default function ScheduleRatio() {
 
   const chartData = useMemo(() =>
     Object.entries(stats.group)
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => {
+        if (a[0] === '편성팀') return 1
+        if (b[0] === '편성팀') return -1
+        return b[1] - a[1]
+      })
       .map(([name, weighted], i) => ({
         name,
         actual: Math.round(weighted),

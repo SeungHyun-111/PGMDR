@@ -32,7 +32,11 @@ function GradeDonutChart({ items, selectedGrade, onGradeSelect }) {
     const acc = {}
     source.forEach(i => { acc[i._team] = (acc[i._team] || 0) + 1 })
     return Object.entries(acc)
-      .sort((a, b) => b[1] - a[1])
+      .sort((a, b) => {
+        if (a[0] === '편성팀') return 1
+        if (b[0] === '편성팀') return -1
+        return b[1] - a[1]
+      })
       .slice(0, 9)
       .map(([name, value]) => ({ name, value }))
   }, [items, activeGrade])

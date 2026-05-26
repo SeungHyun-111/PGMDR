@@ -2,6 +2,7 @@ import { db, ref, set, get } from '../../api/firebase'
 import { buildSlot, buildPreScheduleBlocks, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
 import { subscribeRealtimePaths, unsubscribeAll } from '../helpers/firebaseSubscribe'
 import { decodeMapKeys } from '../../utils/firebaseKey'
+import { normalizeBlocksTeamNames } from '../../utils/teamName'
 
 const PGM_TEAM_ITEMS = Array.from({ length: 10 }, (_, i) => ({
   itemId: `pgmteam_default_${i + 1}`,
@@ -76,15 +77,16 @@ export function createSessionActions(setState, getState) {
       const customSlots    = customSlotsSnap.exists()  ? customSlotsSnap.val()  : {}
 
       const perfMap = perfMapSnap.exists() ? decodePerfMap(perfMapSnap.val()) : {}
+      const weightedMinTargets = weightedSnap.exists() ? Object.values(weightedSnap.val()) : []
 
       setState({
         startDate, endDate: meta.endDate || '', poolType,
         pgmSlots,
         perfMap,
-        preScheduleRows:    preSnap.exists()      ? preSnap.val()                   : [],
-        weightedMinTargets: weightedSnap.exists() ? Object.values(weightedSnap.val()): [],
-        targetMetrics:      targetSnap.exists()   ? targetSnap.val()                : null,
-        scheduleBlocks,
+        preScheduleRows:    preSnap.exists()      ? preSnap.val()      : [],
+        weightedMinTargets,
+        targetMetrics:      targetSnap.exists()   ? targetSnap.val()   : null,
+        scheduleBlocks: normalizeBlocksTeamNames(scheduleBlocks, weightedMinTargets),
         splitSlots,
         customSlots,
         starred:            starredSnap.exists()  ? starredSnap.val()               : {},
@@ -99,7 +101,7 @@ export function createSessionActions(setState, getState) {
         getState().refreshPerformance()
       }
 
-      subscribeRealtimePaths(weekKey, setState)
+      subscribeRealtimePaths(weekKey, setState, getState)
     },
 
     async resetSession(startDate, poolType) {

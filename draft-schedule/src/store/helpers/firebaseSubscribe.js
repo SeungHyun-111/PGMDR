@@ -1,5 +1,6 @@
 import { db, ref, onValue } from '../../api/firebase'
 import { decodeMapKeys } from '../../utils/firebaseKey'
+import { normalizeBlocksTeamNames } from '../../utils/teamName'
 
 const _subs = {}
 
@@ -14,10 +15,14 @@ export function unsubscribeAll() {
   Object.keys(_subs).forEach(k => delete _subs[k])
 }
 
-export function subscribeRealtimePaths(weekKey, setState) {
+export function subscribeRealtimePaths(weekKey, setState, getState) {
   unsubscribeAll()
   const paths = {
-    [`sessions/${weekKey}/scheduleBlocks`]:   snap => setState({ scheduleBlocks:   snap.exists() ? snap.val() : {} }),
+    [`sessions/${weekKey}/scheduleBlocks`]: snap => {
+      const raw = snap.exists() ? snap.val() : {}
+      const { weightedMinTargets } = getState()
+      setState({ scheduleBlocks: normalizeBlocksTeamNames(raw, weightedMinTargets) })
+    },
     [`sessions/${weekKey}/splitSlots`]:       snap => setState({ splitSlots:       snap.exists() ? snap.val() : {} }),
     [`sessions/${weekKey}/customSlots`]:      snap => setState({ customSlots:      snap.exists() ? snap.val() : {} }),
     [`sessions/${weekKey}/starred`]:          snap => setState({ starred:          snap.exists() ? snap.val() : {} }),

@@ -5,6 +5,7 @@ import { DEAL_TYPES } from '../../constants/dealTypes'
 import { CATEGORIES } from '../../constants/categories'
 import { CHANNELS } from '../../constants/channels'
 import { makePerfKey } from '../../hooks/usePerformanceMap'
+import { normalizeTeamName } from '../../utils/teamName'
 
 const inp = { background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 9px', borderRadius: 5, fontSize: 12, width: '100%' }
 
@@ -24,7 +25,7 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
   const initDealType = block.dealTypeConverted || block.dealType || ''
   const [form, setForm] = useState({
     pgmCodeName:       block.pgmCodeName       || '',
-    mdTeam:            block.mdTeam            || block.orgName || '',
+    mdTeam:            normalizeTeamName(block.mdTeam || block.orgName || '', weightedMinTargets),
     mdCategory:        block.mdCategory        || '',
     dealType:          initDealType,
     dealTypeConverted: initDealType,

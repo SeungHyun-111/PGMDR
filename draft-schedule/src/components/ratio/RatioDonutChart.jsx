@@ -106,6 +106,8 @@ export default function RatioDonutChart({ chartData }) {
   const totalActual = chartData.reduce((acc, d) => acc + (d.actual || 0), 0)
 
   const sortedData = [...chartData].sort((a, b) => {
+    if (a.name === '편성팀') return 1
+    if (b.name === '편성팀') return -1
     const hasA = (a.target || 0) > 0
     const hasB = (b.target || 0) > 0
     if (hasA !== hasB) return hasB ? 1 : -1

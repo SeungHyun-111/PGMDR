@@ -6,6 +6,7 @@ import {
 import useScheduleStore from '../store/useScheduleStore'
 import useCategoryMap from '../hooks/useCategoryMap'
 import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
+import { getEffectivePgmSlots } from '../utils/effectiveSlots'
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -100,9 +101,11 @@ function DailyTeamTip({ active, payload, dailyTeamData, metric }) {
   const dateKey = payload[0]?.payload?.date
   const teamsMap = dateKey && dailyTeamData[dateKey]
   if (!teamsMap) return null
-  const teams = Object.values(teamsMap).sort((a, b) =>
-    metric === 'sales' ? b.salesPerMin - a.salesPerMin : b.profitPerMin - a.profitPerMin
-  )
+  const teams = Object.values(teamsMap).sort((a, b) => {
+    if (a.name === '편성팀') return 1
+    if (b.name === '편성팀') return -1
+    return metric === 'sales' ? b.salesPerMin - a.salesPerMin : b.profitPerMin - a.profitPerMin
+  })
   const color = metric === 'sales' ? 'var(--accent)' : 'var(--green)'
   return (
     <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', fontSize: 11, boxShadow: '0 4px 16px rgba(0,0,0,.18)', minWidth: 220 }}>
@@ -268,7 +271,7 @@ function ChartCard({ title, sub, right, children }) {
 // ── main ──────────────────────────────────────────────────────────────────
 
 export default function PerformanceForecast() {
-  const { scheduleBlocks, pgmSlots, proposalItems, perfMap, manualInputs, saveManualInput, saveBlock, weightedMinTargets, targetMetrics } = useScheduleStore()
+  const { scheduleBlocks, pgmSlots, splitSlots, customSlots, proposalItems, perfMap, manualInputs, saveManualInput, saveBlock, weightedMinTargets, targetMetrics } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const [groupBy, setGroupBy]           = useState('team')
   const [simSpm, setSimSpm]             = useState('')
@@ -313,7 +316,11 @@ export default function PerformanceForecast() {
       wm:     acc.wm     + Number(r.weightedMin || 0),
     }), { sales: 0, profit: 0, wm: 0 })
 
-    const totalSlotWm = pgmSlots.reduce((a, sl) => a + (sl.weightedMin || 0), 0)
+    // 엑셀 내보내기와 동일한 방식: getEffectivePgmSlots → 분할 슬롯 2칸으로 카운트
+    const effectiveSlots = getEffectivePgmSlots(pgmSlots, customSlots)
+    const totalSlotWm    = effectiveSlots.reduce((a, sl) => a + (sl.weightedMin || 0), 0)
+    const totalSlotCount = effectiveSlots.reduce((sum, sl) => sum + (splitSlots[sl.slotId] ? 2 : 1), 0)
+    const validCount     = displayRows.length
 
     return {
       ...s,
@@ -321,13 +328,13 @@ export default function PerformanceForecast() {
       profitPerMin: s.wm > 0 ? s.profit / s.wm : 0,
       missingCount: displayRows.filter(r => r.missingPerf).length,
       perfEnteredCount: displayRows.filter(r => !r.missingPerf).length,
-      count: displayRows.length,
-      totalSlotCount: pgmSlots.length,
+      count: validCount,
+      totalSlotCount,
       totalSlotWm,
       scheduleRate: totalSlotWm > 0 ? (s.wm / totalSlotWm * 100) : 0,
       perfRate: displayRows.length > 0 ? (displayRows.filter(r => !r.missingPerf).length / displayRows.length * 100) : 0,
     }
-  }, [displayRows, pgmSlots])
+  }, [displayRows, pgmSlots, customSlots, splitSlots])
 
   // ── 전사 일자별 데이터 ────────────────────────────────────────────────
   const dailyData = useMemo(() => {
@@ -444,11 +451,10 @@ export default function PerformanceForecast() {
   , [groupData, avgGroupSalesPerMin, avgGroupProfitPerMin, companyTotal])
 
   // 탭 전환 후 재마운트 시 저장된 시뮬레이션 값 복원
-  // perfKey는 makePerfKey('', '[편성팀]') = '[위][편성팀]' — normalizeDealType('')이 '[위]' 반환
   useEffect(() => {
-    const perfKey = pgmTeamRows[0]?.perfKey
-    if (!perfKey) return
-    const saved = manualInputs[perfKey]
+    const block = Object.values(scheduleBlocks).find(b => b?.pgmCodeName === '[편성팀]' && b?.memoCode === '[전사블록]')
+    if (!block?.perfKey) return
+    const saved = manualInputs[block.perfKey]
     if (!saved) return
     if (saved.expectedSalesPerWeightedMin  != null) setSimSpm(String(Math.round(saved.expectedSalesPerWeightedMin)))
     if (saved.expectedProfitPerWeightedMin != null) setSimPpm(String(Math.round(saved.expectedProfitPerWeightedMin)))
@@ -493,10 +499,11 @@ export default function PerformanceForecast() {
       if (spmVal !== '') patch.expectedSalesPerWeightedMin  = Number(spmVal)
       if (ppmVal !== '') patch.expectedProfitPerWeightedMin = Number(ppmVal)
       if (Object.keys(patch).length === 0) return
-      const perfKey = pgmTeamRows[0]?.perfKey
-      if (perfKey) saveManualInput(perfKey, patch)
+      Object.values(scheduleBlocks)
+        .filter(b => b?.pgmCodeName === '[편성팀]' && b?.memoCode === '[전사블록]')
+        .forEach(b => { if (b.perfKey) saveManualInput(b.perfKey, patch) })
     }, 500)
-  }, [pgmTeamRows, saveManualInput])
+  }, [scheduleBlocks, saveManualInput])
 
   const groupToggle = (
     <div style={{ display: 'flex', gap: 4 }}>
