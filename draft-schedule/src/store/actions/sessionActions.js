@@ -1,9 +1,9 @@
 import { db, ref, set, get } from '../../api/firebase'
 import { buildSlot, buildPreScheduleBlocks, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
 import { subscribeRealtimePaths, unsubscribeAll } from '../helpers/firebaseSubscribe'
-import { decodeMapKeys } from '../../utils/firebaseKey'
 import { normalizeBlocksTeamNames } from '../../utils/teamName'
 import { genKey } from '../../utils/uniqueKey'
+import { extractEntityFields, applyEntityProps } from '../../utils/mergeEntity'
 
 const PGM_TEAM_ITEMS = Array.from({ length: 10 }, (_, i) => ({
   itemId: `pgmteam_default_${i + 1}`,
@@ -46,6 +46,16 @@ export function createSessionActions(setState, getState) {
           const pgmSlots = (gasData.pgmSlots || []).map(buildSlot)
           const preBlocks = buildPreScheduleBlocks(pgmSlots, gasData.preScheduleRows || [], {})
           await set(ref(db, `sessions/${weekKey}/scheduleBlocks`), preBlocks)
+
+          // entityProps 초기화 — 모든 아이템(제안상품 + 선편성블록)의 엔티티 속성 기록
+          const entityProps = {}
+          proposalItems.forEach(item => {
+            if (item.uniqueKey) entityProps[item.uniqueKey] = extractEntityFields(item)
+          })
+          Object.values(preBlocks).forEach(block => {
+            if (block?.uniqueKey) entityProps[block.uniqueKey] = extractEntityFields(block)
+          })
+          await set(ref(db, `sessions/${weekKey}/entityProps`), entityProps)
         }
 
         await getState()._loadFromFirebase(startDate, poolType)
@@ -58,7 +68,7 @@ export function createSessionActions(setState, getState) {
       const weekKey = `${startDate}_${poolType}`
       const [
         metaSnap, pgmSnap, perfMapSnap, preSnap, weightedSnap, targetSnap,
-        blocksSnap, splitSnap, customSlotsSnap, starredSnap, scheduledSnap, inputsSnap, updatedSnap
+        blocksSnap, splitSnap, customSlotsSnap, starredSnap, scheduledSnap, inputsSnap, entitySnap, updatedSnap
       ] = await Promise.all([
         get(ref(db, `sessions/${weekKey}/gasData/meta`)),
         get(ref(db, `sessions/${weekKey}/gasData/pgmSlots`)),
@@ -72,17 +82,21 @@ export function createSessionActions(setState, getState) {
         get(ref(db, `sessions/${weekKey}/starred`)),
         get(ref(db, `sessions/${weekKey}/scheduledItemIds`)),
         get(ref(db, `sessions/${weekKey}/manualInputs`)),
+        get(ref(db, `sessions/${weekKey}/entityProps`)),
         get(ref(db, `sessions/${weekKey}/lastUpdated`)),
       ])
 
       const meta = metaSnap.exists() ? metaSnap.val() : {}
       const pgmSlots = (pgmSnap.exists() ? pgmSnap.val() : []).map(buildSlot)
-      const scheduleBlocks = blocksSnap.exists() ? blocksSnap.val() : {}
+      const rawBlocks      = blocksSnap.exists()      ? blocksSnap.val()      : {}
       const splitSlots     = splitSnap.exists()        ? splitSnap.val()        : {}
       const customSlots    = customSlotsSnap.exists()  ? customSlotsSnap.val()  : {}
+      const entityProps    = entitySnap.exists()       ? entitySnap.val()       : {}
 
       const perfMap = perfMapSnap.exists() ? decodePerfMap(perfMapSnap.val()) : {}
       const weightedMinTargets = weightedSnap.exists() ? Object.values(weightedSnap.val()) : []
+
+      const normalizedBlocks = normalizeBlocksTeamNames(rawBlocks, weightedMinTargets)
 
       setState({
         startDate, endDate: meta.endDate || '', poolType,
@@ -91,7 +105,9 @@ export function createSessionActions(setState, getState) {
         preScheduleRows:    preSnap.exists()      ? preSnap.val()      : [],
         weightedMinTargets,
         targetMetrics:      targetSnap.exists()   ? targetSnap.val()   : null,
-        scheduleBlocks: normalizeBlocksTeamNames(scheduleBlocks, weightedMinTargets),
+        _rawBlocks:         rawBlocks,
+        scheduleBlocks:     applyEntityProps(normalizedBlocks, entityProps),
+        entityProps,
         splitSlots,
         customSlots,
         starred:            starredSnap.exists()  ? starredSnap.val()               : {},
@@ -116,7 +132,8 @@ export function createSessionActions(setState, getState) {
         startDate: '', endDate: '', poolType: 'A',
         pgmSlots: [], perfMap: {}, preScheduleRows: [],
         weightedMinTargets: [], targetMetrics: null,
-        scheduleBlocks: {}, splitSlots: {}, customSlots: {}, starred: {},
+        scheduleBlocks: {}, _rawBlocks: {}, entityProps: {},
+        splitSlots: {}, customSlots: {}, starred: {},
         scheduledItemIds: {}, manualInputs: {}, lastUpdated: null,
         proposalItems: [], proposalLoaded: false,
       })

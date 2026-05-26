@@ -25,6 +25,8 @@ const useScheduleStore = create((setState, getState) => ({
   perfMap:            {},
 
   scheduleBlocks:   {},
+  _rawBlocks:       {},  // Firebase 원본 (entityProps 머지 전)
+  entityProps:      {},  // uniqueKey → 엔티티 속성 단일 저장소
   splitSlots:       {},
   customSlots:      {},
   starred:          {},

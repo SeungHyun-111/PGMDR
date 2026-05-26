@@ -2,6 +2,7 @@ import { db, ref, set, update, get } from '../../api/firebase'
 import { buildProposalItem } from '../helpers/blockBuilders'
 import { genKey } from '../../utils/uniqueKey'
 import { normalizeItemsTeamNames } from '../../utils/teamName'
+import { applyEntityProps } from '../../utils/mergeEntity'
 
 export function createItemActions(setState, getState) {
   return {
@@ -17,9 +18,13 @@ export function createItemActions(setState, getState) {
         const entries = Array.isArray(raw)
           ? raw.map((v, i) => ({ ...v, _fbIdx: i }))
           : Object.entries(raw).map(([k, v]) => ({ ...v, _fbIdx: k }))
-        const { weightedMinTargets } = getState()
+        const { weightedMinTargets, entityProps } = getState()
+        const items = applyEntityProps(
+          normalizeItemsTeamNames(entries.map(buildProposalItem), weightedMinTargets),
+          entityProps
+        )
         setState({
-          proposalItems:      normalizeItemsTeamNames(entries.map(buildProposalItem), weightedMinTargets),
+          proposalItems:      items,
           proposalLoaded:     true,
           isLoadingProposals: false,
         })
@@ -96,6 +101,13 @@ export function createItemActions(setState, getState) {
       const { startDate, poolType, starred } = getState()
       const weekKey = `${startDate}_${poolType}`
       await set(ref(db, `sessions/${weekKey}/starred/${itemId}`), starred[itemId] ? null : true)
+    },
+
+    async saveEntityProps(uniqueKey, data) {
+      if (!uniqueKey) return
+      const { startDate, poolType } = getState()
+      const weekKey = `${startDate}_${poolType}`
+      await update(ref(db, `sessions/${weekKey}/entityProps/${uniqueKey}`), data)
     },
 
     async saveManualInput(uniqueKey, data) {

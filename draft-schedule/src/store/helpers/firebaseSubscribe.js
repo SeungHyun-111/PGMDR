@@ -1,6 +1,6 @@
 import { db, ref, onValue } from '../../api/firebase'
-import { decodeMapKeys } from '../../utils/firebaseKey'
 import { normalizeBlocksTeamNames } from '../../utils/teamName'
+import { applyEntityProps } from '../../utils/mergeEntity'
 
 const _subs = {}
 
@@ -15,13 +15,31 @@ export function unsubscribeAll() {
   Object.keys(_subs).forEach(k => delete _subs[k])
 }
 
+function buildMergedBlocks(rawBlocks, entityProps, weightedMinTargets) {
+  const normalized = normalizeBlocksTeamNames(rawBlocks, weightedMinTargets)
+  return applyEntityProps(normalized, entityProps)
+}
+
 export function subscribeRealtimePaths(weekKey, setState, getState) {
   unsubscribeAll()
   const paths = {
     [`sessions/${weekKey}/scheduleBlocks`]: snap => {
       const raw = snap.exists() ? snap.val() : {}
-      const { weightedMinTargets } = getState()
-      setState({ scheduleBlocks: normalizeBlocksTeamNames(raw, weightedMinTargets) })
+      const { weightedMinTargets, entityProps } = getState()
+      setState({
+        _rawBlocks:     raw,
+        scheduleBlocks: buildMergedBlocks(raw, entityProps, weightedMinTargets),
+      })
+    },
+    [`sessions/${weekKey}/entityProps`]: snap => {
+      const ep = snap.exists() ? snap.val() : {}
+      const { _rawBlocks, weightedMinTargets, proposalItems } = getState()
+      setState({
+        entityProps:    ep,
+        scheduleBlocks: buildMergedBlocks(_rawBlocks, ep, weightedMinTargets),
+        // 사이드바 아이템에도 최신 entityProps 반영
+        proposalItems:  applyEntityProps(proposalItems, ep),
+      })
     },
     [`sessions/${weekKey}/splitSlots`]:       snap => setState({ splitSlots:       snap.exists() ? snap.val() : {} }),
     [`sessions/${weekKey}/customSlots`]:      snap => setState({ customSlots:      snap.exists() ? snap.val() : {} }),

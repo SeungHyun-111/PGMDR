@@ -1,5 +1,6 @@
 import { db, ref, set, get, update } from '../../api/firebase'
 import { buildProposalItem } from '../helpers/blockBuilders'
+import { resolveEntity } from '../../utils/mergeEntity'
 import { splitWeightedMin } from '../../utils/weightedMin'
 import { normalizeTeamName } from '../../utils/teamName'
 import { genKey } from '../../utils/uniqueKey'
@@ -129,10 +130,11 @@ export function createBlockActions(setState, getState) {
         const all  = Array.isArray(raw) ? raw : Object.values(raw)
         const orig = all.filter(Boolean).find(p => p.itemId === block.itemId)
 
+        const { entityProps } = getState()
         setState(s => {
           if (s.proposalItems.some(p => p.itemId === block.itemId)) return s
-          // orig 못 찾으면 블록 데이터로 fallback — 고정속성(memoCode 등) 유실 방지
-          const item = orig ?? {
+          // orig에 entityProps 머지 (편집된 속성 반영), 없으면 블록 데이터로 fallback
+          const item = orig ? resolveEntity(orig, entityProps) : {
             itemId:            block.itemId,
             uniqueKey:         block.uniqueKey          || genKey('1'),
             pgmCodeName:       block.pgmCodeName        || '',

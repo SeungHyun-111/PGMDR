@@ -4,6 +4,35 @@ React 19 + Vite 기반 TV 방송 편성 협업 SPA.
 
 ---
 
+## ⚡ 개발 원칙 — uniqueKey 기반 엔티티 속성 관리
+
+### 핵심 규칙
+모든 카드(제안상품·편성블록·선편성)는 `uniqueKey`를 고유 식별자로 가진다.  
+`uniqueKey`에 귀속되는 **엔티티 속성**은 Firebase `entityProps/{uniqueKey}` 에 단 한 곳에만 저장되며, 어떤 화면에서든 이 값을 읽는다.
+
+### 엔티티 속성 목록 (`src/utils/mergeEntity.js` → `ENTITY_FIELDS`)
+`pgmCodeName`, `mdTeam`, `orgName`, `mdCategory`, `dealType`, `dealTypeConverted`, `dealTypeChar`, `memoCode`, `scheduleComment`, `annotation`, `newProductType`, `perfKey`
+
+### 새 기능 개발 시 반드시 따를 순서
+1. **속성이 필요한가?** → `ENTITY_FIELDS`에 있는지 먼저 확인
+2. **없으면** → `ENTITY_FIELDS`에 추가하고 `extractEntityFields`가 자동 포함하도록 처리
+3. **저장** → `saveEntityProps(uniqueKey, { 필드: 값 })` 사용. `saveBlock`에 엔티티 필드를 섞지 말 것
+4. **읽기** → `scheduleBlocks`와 `proposalItems`는 이미 entityProps가 머지된 상태. 별도 조회 불필요
+5. **절대 금지** → 화면마다 엔티티 속성을 직접 덮어쓰거나, 변환 경로에서 필드를 수동으로 나열해 복사하는 패턴
+
+### 데이터 흐름
+```
+Firebase entityProps/{uniqueKey}
+  ↓ (실시간 구독, firebaseSubscribe.js)
+Zustand entityProps 상태
+  ↓ (scheduleBlocks 구독 시 자동 머지)
+scheduleBlocks / proposalItems (이미 merged)
+  ↓
+모든 컴포넌트 — 그냥 block.memoCode 읽으면 됨
+```
+
+---
+
 ## 개발 명령어
 
 ```bash

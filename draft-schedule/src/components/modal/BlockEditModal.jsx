@@ -6,6 +6,7 @@ import { CATEGORIES } from '../../constants/categories'
 import { CHANNELS } from '../../constants/channels'
 import { makePerfKey } from '../../hooks/usePerformanceMap'
 import { normalizeTeamName } from '../../utils/teamName'
+import { extractEntityFields } from '../../utils/mergeEntity'
 
 const inp = { background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 9px', borderRadius: 5, fontSize: 12, width: '100%' }
 
@@ -19,7 +20,7 @@ function Field({ label, children }) {
 }
 
 export default function BlockEditModal({ block, onClose, saveBlock }) {
-  const { perfMap, manualInputs, saveManualInput, removeBlock, changeBlockChannel, weightedMinTargets } = useScheduleStore()
+  const { perfMap, manualInputs, saveManualInput, saveEntityProps, removeBlock, changeBlockChannel, weightedMinTargets } = useScheduleStore()
   const blockKey = block.blockKey || block.slotId
 
   const initDealType = block.dealTypeConverted || block.dealType || ''
@@ -62,21 +63,25 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
       const dealTypeConverted = form.dealTypeConverted || form.dealType
       const perfKey = makePerfKey(dealTypeConverted, form.pgmCodeName)
 
-      const patch = {
+      // 엔티티 필드 → entityProps (uniqueKey 기반 단일 저장소)
+      const entityPatch = extractEntityFields({
         ...form,
         dealTypeConverted,
-        orgName:   form.mdTeam,  // orgName과 mdTeam 동기화
-        isDefault: false,
+        orgName: form.mdTeam,
         ...(perfKey ? { perfKey } : {}),
+      })
+      if (block.uniqueKey) {
+        await saveEntityProps(block.uniqueKey, entityPatch)
       }
 
+      // 슬롯 필드만 scheduleBlocks에 저장 (채널 변경 포함)
       const origChannel = block.blockKey?.endsWith('_CA') ? 'CA'
         : block.blockKey?.endsWith('_IP') ? 'IP' : 'ALL'
 
       if (form.channel !== origChannel) {
-        await changeBlockChannel(block, form.channel, patch)
+        await changeBlockChannel(block, form.channel, { ...entityPatch, channel: form.channel, isDefault: false })
       } else {
-        await saveBlock(blockKey, patch)
+        await saveBlock(blockKey, { ...entityPatch, channel: form.channel, isDefault: false })
       }
 
       if (manualKey) {
@@ -84,25 +89,6 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
           expectedSalesPerWeightedMin:  manualSales  === '' ? null : Number(manualSales),
           expectedProfitPerWeightedMin: manualProfit === '' ? null : Number(manualProfit),
         })
-      }
-
-      // 사이드바 카드 데이터 동기화 (편성표 수정 내용이 사이드바에도 반영)
-      if (block.itemId) {
-        useScheduleStore.setState(s => ({
-          proposalItems: s.proposalItems.map(p =>
-            p.itemId === block.itemId
-              ? {
-                  ...p,
-                  pgmCodeName:       form.pgmCodeName,
-                  mdTeam:            form.mdTeam,
-                  mdCategory:        form.mdCategory,
-                  dealType:          dealTypeConverted,
-                  dealTypeConverted: dealTypeConverted,
-                  newProductType:    form.newProductType,
-                }
-              : p
-          ),
-        }))
       }
 
       setSaveState('saved')
