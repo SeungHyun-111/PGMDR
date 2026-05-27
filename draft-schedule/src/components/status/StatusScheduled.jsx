@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
 import { getGrade, getEffectiveProfit, GRADE_META } from '../../utils/grade'
+import { timeToMin } from '../../utils/weightedMin'
 
 function GradeBadge({ grade }) {
   const { color, bg } = GRADE_META[grade] || GRADE_META.D
@@ -16,7 +17,7 @@ const COLS = [
   { key: '★',           label: '★',      sort: null },
   { key: '_grade',       label: '등급',    sort: (a, b) => (GRADE_ORDER[a._grade] ?? 4) - (GRADE_ORDER[b._grade] ?? 4) },
   { key: 'dateKey',      label: '날짜',    sort: (a, b) => (a.dateKey || '').localeCompare(b.dateKey) },
-  { key: 'timeText',     label: '시간',    sort: (a, b) => (a.timeText || '').localeCompare(b.timeText) },
+  { key: 'timeText',     label: '시간',    sort: (a, b) => timeToMin(a.timeText) - timeToMin(b.timeText) },
   { key: 'channel',      label: '채널',    sort: (a, b) => (a.channel || '').localeCompare(b.channel) },
   { key: 'mdTeam',       label: '팀',      sort: (a, b) => (a.mdTeam || '').localeCompare(b.mdTeam || '') },
   { key: 'mdCategory',   label: '카테고리', sort: (a, b) => (a.mdCategory || '').localeCompare(b.mdCategory) },

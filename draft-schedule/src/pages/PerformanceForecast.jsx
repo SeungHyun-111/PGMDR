@@ -7,6 +7,7 @@ import useScheduleStore from '../store/useScheduleStore'
 import useCategoryMap from '../hooks/useCategoryMap'
 import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
 import { getEffectivePgmSlots } from '../utils/effectiveSlots'
+import { timeToMin } from '../utils/weightedMin'
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -28,7 +29,7 @@ function calcForecast(block, perfMap, manualInputs) {
     manualSales, manualProfit,
     expectedSales:  (salesPerMin  ?? 0) * wm,
     expectedProfit: (profitPerMin ?? 0) * wm,
-    missingPerf: !lastPerf && salesPerMin == null,
+    missingPerf: !lastPerf && (manualSales == null || manualProfit == null),
     hasManual: manualSales != null || manualProfit != null,
   }
 }
@@ -301,7 +302,7 @@ export default function PerformanceForecast() {
       }))
       .sort((a, b) => {
         if (a.dateKey !== b.dateKey) return (a.dateKey || '').localeCompare(b.dateKey || '')
-        return (a.timeText || '').localeCompare(b.timeText || '')
+        return timeToMin(a.timeText) - timeToMin(b.timeText)
       })
   , [scheduleBlocks, perfMap, manualInputs, categoryMap, excludePgmTeam])
 
@@ -555,6 +556,7 @@ export default function PerformanceForecast() {
       case '_manualSales':  return r.manualSales  ?? 0
       case '_manualProfit': return r.manualProfit ?? 0
       case 'dealType':      return r.dealTypeConverted || r.dealType || ''
+      case 'timeText':      return timeToMin(r.timeText)
       default:              return r[k] ?? ''
     }
   }

@@ -101,6 +101,11 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
     }
   }
 
+  const { caWeighted, ipWeighted } = isSplit
+    ? splitWeightedMin(slot.weightedMin, slot.dateKey, slot.timeText)
+    : { caWeighted: 0, ipWeighted: 0 }
+  const wmStyle = { position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', fontSize: Math.max(8, fontSize - 1), color: 'var(--text3)', opacity: 0.45, pointerEvents: 'none', fontWeight: 500, lineHeight: 1, userSelect: 'none' }
+
   return (
     <div style={{ position: 'absolute', top, left: 0, right: 0, height, borderBottom: '1px solid var(--border)' }} data-slot-id={slot.slotId}>
       {isSplit ? (
@@ -108,19 +113,25 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: halfHeight, background: caHover ? 'rgba(61,90,138,.2)' : 'transparent', borderBottom: '1px solid var(--border)', transition: 'background .1s' }}
             onDragOver={prevent} onDrop={e => handleDrop(e, 'CA')}
             onDragEnter={() => setCaHover(true)} onDragLeave={() => setCaHover(false)}>
-            {splitBlock_CA && <ScheduleBlock block={splitBlock_CA} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(splitBlock_CA, teamFilter, gridSearch)} />}
+            {splitBlock_CA && !splitBlock_CA.isDefault
+              ? <ScheduleBlock block={splitBlock_CA} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(splitBlock_CA, teamFilter, gridSearch)} />
+              : caWeighted > 0 && <span style={wmStyle}>{caWeighted}</span>}
           </div>
           <div style={{ position: 'absolute', top: halfHeight, left: 0, right: 0, height: halfHeight, background: ipHover ? 'rgba(106,61,138,.2)' : 'transparent', transition: 'background .1s' }}
             onDragOver={prevent} onDrop={e => handleDrop(e, 'IP')}
             onDragEnter={() => setIpHover(true)} onDragLeave={() => setIpHover(false)}>
-            {splitBlock_IP && <ScheduleBlock block={splitBlock_IP} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(splitBlock_IP, teamFilter, gridSearch)} />}
+            {splitBlock_IP && !splitBlock_IP.isDefault
+              ? <ScheduleBlock block={splitBlock_IP} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(splitBlock_IP, teamFilter, gridSearch)} />
+              : ipWeighted > 0 && <span style={wmStyle}>{ipWeighted}</span>}
           </div>
         </>
       ) : (
         <div style={{ position: 'absolute', inset: 0, background: caHover ? 'rgba(74,108,247,.06)' : 'transparent', transition: 'background .1s' }}
           onDragOver={prevent} onDrop={e => handleDrop(e, 'ALL')}
           onDragEnter={() => setCaHover(true)} onDragLeave={() => setCaHover(false)}>
-          {block && <ScheduleBlock block={block} height={height} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(block, teamFilter, gridSearch)} />}
+          {block && !block.isDefault
+            ? <ScheduleBlock block={block} height={height} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(block, teamFilter, gridSearch)} />
+            : slot.weightedMin > 0 && <span style={wmStyle}>{slot.weightedMin}</span>}
         </div>
       )}
     </div>

@@ -217,7 +217,7 @@ function calcForecastLocal(block, perfMap, manualInputs) {
     salesPerMin: sp, profitPerMin: pp,
     expectedSales:  (sp ?? 0) * wm,
     expectedProfit: (pp ?? 0) * wm,
-    missingPerf: !lastPerf && ms == null,
+    missingPerf: !lastPerf && (ms == null || mp == null),
     manualSales: ms, manualProfit: mp,
   }
 }
@@ -557,7 +557,7 @@ ${forPrint ? '' : tipScript}`
 // ── 시뮬레이션 ────────────────────────────────────────────────────────────
 // PerformanceForecast.jsx 구조를 그대로 복제
 
-function buildSimSection({ scheduleBlocks, pgmSlots, perfMap, manualInputs, categoryMap, targetMetrics, weightedMinTargets }) {
+function buildSimSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, perfMap, manualInputs, categoryMap, targetMetrics, weightedMinTargets }) {
   const { teamMap: teamTargetMap, companyTotal } = parseTargetMetrics(targetMetrics)
 
   const rows = Object.values(scheduleBlocks)
@@ -572,7 +572,9 @@ function buildSimSection({ scheduleBlocks, pgmSlots, perfMap, manualInputs, cate
       ? (a.dateKey || '').localeCompare(b.dateKey || '')
       : timeToMin(a.timeText) - timeToMin(b.timeText))
 
-  const totalSlotWm = (pgmSlots || []).reduce((a, sl) => a + (sl.weightedMin || 0), 0)
+  const effectiveSlots = getEffectivePgmSlots(pgmSlots || [], customSlots || {})
+  const totalSlotWm    = effectiveSlots.reduce((a, sl) => a + (sl.weightedMin || 0), 0)
+  const totalSlotCount = effectiveSlots.reduce((sum, sl) => sum + (splitSlots?.[sl.slotId] ? 2 : 1), 0)
 
   const summary = rows.reduce((acc, r) => ({
     sales:  acc.sales  + r.expectedSales,
@@ -637,7 +639,7 @@ function buildSimSection({ scheduleBlocks, pgmSlots, perfMap, manualInputs, cate
   const statCards = `<div class="cards">
   <div class="card"><div class="cl">총 예상취급고</div><div class="cv" style="color:#4a6cf7">${hfs(summary.sales)}</div>${salesPct != null ? `<div class="cs">목표 ${hfs(tgtSales)} · ${Math.round(salesPct)}%</div>` : ''}</div>
   <div class="card"><div class="cl">총 예상한익</div><div class="cv" style="color:#16a34a">${hfs(summary.profit)}</div>${profitPct != null ? `<div class="cs">목표 ${hfs(tgtProfit)} · ${Math.round(profitPct)}%</div>` : ''}</div>
-  <div class="card"><div class="cl">편성 슬롯</div><div class="cv">${summary.count} / ${(pgmSlots||[]).length}</div><div class="cs">가중분 ${hf(summary.wm)}</div></div>
+  <div class="card"><div class="cl">편성 슬롯</div><div class="cv">${summary.count} / ${totalSlotCount}</div><div class="cs">가중분 ${hf(summary.wm)}</div></div>
   <div class="card"><div class="cl">실적 입력</div><div class="cv">${summary.perfEnteredCount}건</div><div class="cs">${Math.round(summary.perfRate)}%</div></div>
   <div class="card ${summary.missingCount > 0 ? 'warn' : ''}"><div class="cl ${summary.missingCount > 0 ? 'warn' : ''}">미입력 실적</div><div class="cv" style="color:${summary.missingCount > 0 ? '#dc2626' : '#1a1d2e'}">${summary.missingCount}건</div><div class="cs">직전 실적 없음</div></div>
 </div>`
