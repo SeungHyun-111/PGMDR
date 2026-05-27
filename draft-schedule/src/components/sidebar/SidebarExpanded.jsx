@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
 import { buildDragGhost } from './ProductCard'
+import { getLastPerf } from '../../utils/entityKey'
 import { DEAL_TYPES } from '../../constants/dealTypes'
 import { CATEGORIES } from '../../constants/categories'
 
@@ -46,7 +47,7 @@ const ADD_FIELDS = [
 const inp = { background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 4, fontSize: 11, width: '100%', boxSizing: 'border-box' }
 
 export default function SidebarExpanded({ items, onClose }) {
-  const { perfMap, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar } = useScheduleStore()
+  const { perfMap, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar, weightedMinTargets, entityProps } = useScheduleStore()
   const [keyword, setKeyword]       = useState('')
   const [teamFilter, setTeamFilter] = useState('전체')
   const [starOnly, setStarOnly]     = useState(false)
@@ -83,10 +84,10 @@ export default function SidebarExpanded({ items, onClose }) {
     return ['전체', ...Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))]
   }, [items])
 
-  const teamOptions = useMemo(() => {
-    const set = new Set(items.map(i => i.mdTeam || '').filter(Boolean))
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
-  }, [items])
+  const teamOptions = useMemo(
+    () => weightedMinTargets.map(t => t.teamName).filter(Boolean),
+    [weightedMinTargets]
+  )
 
   const handleSort = key => {
     if (sortKey === key) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -311,7 +312,7 @@ export default function SidebarExpanded({ items, onClose }) {
           </thead>
           <tbody>
             {visibleRows.map((item, rowIdx) => {
-              const lastPerf  = perfMap[item.perfKey] || null
+              const lastPerf  = getLastPerf(item, entityProps, perfMap)
               const isStarred = !!starred[item.itemId]
               const isNew     = !!item.newProductType
               const stripeBg  = rowIdx % 2 === 0 ? 'var(--bg)' : 'var(--bg2)'

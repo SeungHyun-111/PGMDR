@@ -1,5 +1,5 @@
 import { db, ref, set, get } from '../../api/firebase'
-import { buildSlot, buildPreScheduleBlocks, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
+import { buildSlot, buildPreScheduleBlocks, buildProposalItem, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
 import { subscribeRealtimePaths, unsubscribeAll } from '../helpers/firebaseSubscribe'
 import { normalizeBlocksTeamNames } from '../../utils/teamName'
 import { genKey } from '../../utils/uniqueKey'
@@ -48,9 +48,10 @@ export function createSessionActions(setState, getState) {
           await set(ref(db, `sessions/${weekKey}/scheduleBlocks`), preBlocks)
 
           // entityProps 초기화 — 모든 아이템(제안상품 + 선편성블록)의 엔티티 속성 기록
+          // buildProposalItem()을 통과시켜 dealTypeConverted 등 정규화된 값으로 저장
           const entityProps = {}
           proposalItems.forEach(item => {
-            if (item.uniqueKey) entityProps[item.uniqueKey] = extractEntityFields(item)
+            if (item.uniqueKey) entityProps[item.uniqueKey] = extractEntityFields(buildProposalItem(item))
           })
           Object.values(preBlocks).forEach(block => {
             if (block?.uniqueKey) entityProps[block.uniqueKey] = extractEntityFields(block)

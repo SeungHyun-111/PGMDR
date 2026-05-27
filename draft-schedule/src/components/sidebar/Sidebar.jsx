@@ -25,7 +25,7 @@ const ADD_FIELDS = [
 const PAGE_SIZE = 50
 
 export default function Sidebar({ isOpen, onToggle }) {
-  const { proposalItems, perfMap, starred, loadProposals, proposalLoaded, returnBlockToSidebar, addProposalItem } = useScheduleStore()
+  const { proposalItems, perfMap, starred, loadProposals, proposalLoaded, returnBlockToSidebar, addProposalItem, weightedMinTargets } = useScheduleStore()
 
   const [filters, setFilters] = useState({
     keyword: '',
@@ -38,10 +38,10 @@ export default function Sidebar({ isOpen, onToggle }) {
     starOnly: false,
   })
 
-  const teamOptions = useMemo(() => {
-    const set = new Set(proposalItems.map(i => i.mdTeam || '').filter(Boolean))
-    return Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))
-  }, [proposalItems])
+  const teamOptions = useMemo(
+    () => weightedMinTargets.map(t => t.teamName).filter(Boolean),
+    [weightedMinTargets]
+  )
 
   const [addModal, setAddModal] = useState(false)
   const [addForm, setAddForm]   = useState({})
