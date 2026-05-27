@@ -18,7 +18,7 @@ export function buildDragGhost(item) {
   const bg     = s.getPropertyValue('--bg3').trim()
   const accent = s.getPropertyValue('--accent').trim()
   const text   = s.getPropertyValue('--text').trim()
-  const dt = item.dealTypeConverted || item.dealType || ''
+  const dt = item.dealTypeConverted 
 
   const ghost = document.createElement('div')
   Object.assign(ghost.style, {
