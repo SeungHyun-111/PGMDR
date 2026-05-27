@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
 import ProductTooltip from './ProductTooltip'
+import { getLastPerf } from '../../utils/entityKey'
 
 const DEAL_TYPE_COLORS = {
   '[위]': 'rgba(74,108,247,.75)',
@@ -47,9 +48,9 @@ export default function ProductCard({ item, perfMap }) {
   const [dragging, setDragging]     = useState(false)
   const [tooltipPos, setTooltipPos] = useState(null)
   const [ctxMenu, setCtxMenu]       = useState(null)
-  const { starred, toggleStarred, deleteProposalItem, duplicateProposalItem } = useScheduleStore()
+  const { starred, toggleStarred, deleteProposalItem, duplicateProposalItem, entityProps } = useScheduleStore()
   const isStarred = !!starred[item.itemId]
-  const lastPerf = item.perfKey ? (perfMap[item.perfKey] || null) : null
+  const lastPerf = getLastPerf(item, entityProps, perfMap)
   const isNew = !!item.newProductType
 
   useEffect(() => {
@@ -129,9 +130,9 @@ export default function ProductCard({ item, perfMap }) {
       </div>
 
       <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center', marginBottom: 3 }}>
-        {(item.dealTypeConverted || item.dealType) && (
-          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: dealTypeBg(item.dealTypeConverted || item.dealType), color: '#fff', fontWeight: 700, flexShrink: 0 }}>
-            {item.dealTypeConverted || item.dealType}
+        {item.dealTypeConverted && (
+          <span style={{ fontSize: 9, padding: '1px 6px', borderRadius: 3, background: dealTypeBg(item.dealTypeConverted), color: '#fff', fontWeight: 700, flexShrink: 0 }}>
+            {item.dealTypeConverted}
           </span>
         )}
         <span style={{ fontSize: 10, color: 'var(--text3)' }}>{item.mdCategory || '-'}</span>
@@ -158,7 +159,7 @@ export default function ProductCard({ item, perfMap }) {
         </strong>
       </div>
 
-      {hover && tooltipPos && <ProductTooltip item={item} perfMap={perfMap} pos={tooltipPos} />}
+      {hover && tooltipPos && <ProductTooltip item={item} perfMap={perfMap} entityProps={entityProps} pos={tooltipPos} />}
     </div>
 
     {ctxMenu && (

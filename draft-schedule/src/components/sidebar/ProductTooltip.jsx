@@ -1,9 +1,11 @@
-export default function ProductTooltip({ item, perfMap, pos }) {
-  const lastPerf = item.perfKey ? (perfMap[item.perfKey] || null) : null
+import { getLastPerf } from '../../utils/entityKey'
+
+export default function ProductTooltip({ item, perfMap, entityProps, pos }) {
+  const lastPerf = getLastPerf(item, entityProps, perfMap)
 
   const rows = [
     ['신상품구분',  item.newProductType || '-'],
-    ['거래형태',    item.dealTypeConverted || item.dealType || '-'],
+    ['거래형태',    item.dealTypeConverted || '-'],
     ['메인가격',    item.mainPrice ? Number(item.mainPrice).toLocaleString() + '원' : '-'],
     ['정액비',      item.fixedFee  ? Number(item.fixedFee).toLocaleString()  + '원' : '-'],
     ['희망시간대',  item.preferredTime || '-'],
