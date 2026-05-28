@@ -9,11 +9,13 @@ import SessionPickerScreen from '../components/session/SessionPickerScreen'
 import { splitWeightedMin } from '../utils/weightedMin'
 import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
 import { db, ref, get } from '../api/firebase'
+import { getCompetitionItems, makeCompetitionBlock, toCompetitionItem } from '../utils/competition'
 
 export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   const {
     isLoaded, isLoading, error,
-    loadInitData, resetSession, saveBlock, scheduleItem,
+    loadInitData, resetSession, saveBlock, scheduleItem, returnBlockToSidebar,
+    isViewerMode,
   } = useScheduleStore()
 
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -55,7 +57,9 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
     setSetupPopup(false)
   }
 
-  const handleBlockDrop = async (slot, channel, itemId, isSplit) => {
+  const handleBlockDrop = async (slot, channel, itemId, isSplit, mode = 'compete') => {
+    if (useScheduleStore.getState().isViewerMode) return
+
     const { proposalItems, scheduleBlocks: currentBlocks } = useScheduleStore.getState()
     const item = proposalItems.find(p => p.itemId === itemId)
     if (!item) return
@@ -74,41 +78,15 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
     const perfKey = makePerfKey(dealTypeConverted, item.pgmCodeName) || undefined
     // perfKey가 없으면 undefined로 두어 Firebase에 null 저장 방지
 
-    if (existingBlock && !existingBlock.isDefault) {
-      const brand1 = (existingBlock.pgmCodeName || '').replace(/^\[(.+?)\].*/, '$1')
-      const brand2 = (item.pgmCodeName || '').replace(/^\[(.+?)\].*/, '$1')
+    if (existingBlock && !existingBlock.isDefault && mode === 'replace') {
+      await returnBlockToSidebar(existingBlock)
+    } else if (existingBlock && !existingBlock.isDefault) {
+      const items = [
+        ...getCompetitionItems(existingBlock),
+        toCompetitionItem({ ...item, dealType: dealTypeConverted, dealTypeConverted, perfKey }, weightedMin),
+      ]
       await saveBlock(blockKey, {
-        slotId: slot.slotId, blockKey,
-        dateKey: slot.dateKey, timeText: slot.timeText,
-        durationMin: slot.durationMin, weightedMin: slot.weightedMin,
-        channel, isCompeting: true, isPreSchedule: false,
-        pgmCodeName: `[${brand1}*${brand2}]`,
-        uniqueKey: `3_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 5)}`,
-        item1: {
-          ...(existingBlock.itemId    ? { itemId:    existingBlock.itemId    } : {}),
-          ...(existingBlock.uniqueKey ? { uniqueKey: existingBlock.uniqueKey } : {}),
-          pgmCodeName: existingBlock.pgmCodeName,
-          mdTeam: existingBlock.mdTeam,
-          orgName: existingBlock.orgName,
-          dealType: existingBlock.dealType,
-          dealTypeConverted: existingBlock.dealTypeConverted || existingBlock.dealType || '',
-          memoCode: existingBlock.memoCode || '',
-          ...(existingBlock.perfKey ? { perfKey: existingBlock.perfKey } : {}),
-          weightedMin: existingBlock.weightedMin,
-        },
-        item2: {
-          itemId: item.itemId,
-          ...(item.uniqueKey ? { uniqueKey: item.uniqueKey } : {}),
-          pgmCodeName: item.pgmCodeName,
-          mdTeam: item.mdTeam,
-          orgName: item.mdTeam,
-          dealType: dealTypeConverted,
-          dealTypeConverted,
-          memoCode: item.memoCode || '',
-          ...(perfKey ? { perfKey } : {}),
-          weightedMin,
-        },
-        isDefault: false, assignedAt: Date.now(),
+        ...makeCompetitionBlock({ slot, blockKey, channel, weightedMin, items }),
       })
       await scheduleItem(itemId)
       return
@@ -173,7 +151,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   return (
     <div style={{ display: 'flex', height: 'calc(100% - var(--panel-h, 0px))', overflow: 'hidden', transition: 'height .15s ease' }}>
       <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-        <ScheduleGrid onBlockDrop={handleBlockDrop} />
+        <ScheduleGrid onBlockDrop={handleBlockDrop} readOnly={isViewerMode} />
       </div>
       <Sidebar isOpen={sidebarOpen} onToggle={() => setSidebarOpen(v => !v)} />
       <SearchPanel

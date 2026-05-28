@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx'
 import { getGrade, getEffectiveProfit } from './grade'
 import { getEffectivePgmSlots } from './effectiveSlots'
+import { getCompetitionItems } from './competition'
 
 // ── 시간 비교 헬퍼 ────────────────────────────────────────────────────────
 function timeToMin(t) {
@@ -46,8 +47,8 @@ function buildExcelRow(slot, block, ch, slotDuration) {
     }
   }
   const isComp = block.isCompeting
-  const pgmName = isComp && block.item1 && block.item2
-    ? `${block.item1.pgmCodeName || ''}&${block.item2.pgmCodeName || ''}`
+  const pgmName = isComp
+    ? getCompetitionItems(block).map(item => item.pgmCodeName || '').filter(Boolean).join('&')
     : (block.pgmCodeName || '')
   return {
     'DATE':            slot.dateKey || '',
@@ -364,12 +365,12 @@ function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, p
                       || dealType.includes('[혼]') || dealType.includes('혼합')
                       || dealType.includes('[액]') || dealType.includes('정액')
     const hasHash      = !!(block.scheduleComment && block.scheduleComment.includes('#'))
-    const isGreenBg    = !isDirect && !isPurple && hasHash
+    const isGreenBg    = hasHash
     const isComp       = block.isCompeting
     const isPgmTeam    = block.pgmCodeName === '[편성팀]'
 
-    const bgColor     = isComp ? '#8b0000' : isPgmTeam ? '#f0f1f7' : isDirect ? '#1d4ed8' : isPurple ? '#7c3aed' : isGreenBg ? '#166534' : '#ffffff'
-    const borderColor = isComp ? '#ff4444' : isPgmTeam ? '#c8cade' : isDirect ? 'rgba(59,130,246,.5)' : isPurple ? 'rgba(139,92,246,.5)' : isGreenBg ? 'rgba(34,197,94,.5)' : '#e2e4ef'
+    const bgColor     = isComp ? '#8b0000' : isPgmTeam ? '#f0f1f7' : isGreenBg ? '#166534' : isDirect ? '#1d4ed8' : isPurple ? '#7c3aed' : '#ffffff'
+    const borderColor = isComp ? '#ff4444' : isPgmTeam ? '#c8cade' : isGreenBg ? 'rgba(34,197,94,.5)' : isDirect ? 'rgba(59,130,246,.5)' : isPurple ? 'rgba(139,92,246,.5)' : '#e2e4ef'
     const isColored   = isComp || isDirect || isPurple || isGreenBg
     const textColor   = isColored ? '#fff' : '#1a1d2e'
     const fontSize    = rowH > 30 ? 10 : 9
@@ -414,7 +415,8 @@ function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, p
 
     const lastPerf = (block.perfKey && perfMap) ? (perfMap[block.perfKey] || null) : null
     const tipJson  = JSON.stringify({
-      isComp, item1: block.item1 || null, item2: block.item2 || null,
+      isComp, items: isComp ? getCompetitionItems(block) : [],
+      item1: block.item1 || null, item2: block.item2 || null,
       mdTeam: block.mdTeam || block.orgName || null, channel: block.channel || null,
       dealType: block.dealType || null, newProductType: block.newProductType || null,
       mdCategory: block.mdCategory || null, dateKey: block.dateKey || null,
@@ -485,7 +487,7 @@ function attachTip(el){
     var d=JSON.parse(el.dataset.tip),h='';
     if(d.isComp){
       h='<div style="font-size:11px;font-weight:700;color:#dc2626;margin-bottom:8px">⚔ 경쟁 중</div>';
-      [d.item1,d.item2].filter(Boolean).forEach(function(it,i){
+      (d.items || [d.item1,d.item2]).filter(Boolean).forEach(function(it,i){
         h+='<div style="margin-bottom:6px;padding-bottom:6px'+(i===0?';border-bottom:1px solid #e2e4ef':'')+'"><div style="font-size:10px;font-weight:700;color:'+(i===0?'#1d4ed8':'#6d28d9')+';margin-bottom:3px">'+(i===0?'● 기존':'● 신규')+'</div>';
         [['상품',it.pgmCodeName],['팀',it.mdTeam||'-'],['거래형태',it.dealType||'-']].forEach(function(lr){h+='<div style="display:flex;gap:8px;font-size:10px"><span style="color:#8b90ab;min-width:46px">'+r(lr[0])+'</span><span>'+r(lr[1])+'</span></div>'});
         h+='</div>';

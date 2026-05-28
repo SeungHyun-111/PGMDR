@@ -1,17 +1,38 @@
 // src/components/schedule/ScheduleBlock.jsx
 import { useState, useEffect, memo } from 'react'
 import BlockEditModal from '../modal/BlockEditModal'
-import useScheduleStore from '../../store/useScheduleStore'
+import ConfirmActionModal from '../common/ConfirmActionModal'
+import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
 import { getDealTypeChar } from '../../constants/dealTypes'
+import { db, ref, push } from '../../api/firebase'
+import { competitionItemKey, getCompetitionItems } from '../../utils/competition'
 
-function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }) {
+function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, dimmed = false, readOnly = false }) {
   const [hover, setHover]               = useState(false)
   const [tooltipPos, setTooltipPos]     = useState(null)
   const [contextMenu, setContextMenu]   = useState(null)
   const [editModal, setEditModal]       = useState(false)
+  const [returnConfirm, setReturnConfirm] = useState(false)
+  const [fillReturnSlot, setFillReturnSlot] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [competitionSelect, setCompetitionSelect] = useState(null)
   const [annotationPopup, setAnnotationPopup] = useState(false)
   const [annotationText, setAnnotationText]   = useState('')
-  const { returnBlockToSidebar, perfMap, manualInputs } = useScheduleStore()
+  const { returnBlockToSidebar: returnBlockToSidebarRaw, releaseCompetition, perfMap, manualInputs } = useScheduleStore()
+  const returnBlockToSidebar = async (targetBlock) => {
+    await returnBlockToSidebarRaw(targetBlock)
+    if (!fillReturnSlot) return
+    const blockKey = targetBlock.blockKey || targetBlock.slotId
+    const sourceChannel = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
+    await saveBlock(blockKey, {
+      ...makeDefaultBlock(targetBlock, sourceChannel),
+      uniqueKey: `0_${push(ref(db, 'entityKeys')).key}`,
+    })
+    setFillReturnSlot(false)
+  }
+  const removeBlock = (blockKey) => {
+    setDeleteConfirm({ blockKey, type: block.isCompeting ? 'releaseCompetition' : 'delete' })
+  }
 
   // 클릭 시 context menu 닫기 + hover 상태도 함께 초기화 (tooltip 잔류 방지)
   useEffect(() => {
@@ -24,8 +45,8 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }
     return () => document.removeEventListener('click', handler)
   }, [])
 
-  const isDefault   = block.isDefault
   const isCompeting = block.isCompeting
+  const competitionItems = isCompeting ? getCompetitionItems(block) : []
   const hasAnnotation = !!block.annotation
   const hasHash = !!(block.scheduleComment && block.scheduleComment.includes('#'))
 
@@ -37,7 +58,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }
   const isPurple  = dealType.includes('[모]') || dealType.includes('모바일광고')
                  || dealType.includes('[혼]') || dealType.includes('혼합')
                  || dealType.includes('[액]') || dealType.includes('정액')
-  const isGreenBg = !isDirect && !isPurple && hasHash
+  const isGreenBg = hasHash
 
   const teamShort = isCompeting
     ? '경쟁'
@@ -49,16 +70,16 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }
 
   const bgColor = isCompeting ? '#8b0000'
     : isPgmTeam  ? 'var(--bg3)'
+    : isGreenBg  ? '#166534'
     : isDirect   ? '#1d4ed8'
     : isPurple   ? '#7c3aed'
-    : isGreenBg  ? '#166534'
     : 'var(--bg2)'
 
   const borderColor = isCompeting ? '#ff4444'
     : isPgmTeam  ? 'var(--text3)'
+    : isGreenBg  ? 'rgba(34,197,94,.5)'
     : isDirect   ? 'rgba(59,130,246,.5)'
     : isPurple   ? 'rgba(139,92,246,.5)'
-    : isGreenBg  ? 'rgba(34,197,94,.5)'
     : 'var(--border)'
 
   const isColored = isCompeting || isDirect || isPurple || isGreenBg
@@ -68,6 +89,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }
   const badgeBg   = isColored ? 'rgba(0,0,0,.25)' : 'rgba(0,0,0,.07)'
 
   const handleDragStart = (e) => {
+    if (readOnly) { e.preventDefault(); return }
     if (isCompeting) { e.preventDefault(); return }
     setHover(false)
     setTooltipPos(null)
@@ -91,15 +113,16 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }
   }
 
   const handleSaveAnnotation = () => {
+    if (readOnly) return
     saveBlock(block.blockKey || block.slotId, { annotation: annotationText })
     setAnnotationPopup(false)
   }
 
-  const menuItems = [
+  const menuItems = readOnly ? [] : [
     { label: '수정', action: () => setEditModal(true) },
     { label: hasAnnotation ? '첨삭 수정' : '첨삭 추가', action: () => { setAnnotationText(block.annotation || ''); setAnnotationPopup(true) } },
     ...(!isCompeting ? [
-      { label: '사이드바로 반환', action: () => returnBlockToSidebar(block) },
+      { label: '사이드바로 반환', action: () => setReturnConfirm(true) },
       { label: '삭제', action: () => removeBlock(block.blockKey || block.slotId), danger: true },
     ] : []),
     ...(isCompeting ? [
@@ -113,15 +136,21 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }
   const manual = manualKey ? (manualInputs[manualKey] || {}) : {}
 
   return (
-    <div style={{ position: 'absolute', inset: '1px', opacity: dimmed ? 0.12 : 1, transition: 'opacity .15s' }}
+    <div style={{
+      position: 'absolute',
+      inset: '1px',
+      opacity: dimmed ? 0.12 : 1,
+      transition: 'opacity .15s',
+    }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
       <div
-        draggable={!isCompeting}
+        draggable={!readOnly && !isCompeting}
         onDragStart={handleDragStart}
         onContextMenu={e => {
           e.preventDefault(); e.stopPropagation()
+          if (readOnly) return
           // 화면 경계 벗어남 방지
           const approxH = menuItems.length * 34 + 10
           const approxW = 170
@@ -129,8 +158,8 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }
           const x = e.clientX + approxW > window.innerWidth  ? e.clientX - approxW : e.clientX
           setContextMenu({ x, y })
         }}
-        onDoubleClick={() => setEditModal(true)}
-        style={{ position: 'absolute', inset: 0, background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 3, overflow: 'hidden', cursor: isCompeting ? 'default' : 'grab', display: 'flex', alignItems: 'center', padding: '0 4px', gap: 3 }}
+        onDoubleClick={() => { if (!readOnly) setEditModal(true) }}
+        style={{ position: 'absolute', inset: 0, background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 3, overflow: 'hidden', cursor: readOnly || isCompeting ? 'default' : 'grab', display: 'flex', alignItems: 'center', padding: '0 4px', gap: 3 }}
       >
         {teamShort && (
           <span style={{ fontSize: badgeSz, fontWeight: 700, color: textColor, background: badgeBg, padding: '0 3px', height: 14, borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
@@ -215,17 +244,228 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock, dimmed = false }
           saveBlock={saveBlock}
         />
       )}
+      {returnConfirm && (
+        <ConfirmActionModal
+          title="사이드바로 반환"
+          description={`[${block.pgmCodeName || '-'}]을 편성표에서 빼고 사이드바로 반환할까요?`}
+          confirmText="반환"
+          onCancel={() => setReturnConfirm(false)}
+          onConfirm={() => {
+            setReturnConfirm(false)
+            returnBlockToSidebar(block)
+          }}
+        >
+          <ReturnSlotChoice value={fillReturnSlot} onChange={setFillReturnSlot} />
+        </ConfirmActionModal>
+      )}
+      {deleteConfirm?.type === 'releaseCompetition' && (
+        <CompetitionReleaseModal
+          block={block}
+          onCancel={() => setDeleteConfirm(null)}
+          onPickProduct={() => {
+            setCompetitionSelect(deleteConfirm)
+            setDeleteConfirm(null)
+          }}
+          onEmpty={async () => {
+            const pending = deleteConfirm
+            setDeleteConfirm(null)
+            await releaseCompetition(pending.blockKey, { mode: 'empty' })
+          }}
+          onDefault={async () => {
+            const pending = deleteConfirm
+            setDeleteConfirm(null)
+            await releaseCompetition(pending.blockKey, { mode: 'default' })
+          }}
+        />
+      )}
+      {competitionSelect && (
+        <CompetitionProductSelectModal
+          items={competitionItems}
+          onCancel={() => setCompetitionSelect(null)}
+          onSelect={async (item, index) => {
+            const pending = competitionSelect
+            setCompetitionSelect(null)
+            await releaseCompetition(pending.blockKey, {
+              mode: 'select',
+              selectedKey: competitionItemKey(item, index),
+            })
+          }}
+        />
+      )}
+      {deleteConfirm && deleteConfirm.type !== 'releaseCompetition' && (
+        <ConfirmActionModal
+          title={deleteConfirm.type === 'releaseCompetition' ? '경쟁 해제' : '편성 블록 삭제'}
+          description={deleteConfirm.type === 'releaseCompetition'
+            ? '경쟁 편성을 해제할까요? 두 상품은 편성표에서 제거되고 사이드바로 복원됩니다.'
+            : `[${block.pgmCodeName || '-'}]을 편성표에서 삭제할까요?`}
+          confirmText={deleteConfirm.type === 'releaseCompetition' ? '해제' : '삭제'}
+          danger
+          onCancel={() => {
+            setDeleteConfirm(null)
+            setFillReturnSlot(false)
+          }}
+          onConfirm={async () => {
+            const pending = deleteConfirm
+            setDeleteConfirm(null)
+            await removeBlockRaw(pending.blockKey)
+            if (pending.type === 'releaseCompetition' && fillReturnSlot) {
+              const sourceChannel = pending.blockKey.endsWith('_CA') ? 'CA' : pending.blockKey.endsWith('_IP') ? 'IP' : 'ALL'
+              await saveBlock(pending.blockKey, {
+                ...makeDefaultBlock(block, sourceChannel),
+                uniqueKey: `0_${push(ref(db, 'entityKeys')).key}`,
+              })
+            }
+            setFillReturnSlot(false)
+          }}
+        >
+          {deleteConfirm.type === 'releaseCompetition' && (
+            <ReturnSlotChoice value={fillReturnSlot} onChange={setFillReturnSlot} />
+          )}
+        </ConfirmActionModal>
+      )}
     </div>
   )
 }
 
 export default memo(ScheduleBlock)
 
+function CompetitionReleaseModal({ block, onCancel, onPickProduct, onEmpty, onDefault }) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.42)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={onCancel}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ width: 380, background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 10, padding: '18px 20px', boxShadow: '0 16px 48px rgba(0,0,0,.45)' }}
+      >
+        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', marginBottom: 8 }}>경쟁 해제</div>
+        <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.55, marginBottom: 14 }}>
+          [{block.pgmCodeName || '-'}] 경쟁 슬롯을 어떻게 처리할까요?
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+          <ChoiceButton onClick={onPickProduct} label="상품 선택하기" />
+          <ChoiceButton onClick={onEmpty} label="슬롯 비우기" danger />
+          <ChoiceButton onClick={onDefault} label="[편성팀] [전사블록] 채우기" />
+        </div>
+        <button
+          onClick={onCancel}
+          style={{ width: '100%', padding: '8px 0', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}
+        >
+          취소
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function CompetitionProductSelectModal({ items, onCancel, onSelect }) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.42)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+      onClick={onCancel}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{ width: 420, maxHeight: '80vh', overflow: 'auto', background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 10, padding: '18px 20px', boxShadow: '0 16px 48px rgba(0,0,0,.45)' }}
+      >
+        <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', marginBottom: 8 }}>남길 상품 선택</div>
+        <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.55, marginBottom: 14 }}>
+          경쟁 상품 중 편성표에 남길 상품 하나를 선택하세요.
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
+          {items.map((item, index) => (
+            <button
+              key={competitionItemKey(item, index)}
+              type="button"
+              onClick={() => onSelect(item, index)}
+              style={{ padding: '10px 12px', textAlign: 'left', background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 6, cursor: 'pointer' }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 3 }}>{item.pgmCodeName || '-'}</div>
+              <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+                {[item.mdTeam || item.orgName, item.dealTypeConverted || item.dealType, item.memoCode].filter(Boolean).join(' · ') || '-'}
+              </div>
+            </button>
+          ))}
+        </div>
+        <button
+          onClick={onCancel}
+          style={{ width: '100%', padding: '8px 0', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}
+        >
+          취소
+        </button>
+      </div>
+    </div>
+  )
+}
+
+function ChoiceButton({ label, onClick, danger = false }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '10px 12px',
+        textAlign: 'left',
+        background: danger ? 'rgba(220,38,38,.10)' : 'var(--bg3)',
+        border: `1px solid ${danger ? 'var(--red)' : 'var(--border)'}`,
+        color: danger ? 'var(--red)' : 'var(--text)',
+        borderRadius: 6,
+        fontSize: 12,
+        fontWeight: 700,
+        cursor: 'pointer',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
+function ReturnSlotChoice({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+      <button
+        type="button"
+        onClick={() => onChange(false)}
+        style={{
+          padding: '8px 10px',
+          textAlign: 'left',
+          background: !value ? 'rgba(74,108,247,.10)' : 'var(--bg3)',
+          border: `1px solid ${!value ? 'var(--accent)' : 'var(--border)'}`,
+          color: 'var(--text)',
+          borderRadius: 6,
+          fontSize: 12,
+          cursor: 'pointer',
+        }}
+      >
+        기존 슬롯 비우기
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange(true)}
+        style={{
+          padding: '8px 10px',
+          textAlign: 'left',
+          background: value ? 'rgba(74,108,247,.10)' : 'var(--bg3)',
+          border: `1px solid ${value ? 'var(--accent)' : 'var(--border)'}`,
+          color: 'var(--text)',
+          borderRadius: 6,
+          fontSize: 12,
+          cursor: 'pointer',
+        }}
+      >
+        [편성팀] [전사블록]으로 채우기
+      </button>
+    </div>
+  )
+}
+
 function BlockTooltip({ block, lastPerf, manual, pos }) {
   // 화면 오른쪽/아래 잘림 방지
   const tooltipW = 230
   const hasManual = manual && (manual.expectedSalesPerWeightedMin != null || manual.expectedProfitPerWeightedMin != null)
-  const approxH  = block.isCompeting ? 150 : (block.annotation ? 290 : 220) + (hasManual ? 60 : 0)
+  const compItems = getCompetitionItems(block)
+  const approxH  = block.isCompeting ? Math.min(360, 60 + compItems.length * 62) : (block.annotation ? 290 : 220) + (hasManual ? 60 : 0)
   const left = pos.x + tooltipW > window.innerWidth ? pos.x - tooltipW - 12 : pos.x
   const top  = Math.min(pos.y, window.innerHeight - approxH - 8)
 
@@ -248,7 +488,7 @@ function BlockTooltip({ block, lastPerf, manual, pos }) {
       {block.isCompeting ? (
         <>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--red)', marginBottom: 8 }}>⚔ 경쟁 중</div>
-          {[block.item1, block.item2].filter(Boolean).map((item, i) => (
+          {compItems.map((item, i) => (
             <div key={i} style={{ marginBottom: 6, paddingBottom: 6, borderBottom: i === 0 ? '1px solid var(--border)' : 'none' }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: i === 0 ? 'var(--ca-t)' : 'var(--ip-t)', marginBottom: 3 }}>{i === 0 ? '● 기존' : '● 신규'}</div>
               {[['상품', item.pgmCodeName], ['팀', item.mdTeam || '-'], ['거래형태', item.dealType || '-']].map(([l, v]) => (

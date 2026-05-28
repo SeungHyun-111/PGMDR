@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
 import ProductTooltip from './ProductTooltip'
+import ConfirmActionModal from '../common/ConfirmActionModal'
 import { getLastPerf } from '../../utils/entityKey'
 
 const DEAL_TYPE_COLORS = {
@@ -48,6 +49,7 @@ export default function ProductCard({ item, perfMap }) {
   const [dragging, setDragging]     = useState(false)
   const [tooltipPos, setTooltipPos] = useState(null)
   const [ctxMenu, setCtxMenu]       = useState(null)
+  const [deleteConfirm, setDeleteConfirm] = useState(false)
   const { starred, toggleStarred, deleteProposalItem, duplicateProposalItem, entityProps } = useScheduleStore()
   const isStarred = !!starred[item.itemId]
   const lastPerf = getLastPerf(item, entityProps, perfMap)
@@ -172,11 +174,24 @@ export default function ProductCard({ item, perfMap }) {
           복사
         </button>
         <button
-          onClick={() => { deleteProposalItem(item.itemId); setCtxMenu(null) }}
+          onClick={() => { setDeleteConfirm(true); setCtxMenu(null) }}
           style={{ display: 'block', width: '100%', padding: '7px 14px', background: 'none', border: 'none', textAlign: 'left', fontSize: 12, color: 'var(--red, #f55)', cursor: 'pointer' }}>
           삭제
         </button>
       </div>
+    )}
+    {deleteConfirm && (
+      <ConfirmActionModal
+        title="제안상품 삭제"
+        description={`[${item.pgmCodeName || '-'}]을 제안상품 목록에서 삭제할까요?`}
+        confirmText="삭제"
+        danger
+        onCancel={() => setDeleteConfirm(false)}
+        onConfirm={() => {
+          setDeleteConfirm(false)
+          deleteProposalItem(item.itemId)
+        }}
+      />
     )}
     </>
   )

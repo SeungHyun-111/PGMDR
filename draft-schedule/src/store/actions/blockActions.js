@@ -1,9 +1,10 @@
 import { db, ref, set, get, update } from '../../api/firebase'
-import { buildProposalItem } from '../helpers/blockBuilders'
+import { buildProposalItem, makeDefaultBlock } from '../helpers/blockBuilders'
 import { resolveEntity } from '../../utils/mergeEntity'
 import { splitWeightedMin } from '../../utils/weightedMin'
 import { normalizeTeamName } from '../../utils/teamName'
 import { genKey } from '../../utils/uniqueKey'
+import { competitionItemKey, competitionItemToBlock, getCompetitionItems } from '../../utils/competition'
 
 export function createBlockActions(setState, getState) {
   return {
@@ -30,7 +31,7 @@ export function createBlockActions(setState, getState) {
 
       if (block?.isCompeting) {
         // 경쟁 해제: item1/item2 양쪽 scheduledItemIds 제거 + 사이드바 복원
-        const compItems = [block.item1, block.item2].filter(Boolean)
+        const compItems = getCompetitionItems(block)
         for (const it of compItems) {
           if (it.itemId) {
             await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${it.itemId}`), null)
@@ -68,6 +69,37 @@ export function createBlockActions(setState, getState) {
     },
 
     // 채널 변경 + 그리드 분리/합치기 동시 처리
+    async releaseCompetition(blockKey, { mode, selectedKey } = {}) {
+      const { startDate, poolType, scheduleBlocks } = getState()
+      const weekKey = `${startDate}_${poolType}`
+      const block = scheduleBlocks[blockKey]
+      if (!block?.isCompeting) return
+
+      const items = getCompetitionItems(block)
+      const selectedIndex = items.findIndex((item, i) => competitionItemKey(item, i) === selectedKey)
+      const selectedItem = mode === 'select' ? items[selectedIndex] : null
+      const restoreItems = selectedItem
+        ? items.filter((_, i) => i !== selectedIndex)
+        : items
+
+      await restoreCompetitionItems({ setState, weekKey, items: restoreItems })
+
+      const updates = { [`scheduleBlocks/${blockKey}`]: null }
+      if (selectedItem) {
+        updates[`scheduleBlocks/${blockKey}`] = competitionItemToBlock(selectedItem, block)
+        if (selectedItem.itemId) updates[`scheduledItemIds/${selectedItem.itemId}`] = true
+      } else if (mode === 'default') {
+        const sourceChannel = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
+        updates[`scheduleBlocks/${blockKey}`] = {
+          ...makeDefaultBlock(block, sourceChannel),
+          uniqueKey: genKey('0'),
+        }
+      }
+
+      await update(ref(db, `sessions/${weekKey}`), updates)
+      getState()._writeLog('경쟁해제', blockKey, block, updates[`scheduleBlocks/${blockKey}`] || null)
+    },
+
     async changeBlockChannel(block, newChannel, patch) {
       const { startDate, poolType, splitSlots, pgmSlots, weightedMinTargets } = getState()
       patch = {
@@ -176,4 +208,31 @@ export function createBlockActions(setState, getState) {
       }
     },
   }
+}
+
+async function restoreCompetitionItems({ setState, weekKey, items }) {
+  for (const it of items) {
+    if (it.itemId) await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${it.itemId}`), null)
+  }
+
+  const snap = await get(ref(db, `sessions/${weekKey}/gasData/proposalItems`))
+  const raw  = snap.exists() ? snap.val() : {}
+  const allItems = Array.isArray(raw) ? raw : Object.values(raw)
+
+  setState(s => {
+    const toAdd = []
+    for (const it of items) {
+      if (it.itemId && s.proposalItems.some(p => p.itemId === it.itemId)) continue
+      const orig = it.itemId ? allItems.filter(Boolean).find(p => p.itemId === it.itemId) : null
+      if (orig) {
+        toAdd.push(buildProposalItem(orig))
+      } else if (it.pgmCodeName) {
+        toAdd.push(buildProposalItem({
+          ...it,
+          itemId: it.itemId || `comp_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+        }))
+      }
+    }
+    return toAdd.length ? { proposalItems: [...s.proposalItems, ...toAdd] } : s
+  })
 }

@@ -48,9 +48,33 @@ export default function PresenceBar() {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
       {users.map((u, i) => (
-        <div key={i} title={u.userName}
-          style={{ width: 24, height: 24, borderRadius: '50%', background: getColor(u.userName), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff', border: u.userName === userName ? '2px solid var(--accent)' : '2px solid var(--bg2)', cursor: 'default', flexShrink: 0 }}>
-          {u.userName.slice(0, 1)}
+        <div
+          key={i}
+          title={u.userName}
+          style={{
+            minWidth: 26,
+            maxWidth: 42,
+            height: 24,
+            padding: '0 6px',
+            borderRadius: 999,
+            background: getColor(u.userName),
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: 10,
+            fontWeight: 800,
+            color: '#fff',
+            border: u.userName === userName ? '2px solid var(--accent)' : '2px solid var(--bg2)',
+            cursor: 'default',
+            flexShrink: 0,
+            boxSizing: 'border-box',
+            lineHeight: 1,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'clip',
+          }}
+        >
+          {(u.userName || '?').slice(0, 3)}
         </div>
       ))}
       <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 2 }}>

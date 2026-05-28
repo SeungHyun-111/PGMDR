@@ -1,7 +1,9 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
-import useScheduleStore from '../../store/useScheduleStore'
+import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
 import { buildDragGhost } from './ProductCard'
+import ConfirmActionModal from '../common/ConfirmActionModal'
 import { getLastPerf } from '../../utils/entityKey'
+import { db, ref, push } from '../../api/firebase'
 import { DEAL_TYPES } from '../../constants/dealTypes'
 import { CATEGORIES } from '../../constants/categories'
 
@@ -47,7 +49,7 @@ const ADD_FIELDS = [
 const inp = { background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 4, fontSize: 11, width: '100%', boxSizing: 'border-box' }
 
 export default function SidebarExpanded({ items, onClose }) {
-  const { perfMap, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar, weightedMinTargets, entityProps } = useScheduleStore()
+  const { perfMap, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar, weightedMinTargets, entityProps, saveBlock } = useScheduleStore()
   const [keyword, setKeyword]       = useState('')
   const [teamFilter, setTeamFilter] = useState('전체')
   const [starOnly, setStarOnly]     = useState(false)
@@ -62,6 +64,9 @@ export default function SidebarExpanded({ items, onClose }) {
   const [blockDragOver, setBlockDragOver] = useState(null) // { insertBeforeId: string|null }
   const [pinnedReturn, setPinnedReturn]   = useState(null) // { itemId, insertBeforeId }
   const [highlightId, setHighlightId]     = useState(null)
+  const [returnConfirm, setReturnConfirm] = useState(null) // { block, insertBeforeId }
+  const [fillReturnSlot, setFillReturnSlot] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState(null) // { itemId, name }
   const [ctxMenu, setCtxMenu]             = useState(null) // { x, y, itemId }
 
   useEffect(() => {
@@ -155,6 +160,24 @@ export default function SidebarExpanded({ items, onClose }) {
     if (!e.currentTarget.contains(e.relatedTarget)) setBlockDragOver(null)
   }
 
+  const completeReturnBlock = async ({ block, insertBeforeId }) => {
+    const effectiveItemId = await returnBlockToSidebar(block)
+    if (fillReturnSlot) {
+      const blockKey = block.blockKey || block.slotId
+      const sourceChannel = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
+      await saveBlock(blockKey, {
+        ...makeDefaultBlock(block, sourceChannel),
+        uniqueKey: `0_${push(ref(db, 'entityKeys')).key}`,
+      })
+    }
+    setFillReturnSlot(false)
+    if (effectiveItemId) {
+      setPinnedReturn({ itemId: effectiveItemId, insertBeforeId })
+      setHighlightId(effectiveItemId)
+      setTimeout(() => setHighlightId(null), 1800)
+    }
+  }
+
   const handleTableDrop = async (e) => {
     e.preventDefault()
     const blockKey = e.dataTransfer.getData('blockKey')
@@ -175,12 +198,7 @@ export default function SidebarExpanded({ items, onClose }) {
     const { scheduleBlocks } = useScheduleStore.getState()
     const block = scheduleBlocks[blockKey]
     if (!block || block.isCompeting) return
-    const effectiveItemId = await returnBlockToSidebar(block)
-    if (effectiveItemId) {
-      setPinnedReturn({ itemId: effectiveItemId, insertBeforeId })
-      setHighlightId(effectiveItemId)
-      setTimeout(() => setHighlightId(null), 1800)
-    }
+    setReturnConfirm({ block, insertBeforeId })
   }
 
   const startEdit = (item, col) => {
@@ -439,7 +457,11 @@ export default function SidebarExpanded({ items, onClose }) {
               복사
             </button>
             <div style={{ height: 1, background: 'var(--border)' }} />
-            <button onClick={() => { deleteProposalItem(ctxMenu.itemId); setCtxMenu(null) }}
+            <button onClick={() => {
+              const item = visibleRows.find(row => row.itemId === ctxMenu.itemId)
+              setDeleteConfirm({ itemId: ctxMenu.itemId, name: item?.pgmCodeName || '-' })
+              setCtxMenu(null)
+            }}
               style={{ display: 'block', width: '100%', padding: '9px 14px', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--red)', fontSize: 12, cursor: 'pointer' }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--bg4)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -492,6 +514,64 @@ export default function SidebarExpanded({ items, onClose }) {
           </div>
         </div>
       )}
+      {returnConfirm && (
+        <ConfirmActionModal
+          title="사이드바로 반환"
+          description={`[${returnConfirm.block.pgmCodeName || '-'}]을 편성표에서 빼고 사이드바로 반환할까요?`}
+          confirmText="반환"
+          onCancel={() => { setReturnConfirm(null); setFillReturnSlot(false) }}
+          onConfirm={async () => {
+            const pending = returnConfirm
+            setReturnConfirm(null)
+            await completeReturnBlock(pending)
+          }}
+        >
+          <ReturnSlotChoice value={fillReturnSlot} onChange={setFillReturnSlot} />
+        </ConfirmActionModal>
+      )}
+      {deleteConfirm && (
+        <ConfirmActionModal
+          title="제안상품 삭제"
+          description={`[${deleteConfirm.name}]을 제안상품 목록에서 삭제할까요?`}
+          confirmText="삭제"
+          danger
+          onCancel={() => setDeleteConfirm(null)}
+          onConfirm={() => {
+            const pending = deleteConfirm
+            setDeleteConfirm(null)
+            deleteProposalItem(pending.itemId)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function ReturnSlotChoice({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+      {[
+        { value: false, label: '기존 슬롯 비우기' },
+        { value: true, label: '[편성팀] [전사블록]으로 채우기' },
+      ].map(option => (
+        <button
+          key={String(option.value)}
+          type="button"
+          onClick={() => onChange(option.value)}
+          style={{
+            padding: '8px 10px',
+            textAlign: 'left',
+            background: value === option.value ? 'rgba(74,108,247,.10)' : 'var(--bg3)',
+            border: `1px solid ${value === option.value ? 'var(--accent)' : 'var(--border)'}`,
+            color: 'var(--text)',
+            borderRadius: 6,
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
+          {option.label}
+        </button>
+      ))}
     </div>
   )
 }

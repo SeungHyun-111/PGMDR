@@ -34,6 +34,13 @@ const useScheduleStore = create((setState, getState) => ({
   manualInputs:     {},
   lastUpdated:      null,
 
+  isViewerMode: localStorage.getItem('isViewerMode') === 'true',
+  setViewerMode: (v) => {
+    const next = typeof v === 'function' ? v(getState().isViewerMode) : v
+    localStorage.setItem('isViewerMode', String(next))
+    setState({ isViewerMode: next })
+  },
+
   gridSearch: '',
   setGridSearch: (q) => setState({ gridSearch: q }),
   searchPanelOpen: false,

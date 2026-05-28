@@ -11,8 +11,9 @@ const HEADER_HEIGHT = 36
 const TOOLBAR_HEIGHT = 32
 const MIN_ROW_HEIGHT = 28
 
-export default function ScheduleGrid({ onBlockDrop }) {
-  const { pgmSlots, customSlots, scheduleBlocks, saveBlock, removeBlock, splitSlots, toggleSplitSlot, splitSlotTime, deleteSlotTime, gridSearch, setGridSearch, searchPanelOpen, setSearchPanelOpen } = useScheduleStore()
+export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
+  const { pgmSlots, customSlots, scheduleBlocks, saveBlock, removeBlock, splitSlots, toggleSplitSlot, splitSlotTime, deleteSlotTime, gridSearch, setGridSearch, setSearchPanelOpen, isViewerMode, setViewerMode } = useScheduleStore()
+  const viewerMode = readOnly || isViewerMode
   const containerRef = useRef(null)
   const [containerWidth, setContainerWidth] = useState(1200)
   const [containerHeight, setContainerHeight] = useState(0)
@@ -95,6 +96,7 @@ export default function ScheduleGrid({ onBlockDrop }) {
   const handleTimeAxisRightClick = (e, slot, dateSlots) => {
     e.preventDefault()
     e.stopPropagation()
+    if (viewerMode) return
     const idx = dateSlots.findIndex(s => s.slotId === slot.slotId)
     const x = Math.min(e.clientX, window.innerWidth  - 160)
     const y = Math.min(e.clientY, window.innerHeight - 120)
@@ -102,6 +104,7 @@ export default function ScheduleGrid({ onBlockDrop }) {
   }
 
   const openCaIpPopup = slot => {
+    if (viewerMode) return
     const isSplit = !!splitSlots[slot.slotId]
     const popupW = 276, popupH = 120
     const x = Math.min(ctxMenu?.x ?? 0, window.innerWidth  - popupW)
@@ -118,17 +121,20 @@ export default function ScheduleGrid({ onBlockDrop }) {
   }
 
   const openTimeSplitModal = slot => {
+    if (viewerMode) return
     setCtxMenu(null)
     setTimeSplitInput('')
     setTimeSplitModal(slot)
   }
 
   const handleDeleteSlotTime = async slot => {
+    if (viewerMode) return
     setCtxMenu(null)
     await deleteSlotTime(slot.slotId)
   }
 
   const handleTimeSplitConfirm = async () => {
+    if (viewerMode) return
     if (!timeSplitModal || !timeSplitInput.trim()) return
     await splitSlotTime(timeSplitModal.slotId, timeSplitInput.trim())
     setTimeSplitModal(null)
@@ -155,6 +161,7 @@ export default function ScheduleGrid({ onBlockDrop }) {
   }, [timeSplitModal, timeSplitInput])
 
   const handleSplitConfirm = async choice => {
+    if (viewerMode) return
     const { slotId, slot, mode, singleBlock, caBlock, ipBlock } = splitPopup
     const { caWeighted, ipWeighted } = splitWeightedMin(slot.weightedMin, slot.dateKey, slot.timeText)
 
@@ -231,6 +238,61 @@ export default function ScheduleGrid({ onBlockDrop }) {
             fontSize: 11, outline: 'none', transition: 'width .2s',
           }}
         />
+        <label
+          title="뷰어 모드에서는 편성표 편집과 드래그 작업이 잠깁니다."
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            fontSize: 11,
+            color: viewerMode ? 'var(--accent)' : 'var(--text3)',
+            userSelect: 'none',
+            cursor: 'pointer',
+          }}
+        >
+          <span style={{
+            color: viewerMode ? 'var(--text3)' : 'var(--accent)',
+            fontWeight: viewerMode ? 400 : 700,
+          }}>편집</span>
+          <input
+            type="checkbox"
+            checked={viewerMode}
+            onChange={e => {
+              if (e.target.checked) {
+                setSplitPopup(null)
+                setCtxMenu(null)
+                setTimeSplitModal(null)
+              }
+              setViewerMode(e.target.checked)
+            }}
+            style={{ display: 'none' }}
+          />
+          <span style={{
+            width: 30,
+            height: 16,
+            borderRadius: 999,
+            background: viewerMode ? 'var(--accent)' : 'var(--bg4)',
+            border: '1px solid var(--border)',
+            position: 'relative',
+            transition: 'background .15s',
+            flexShrink: 0,
+          }}>
+            <span style={{
+              position: 'absolute',
+              top: 2,
+              left: viewerMode ? 16 : 2,
+              width: 10,
+              height: 10,
+              borderRadius: '50%',
+              background: viewerMode ? '#fff' : 'var(--text3)',
+              transition: 'left .15s',
+            }} />
+          </span>
+          <span style={{
+            color: viewerMode ? 'var(--accent)' : 'var(--text3)',
+            fontWeight: viewerMode ? 700 : 400,
+          }}>뷰어</span>
+        </label>
       </div>
 
       {/* 헤더 */}
@@ -312,6 +374,7 @@ export default function ScheduleGrid({ onBlockDrop }) {
                         removeBlock={removeBlock}
                         teamFilter={teamFilter}
                         gridSearch={gridSearch}
+                        readOnly={viewerMode}
                       />
                     )
                   })

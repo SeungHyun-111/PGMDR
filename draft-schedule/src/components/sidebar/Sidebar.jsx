@@ -1,8 +1,10 @@
 import { useState, useMemo, useRef, useEffect } from 'react'
-import useScheduleStore from '../../store/useScheduleStore'
+import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
 import ProductCard from './ProductCard'
 import ProductFilters from './ProductFilters'
 import SidebarExpanded from './SidebarExpanded'
+import ConfirmActionModal from '../common/ConfirmActionModal'
+import { db, ref, push } from '../../api/firebase'
 import { DEAL_TYPES } from '../../constants/dealTypes'
 import { CATEGORIES } from '../../constants/categories'
 
@@ -25,7 +27,7 @@ const ADD_FIELDS = [
 const PAGE_SIZE = 50
 
 export default function Sidebar({ isOpen, onToggle }) {
-  const { proposalItems, perfMap, starred, loadProposals, proposalLoaded, returnBlockToSidebar, addProposalItem, weightedMinTargets } = useScheduleStore()
+  const { proposalItems, perfMap, starred, loadProposals, proposalLoaded, returnBlockToSidebar, addProposalItem, weightedMinTargets, saveBlock } = useScheduleStore()
 
   const [filters, setFilters] = useState({
     keyword: '',
@@ -55,6 +57,8 @@ export default function Sidebar({ isOpen, onToggle }) {
   const [blockDragOver, setBlockDragOver] = useState(null) // { insertBeforeId: string|null }
   const [pinnedReturn, setPinnedReturn]   = useState(null) // { itemId, insertBeforeId }
   const [highlightId, setHighlightId]     = useState(null)
+  const [returnConfirm, setReturnConfirm] = useState(null) // { block, insertBeforeId }
+  const [fillReturnSlot, setFillReturnSlot] = useState(false)
 
   useEffect(() => {
     if ((isOpen || bottomOpen) && !proposalLoaded) loadProposals()
@@ -139,6 +143,24 @@ export default function Sidebar({ isOpen, onToggle }) {
     if (!e.currentTarget.contains(e.relatedTarget)) setBlockDragOver(null)
   }
 
+  const completeReturnBlock = async ({ block, insertBeforeId }) => {
+    const effectiveItemId = await returnBlockToSidebar(block)
+    if (fillReturnSlot) {
+      const blockKey = block.blockKey || block.slotId
+      const sourceChannel = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
+      await saveBlock(blockKey, {
+        ...makeDefaultBlock(block, sourceChannel),
+        uniqueKey: `0_${push(ref(db, 'entityKeys')).key}`,
+      })
+    }
+    setFillReturnSlot(false)
+    if (effectiveItemId) {
+      setPinnedReturn({ itemId: effectiveItemId, insertBeforeId })
+      setHighlightId(effectiveItemId)
+      setTimeout(() => setHighlightId(null), 1800)
+    }
+  }
+
   const handleScrollDrop = async (e) => {
     e.preventDefault()
     const blockKey = e.dataTransfer.getData('blockKey')
@@ -159,12 +181,7 @@ export default function Sidebar({ isOpen, onToggle }) {
     const { scheduleBlocks } = useScheduleStore.getState()
     const block = scheduleBlocks[blockKey]
     if (!block || block.isCompeting) return
-    const effectiveItemId = await returnBlockToSidebar(block)
-    if (effectiveItemId) {
-      setPinnedReturn({ itemId: effectiveItemId, insertBeforeId })
-      setHighlightId(effectiveItemId)
-      setTimeout(() => setHighlightId(null), 1800)
-    }
+    setReturnConfirm({ block, insertBeforeId })
   }
 
   const handleExpand = () => {
@@ -298,6 +315,50 @@ export default function Sidebar({ isOpen, onToggle }) {
           </div>
         </div>
       )}
+      {returnConfirm && (
+        <ConfirmActionModal
+          title="사이드바로 반환"
+          description={`[${returnConfirm.block.pgmCodeName || '-'}]을 편성표에서 빼고 사이드바로 반환할까요?`}
+          confirmText="반환"
+          onCancel={() => { setReturnConfirm(null); setFillReturnSlot(false) }}
+          onConfirm={async () => {
+            const pending = returnConfirm
+            setReturnConfirm(null)
+            await completeReturnBlock(pending)
+          }}
+        >
+          <ReturnSlotChoice value={fillReturnSlot} onChange={setFillReturnSlot} />
+        </ConfirmActionModal>
+      )}
     </>
+  )
+}
+
+function ReturnSlotChoice({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
+      {[
+        { value: false, label: '기존 슬롯 비우기' },
+        { value: true, label: '[편성팀] [전사블록]으로 채우기' },
+      ].map(option => (
+        <button
+          key={String(option.value)}
+          type="button"
+          onClick={() => onChange(option.value)}
+          style={{
+            padding: '8px 10px',
+            textAlign: 'left',
+            background: value === option.value ? 'rgba(74,108,247,.10)' : 'var(--bg3)',
+            border: `1px solid ${value === option.value ? 'var(--accent)' : 'var(--border)'}`,
+            color: 'var(--text)',
+            borderRadius: 6,
+            fontSize: 12,
+            cursor: 'pointer',
+          }}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
   )
 }

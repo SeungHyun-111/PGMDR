@@ -209,3 +209,10 @@ sessions/{weekKey}/customSlots/{id}: {
 |------|------|------|
 | 순수 유틸이 hook 파일에 위치 | `usePerformanceMap.js` | `normalizeDealType()`, `makePerfKey()`는 Hook이 아닌 순수 함수. `src/utils/` 로 이동 권장 |
 | Optimistic update 롤백 없음 | `BlockEditModal.jsx:90-104` | Firebase write 전 setState → 실패 시 UI·DB 불일치. try/catch + 롤백 처리 필요 |
+
+### [다음 패치 확인] uniqueKey 발급 체계 정리
+
+| 항목 | 파일 | 내용 |
+|------|------|------|
+| uniqueKey 발급 방식 통일 | `utils/uniqueKey.js`, `sessionActions.js`, `refreshActions.js`, `itemActions.js`, `blockActions.js`, `DraftSchedule.jsx`, `SlotRow.jsx` | 현재 `genKey()`/`Date.now()+Math.random()`/슬롯 기반 키/Firebase push key가 혼재되어 있음. 운영 중인 기존 세션의 `uniqueKey`, `entityProps`, `manualInputs`, `scheduleBlocks`는 마이그레이션하지 말고 그대로 유지. 다음 새 판 시작 전 신규 생성분부터 Firebase push key 기반으로 통일하는 방향 검토. |
+| 전사블록 키 정책 확인 | `blockBuilders.js`, `SlotRow.jsx` | 기본 `makeDefaultBlock()`은 아직 `uniqueKey: 0_${blockKey}` 슬롯 기반. 드래그 이동 후 빈 슬롯 채우기 액션은 `0_${Firebase push key}`로 변경됨. 다음 패치에서 전사블록 전체 정책을 슬롯 기반으로 둘지, 신규 엔티티 기반으로 둘지 결정 필요. |
