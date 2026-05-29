@@ -1,11 +1,13 @@
-export default function RatioTable({ data, groupDm = {}, stats, targetMap, totalSlotWeighted, totalTarget, showTarget, chartData }) {
+export default function RatioTable({ data, groupDm = {}, stats, targetMap, totalSlotWeighted, totalTarget, showTarget, chartData, scheduledWeighted }) {
   const sorted = Object.entries(data).sort((a, b) => {
     if (a[0] === '편성팀') return 1
     if (b[0] === '편성팀') return -1
+    if (a[0] === '미편성') return 1
+    if (b[0] === '미편성') return -1
     return b[1] - a[1]
   })
 
-  const getTeamColor = (name) => chartData?.find(d => d.name === name)?.color || 'var(--text3)'
+  const getTeamColor = name => chartData?.find(d => d.name === name)?.color || 'var(--text3)'
 
   return (
     <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
@@ -13,10 +15,10 @@ export default function RatioTable({ data, groupDm = {}, stats, targetMap, total
         <thead>
           <tr style={{ background: 'var(--bg3)', borderBottom: '2px solid var(--border)' }}>
             <th style={{ padding: '10px 14px', textAlign: 'left', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>구분</th>
-            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>편성 가중분</th>
-            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>단순분</th>
+            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>가중분</th>
+            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>순수분</th>
             <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>평균 가중률</th>
-            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>편성 비중</th>
+            <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>비중</th>
             {showTarget && <>
               <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>목표 가중분</th>
               <th style={{ padding: '10px 14px', textAlign: 'right', fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>목표 비중</th>
@@ -32,6 +34,7 @@ export default function RatioTable({ data, groupDm = {}, stats, targetMap, total
             const achievePct = target > 0 ? (weighted / target * 100) : null
             const isDefault = name === '편성팀'
             const isCompeting = name === '경쟁'
+            const isUnscheduled = name === '미편성'
             const teamColor = getTeamColor(name)
             const dm = groupDm[name] || 0
             const avgRate = dm > 0 ? (weighted / dm * 100).toFixed(1) + '%' : '-'
@@ -43,19 +46,19 @@ export default function RatioTable({ data, groupDm = {}, stats, targetMap, total
                     {!isDefault && !isCompeting && (
                       <div style={{ width: 10, height: 10, borderRadius: '50%', background: teamColor, flexShrink: 0 }} />
                     )}
-                    <span style={{ fontWeight: 600, color: isCompeting ? 'var(--red)' : isDefault ? 'var(--text3)' : 'var(--text)' }}>
-                      {isCompeting ? '⚔ ' : isDefault ? '◻ ' : ''}{name}
+                    <span style={{ fontWeight: 600, color: isCompeting ? 'var(--red)' : isDefault || isUnscheduled ? 'var(--text3)' : 'var(--text)' }}>
+                      {name}
                     </span>
                   </div>
                 </td>
-                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: isDefault ? 'var(--text3)' : teamColor }}>
+                <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: isDefault || isUnscheduled ? 'var(--text3)' : teamColor }}>
                   {Math.round(weighted).toLocaleString()}
                 </td>
                 <td style={{ padding: '10px 14px', textAlign: 'right', color: 'var(--text2)' }}>
                   {dm > 0 ? dm.toLocaleString() : '-'}
                 </td>
                 <td style={{ padding: '10px 14px', textAlign: 'right', color: 'var(--text3)', fontSize: 11 }}>
-                  {avgRate !== '-' ? avgRate : '-'}
+                  {avgRate}
                 </td>
                 <td style={{ padding: '10px 14px', textAlign: 'right', color: 'var(--text2)', fontSize: 11 }}>
                   {totalPct.toFixed(1)}%
@@ -86,7 +89,7 @@ export default function RatioTable({ data, groupDm = {}, stats, targetMap, total
           <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--bg3)' }}>
             <td style={{ padding: '10px 14px', fontWeight: 700 }}>합계</td>
             <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--accent)' }}>{Math.round(stats.totalWeighted).toLocaleString()}</td>
-            <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--text2)' }}>{(stats.totalDm || 0) > 0 ? (stats.totalDm).toLocaleString() : '-'}</td>
+            <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--text2)' }}>{(stats.totalDm || 0) > 0 ? stats.totalDm.toLocaleString() : '-'}</td>
             <td style={{ padding: '10px 14px', textAlign: 'right', fontWeight: 700, color: 'var(--text2)', fontSize: 11 }}>
               {(stats.totalDm || 0) > 0 ? (stats.totalWeighted / stats.totalDm * 100).toFixed(1) + '%' : '-'}
             </td>
@@ -102,10 +105,10 @@ export default function RatioTable({ data, groupDm = {}, stats, targetMap, total
                 {totalTarget > 0 && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <div style={{ flex: 1, height: 6, background: 'var(--bg4)', borderRadius: 3, overflow: 'hidden' }}>
-                      <div style={{ width: `${Math.min(stats.totalWeighted / totalTarget * 100, 100)}%`, height: '100%', borderRadius: 3, background: 'var(--accent)', transition: 'width .4s' }} />
+                      <div style={{ width: `${Math.min((scheduledWeighted || 0) / totalTarget * 100, 100)}%`, height: '100%', borderRadius: 3, background: 'var(--accent)', transition: 'width .4s' }} />
                     </div>
-                    <span style={{ fontSize: 11, minWidth: 40, textAlign: 'right', fontWeight: 700, color: stats.totalWeighted >= totalTarget ? 'var(--green)' : 'var(--yellow)' }}>
-                      {Math.round(stats.totalWeighted / totalTarget * 100)}%
+                    <span style={{ fontSize: 11, minWidth: 40, textAlign: 'right', fontWeight: 700, color: (scheduledWeighted || 0) >= totalTarget ? 'var(--green)' : 'var(--yellow)' }}>
+                      {Math.round((scheduledWeighted || 0) / totalTarget * 100)}%
                     </span>
                   </div>
                 )}

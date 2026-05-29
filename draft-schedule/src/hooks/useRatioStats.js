@@ -18,7 +18,7 @@ export default function useRatioStats(scheduleBlocks, categoryMap, viewType) {
 
       const ch = block.channel || 'ALL'
       if (block.isCompeting) {
-        channel['경쟁'] = (channel['경쟁'] || 0) + w
+        channel.경쟁 = (channel.경쟁 || 0) + w
         competingWeighted += w
       } else {
         channel[ch] = (channel[ch] || 0) + w
@@ -28,7 +28,7 @@ export default function useRatioStats(scheduleBlocks, categoryMap, viewType) {
         ? (block.isDefault ? '편성팀' : (block.mdCategory || categoryMap[block.pgmCodeName] || '미분류'))
         : (block.isCompeting ? '경쟁' : block.isDefault ? '편성팀' : (block.mdTeam || block.orgName || '미지정'))
 
-      group[key]   = (group[key]   || 0) + w
+      group[key] = (group[key] || 0) + w
       groupDm[key] = (groupDm[key] || 0) + d
     })
 

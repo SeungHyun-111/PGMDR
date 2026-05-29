@@ -26,6 +26,21 @@ export function getEffectiveProfit(item, perfMap, manualInputs) {
   return v === null ? null : Number(v)
 }
 
+export function getEffectiveMetrics(item, perfMap, manualInputs) {
+  if (!item) return { salesPerMin: 0, profitPerMin: 0, source: 'missing' }
+  const manual = item.uniqueKey ? ((manualInputs || {})[item.uniqueKey] || {}) : {}
+  const perf = item.perfKey ? ((perfMap || {})[item.perfKey] || {}) : {}
+  const hasManualSales = manual.expectedSalesPerWeightedMin !== undefined && manual.expectedSalesPerWeightedMin !== null && manual.expectedSalesPerWeightedMin !== ''
+  const hasManualProfit = manual.expectedProfitPerWeightedMin !== undefined && manual.expectedProfitPerWeightedMin !== null && manual.expectedProfitPerWeightedMin !== ''
+  const hasPerfSales = perf.salesPerWeightedMin !== undefined && perf.salesPerWeightedMin !== null && perf.salesPerWeightedMin !== ''
+  const hasPerfProfit = perf.profitPerWeightedMin !== undefined && perf.profitPerWeightedMin !== null && perf.profitPerWeightedMin !== ''
+  return {
+    salesPerMin: Number(hasManualSales ? manual.expectedSalesPerWeightedMin : hasPerfSales ? perf.salesPerWeightedMin : 0),
+    profitPerMin: Number(hasManualProfit ? manual.expectedProfitPerWeightedMin : hasPerfProfit ? perf.profitPerWeightedMin : 0),
+    source: hasManualSales || hasManualProfit ? 'manual' : hasPerfSales || hasPerfProfit ? 'perf' : 'missing',
+  }
+}
+
 export function calcGradeDist(items, perfMap, manualInputs) {
   const counts = { S: 0, A: 0, B: 0, C: 0, D: 0 }
   items.forEach(item => {

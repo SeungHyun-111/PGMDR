@@ -257,7 +257,7 @@ export default function ScheduleStatus() {
       )}
       {tab === 'scheduled'   && <StatusScheduled   rows={filteredBlocks} competing={competingBlocks} perfMap={perfMap} manualInputs={manualInputs} />}
       {tab === 'unscheduled' && <StatusUnscheduled rows={filteredItems}  perfMap={perfMap} manualInputs={manualInputs} />}
-      {tab === 'logs'        && <StatusLogs logs={logs} />}
+      {tab === 'logs'        && <StatusLogs logs={logs} startDate={startDate} poolType={poolType} />}
     </div>
   )
 }

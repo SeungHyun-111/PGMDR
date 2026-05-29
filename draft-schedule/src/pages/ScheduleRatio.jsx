@@ -2,36 +2,91 @@ import { useMemo, useState } from 'react'
 import useScheduleStore from '../store/useScheduleStore'
 import useCategoryMap from '../hooks/useCategoryMap'
 import useRatioStats from '../hooks/useRatioStats'
+import { getEffectivePgmSlots } from '../utils/effectiveSlots'
 import RatioSummaryCards from '../components/ratio/RatioSummaryCards'
 import RatioDonutChart, { TEAM_COLORS } from '../components/ratio/RatioDonutChart'
 import RatioTable from '../components/ratio/RatioTable'
 import RatioPgmCount from '../components/ratio/RatioPgmCount'
 
+const UNSCHEDULED_NAME = '미편성'
+const DEFAULT_TEAM_NAME = '편성팀'
+const COMPETING_NAME = '경쟁'
+const UNCATEGORIZED_NAME = '미분류'
+
 export default function ScheduleRatio() {
-  const { scheduleBlocks, pgmSlots, weightedMinTargets, proposalItems, perfMap, manualInputs } = useScheduleStore()
+  const {
+    scheduleBlocks,
+    pgmSlots,
+    customSlots,
+    splitSlots,
+    weightedMinTargets,
+    proposalItems,
+    perfMap,
+    manualInputs,
+  } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const [viewType, setViewType] = useState('team')
 
-  const enrichedBlocks = useMemo(() => {
+  const effectiveSlots = useMemo(
+    () => getEffectivePgmSlots(pgmSlots || [], customSlots || {}),
+    [pgmSlots, customSlots]
+  )
+
+  const validScheduleBlocks = useMemo(() => {
     const result = {}
-    Object.entries(scheduleBlocks).forEach(([key, block]) => {
-      result[key] = { ...block, mdCategory: block.mdCategory || categoryMap[block.pgmCodeName] || '미분류' }
+    effectiveSlots.forEach(slot => {
+      if (splitSlots?.[slot.slotId]) {
+        const caKey = `${slot.slotId}_CA`
+        const ipKey = `${slot.slotId}_IP`
+        if (scheduleBlocks[caKey]) result[caKey] = scheduleBlocks[caKey]
+        if (scheduleBlocks[ipKey]) result[ipKey] = scheduleBlocks[ipKey]
+      } else if (scheduleBlocks[slot.slotId]) {
+        result[slot.slotId] = scheduleBlocks[slot.slotId]
+      }
     })
     return result
-  }, [scheduleBlocks, categoryMap])
+  }, [scheduleBlocks, effectiveSlots, splitSlots])
+
+  const enrichedBlocks = useMemo(() => {
+    const result = {}
+    Object.entries(validScheduleBlocks).forEach(([key, block]) => {
+      result[key] = {
+        ...block,
+        mdCategory: block.mdCategory || categoryMap[block.pgmCodeName] || UNCATEGORIZED_NAME,
+      }
+    })
+    return result
+  }, [validScheduleBlocks, categoryMap])
 
   const stats = useRatioStats(enrichedBlocks, categoryMap, viewType)
 
-  const totalSlotWeighted = useMemo(() =>
-    pgmSlots.reduce((acc, s) => acc + (s.weightedMin || 0), 0)
-  , [pgmSlots])
+  const totalSlotWeighted = useMemo(
+    () => effectiveSlots.reduce((acc, s) => acc + (s.weightedMin || 0), 0),
+    [effectiveSlots]
+  )
+
+  const unscheduledWeighted = Math.max(0, totalSlotWeighted - stats.totalWeighted)
+
+  const ratioData = useMemo(() => {
+    if (unscheduledWeighted <= 0) return stats.group
+    return { ...stats.group, [UNSCHEDULED_NAME]: unscheduledWeighted }
+  }, [stats.group, unscheduledWeighted])
+
+  const ratioStats = useMemo(() => {
+    if (unscheduledWeighted <= 0) return stats
+    return {
+      ...stats,
+      group: ratioData,
+      groupDm: { ...stats.groupDm, [UNSCHEDULED_NAME]: 0 },
+      totalWeighted: stats.totalWeighted + unscheduledWeighted,
+    }
+  }, [stats, ratioData, unscheduledWeighted])
 
   const targetMap = useMemo(() => {
     const map = {}
     weightedMinTargets.forEach(t => {
       const name = (t.teamName || '').trim()
       map[name] = t.weeklyTarget
-      // "영업1팀" ↔ "영업1" 양방향 등록 — GAS teamName과 block.mdTeam 접미사 불일치 대응
       const alt = name.endsWith('팀') ? name.slice(0, -1) : name + '팀'
       map[alt] = t.weeklyTarget
     })
@@ -40,24 +95,33 @@ export default function ScheduleRatio() {
 
   const totalTarget = totalSlotWeighted
 
-  const scheduledCount = useMemo(() =>
-    Object.values(scheduleBlocks).filter(b => !b.isDefault).length
-  , [scheduleBlocks])
+  const scheduledCount = useMemo(
+    () => Object.values(validScheduleBlocks).filter(b => !b.isDefault).length,
+    [validScheduleBlocks]
+  )
 
   const chartData = useMemo(() =>
-    Object.entries(stats.group)
+    Object.entries(ratioData)
       .sort((a, b) => {
-        if (a[0] === '편성팀') return 1
-        if (b[0] === '편성팀') return -1
+        if (a[0] === DEFAULT_TEAM_NAME) return 1
+        if (b[0] === DEFAULT_TEAM_NAME) return -1
+        if (a[0] === UNSCHEDULED_NAME) return 1
+        if (b[0] === UNSCHEDULED_NAME) return -1
         return b[1] - a[1]
       })
       .map(([name, weighted], i) => ({
         name,
         actual: Math.round(weighted),
         target: Math.round(targetMap[name] || 0),
-        color: name === '편성팀' ? '#94a3b8' : name === '경쟁' ? '#dc2626' : TEAM_COLORS[i % TEAM_COLORS.length]
+        color: name === UNSCHEDULED_NAME
+          ? '#64748b'
+          : name === DEFAULT_TEAM_NAME
+            ? '#94a3b8'
+            : name === COMPETING_NAME
+              ? '#dc2626'
+              : TEAM_COLORS[i % TEAM_COLORS.length],
       }))
-  , [stats.group, targetMap])
+  , [ratioData, targetMap])
 
   return (
     <div style={{ padding: 16, height: '100%', overflowY: 'auto' }}>
@@ -84,14 +148,15 @@ export default function ScheduleRatio() {
       <RatioDonutChart chartData={chartData} />
 
       <RatioTable
-        data={stats.group}
-        groupDm={stats.groupDm}
-        stats={stats}
+        data={ratioData}
+        groupDm={ratioStats.groupDm}
+        stats={ratioStats}
         targetMap={targetMap}
         totalSlotWeighted={totalSlotWeighted}
         totalTarget={totalTarget}
         showTarget={viewType === 'team'}
         chartData={chartData}
+        scheduledWeighted={stats.totalWeighted}
       />
 
       <RatioPgmCount enrichedBlocks={enrichedBlocks} perfMap={perfMap} manualInputs={manualInputs} />

@@ -262,11 +262,59 @@ function ChartCard({ title, sub, right, children }) {
     <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 18px' }}>
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
         <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{title}</span>
-        {sub && <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 8 }}>{sub}</span>}
+        {sub && <span style={{ fontSize: 10, color: 'var(--text2)', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px', marginLeft: 8, fontWeight: 700 }}>{sub}</span>}
         {right && <div style={{ marginLeft: 'auto' }}>{right}</div>}
       </div>
       {children}
     </div>
+  )
+}
+
+function ReferenceLineLabel({ viewBox, text, color, lane = 'top' }) {
+  if (!viewBox) return null
+  const { x, y, width } = viewBox
+  const labelW = 86
+  const labelH = 18
+  const chartTop = 4
+  const chartBottom = 156
+  const plotEndX = x + width
+  const labelX = plotEndX - labelW - 8
+  const labelY = lane === 'bottom' ? chartBottom : chartTop
+  const lineEndX = labelX + labelW + 4
+  const lineEndY = labelY + labelH / 2
+  const lineStartX = plotEndX
+  const elbowX = lineEndX + 14
+  return (
+    <g>
+      <polyline
+        points={`${lineStartX},${y} ${elbowX},${y} ${lineEndX},${lineEndY}`}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.2}
+        strokeOpacity={0.95}
+      />
+      <circle cx={lineStartX} cy={y} r={2} fill={color} fillOpacity={0.9} />
+      <rect
+        x={labelX}
+        y={labelY}
+        width={labelW}
+        height={labelH}
+        rx={3}
+        fill="var(--bg2)"
+        stroke={color}
+        strokeOpacity={0.9}
+      />
+      <text
+        x={labelX + labelW / 2}
+        y={labelY + 12}
+        textAnchor="middle"
+        fill={color}
+        fontSize={10}
+        fontWeight={800}
+      >
+        {text}
+      </text>
+    </g>
   )
 }
 
@@ -620,6 +668,9 @@ export default function PerformanceForecast() {
       </div>
 
       {/* ── HERO ──────────────────────────────────────────────── */}
+      <div style={{ padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>
+        시뮬레이션 평균 기준: 미입력 포함(실적 = 0, 가중분 = 총 편성)
+      </div>
       {(() => {
         const salesAchieve  = companyTotal?.salesPerMin  > 0 ? summary.salesPerMin  / companyTotal.salesPerMin  * 100 : null
         const profitAchieve = companyTotal?.profitPerMin > 0 ? summary.profitPerMin / companyTotal.profitPerMin * 100 : null
@@ -785,10 +836,13 @@ export default function PerformanceForecast() {
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 
-          <ChartCard title="전사 일자별 분당취급고" sub="원/분 · 평균선 / 전사목표선(적)">
+          <ChartCard title="전사 일자별 분당취급고" sub="미입력 포함(실적 = 0, 가중분 = 총 편성) · 평균선 / 전사목표선">
             {(() => {
               const dataMax = Math.max(...dailyData.map(d => d.salesPerMin), 0)
               const yMax = Math.ceil(Math.max(dataMax, companyTotal?.salesPerMin || 0) * 1.12)
+              const targetLine = companyTotal?.salesPerMin || 0
+              const avgLane = avgDailySalesMin >= targetLine ? 'top' : 'bottom'
+              const targetLane = avgLane === 'top' ? 'bottom' : 'top'
               return (
             <ResponsiveContainer width="100%" height={210}>
               <BarChart data={dailyData} margin={{ top: 24, right: 8, bottom: 0, left: 8 }} barCategoryGap="32%">
@@ -796,11 +850,11 @@ export default function PerformanceForecast() {
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--text2)' }} axisLine={false} tickLine={false} />
                 <YAxis domain={[0, yMax]} tick={{ fontSize: 9, fill: 'var(--text3)' }} axisLine={false} tickLine={false} tickFormatter={v => fmtS(v)} width={42} />
                 <Tooltip content={<DailyTeamTip dailyTeamData={dailyTeamData} metric="sales" />} />
-                <ReferenceLine y={avgDailySalesMin} stroke="var(--accent)" strokeDasharray="5 3" strokeOpacity={0.6}
-                  label={{ value: `${fmt(avgDailySalesMin)} 평균`, position: 'insideTopRight', fill: 'var(--text3)', fontSize: 9 }} />
+                <ReferenceLine y={avgDailySalesMin} stroke="#2563eb" strokeDasharray="5 3" strokeOpacity={0.95} strokeWidth={1.5}
+                  label={<ReferenceLineLabel text={`${fmt(avgDailySalesMin)} 평균`} color="#2563eb" lane={avgLane} />} />
                 {companyTotal?.salesPerMin > 0 && (
-                  <ReferenceLine y={companyTotal.salesPerMin} stroke="#ef4444" strokeDasharray="4 3" strokeOpacity={0.8}
-                    label={{ value: `${fmt(companyTotal.salesPerMin)} 목표`, position: 'insideTopRight', fill: '#ef4444', fontSize: 9 }} />
+                  <ReferenceLine y={companyTotal.salesPerMin} stroke="#dc2626" strokeDasharray="4 3" strokeOpacity={0.95} strokeWidth={1.5}
+                    label={<ReferenceLineLabel text={`${fmt(companyTotal.salesPerMin)} 목표`} color="#dc2626" lane={targetLane} />} />
                 )}
                 <Bar dataKey="salesPerMin" name="분당취급고" radius={[4, 4, 0, 0]} cursor="pointer"
                   onClick={d => setSelectedDate(prev => prev === d.date ? null : d.date)}>
@@ -822,10 +876,13 @@ export default function PerformanceForecast() {
             })()}
           </ChartCard>
 
-          <ChartCard title="전사 일자별 분당한익" sub="원/분 · 평균선 / 전사목표선(적)">
+          <ChartCard title="전사 일자별 분당한익" sub="미입력 포함(실적 = 0, 가중분 = 총 편성) · 평균선 / 전사목표선">
             {(() => {
               const dataMax = Math.max(...dailyData.map(d => d.profitPerMin), 0)
               const yMax = Math.ceil(Math.max(dataMax, companyTotal?.profitPerMin || 0) * 1.12)
+              const targetLine = companyTotal?.profitPerMin || 0
+              const avgLane = avgDailyProfitMin >= targetLine ? 'top' : 'bottom'
+              const targetLane = avgLane === 'top' ? 'bottom' : 'top'
               return (
             <ResponsiveContainer width="100%" height={210}>
               <BarChart data={dailyData} margin={{ top: 24, right: 8, bottom: 0, left: 8 }} barCategoryGap="32%">
@@ -833,11 +890,11 @@ export default function PerformanceForecast() {
                 <XAxis dataKey="label" tick={{ fontSize: 10, fill: 'var(--text2)' }} axisLine={false} tickLine={false} />
                 <YAxis domain={[0, yMax]} tick={{ fontSize: 9, fill: 'var(--text3)' }} axisLine={false} tickLine={false} tickFormatter={v => fmtS(v)} width={42} />
                 <Tooltip content={<DailyTeamTip dailyTeamData={dailyTeamData} metric="profit" />} />
-                <ReferenceLine y={avgDailyProfitMin} stroke="var(--green)" strokeDasharray="5 3" strokeOpacity={0.6}
-                  label={{ value: `${fmt(avgDailyProfitMin)} 평균`, position: 'insideTopRight', fill: 'var(--text3)', fontSize: 9 }} />
+                <ReferenceLine y={avgDailyProfitMin} stroke="#16a34a" strokeDasharray="5 3" strokeOpacity={0.95} strokeWidth={1.5}
+                  label={<ReferenceLineLabel text={`${fmt(avgDailyProfitMin)} 평균`} color="#16a34a" lane={avgLane} />} />
                 {companyTotal?.profitPerMin > 0 && (
-                  <ReferenceLine y={companyTotal.profitPerMin} stroke="#ef4444" strokeDasharray="4 3" strokeOpacity={0.8}
-                    label={{ value: `${fmt(companyTotal.profitPerMin)} 목표`, position: 'insideTopRight', fill: '#ef4444', fontSize: 9 }} />
+                  <ReferenceLine y={companyTotal.profitPerMin} stroke="#dc2626" strokeDasharray="4 3" strokeOpacity={0.95} strokeWidth={1.5}
+                    label={<ReferenceLineLabel text={`${fmt(companyTotal.profitPerMin)} 목표`} color="#dc2626" lane={targetLane} />} />
                 )}
                 <Bar dataKey="profitPerMin" name="분당한익" radius={[4, 4, 0, 0]} cursor="pointer"
                   onClick={d => setSelectedDate(prev => prev === d.date ? null : d.date)}>
@@ -892,7 +949,7 @@ export default function PerformanceForecast() {
             return (
               <ChartCard
                 title={`${groupBy === 'team' ? '팀별' : '카테고리별'} 분당취급고`}
-                sub="편성 vs 목표 (미설정→전사목표)">
+                sub="미입력 포함(실적 = 0, 가중분 = 총 편성) · 편성 vs 목표">
                 <ResponsiveContainer width="100%" height={Math.max(240, enrichedGroupData.length * 54 + 30)}>
                   <BarChart data={enrichedGroupData} layout="vertical" margin={{ top: 4, right: 8, bottom: 4, left: 52 }} barCategoryGap="16%">
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
@@ -935,7 +992,7 @@ export default function PerformanceForecast() {
             return (
               <ChartCard
                 title={`${groupBy === 'team' ? '팀별' : '카테고리별'} 분당한익`}
-                sub="편성 vs 목표 (미설정→전사목표)">
+                sub="미입력 포함(실적 = 0, 가중분 = 총 편성) · 편성 vs 목표">
                 <ResponsiveContainer width="100%" height={Math.max(240, enrichedGroupData.length * 54 + 30)}>
                   <BarChart data={enrichedGroupData} layout="vertical" margin={{ top: 4, right: 8, bottom: 4, left: 52 }} barCategoryGap="16%">
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
@@ -1024,7 +1081,7 @@ export default function PerformanceForecast() {
       <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>편성별 실적 상세</span>
-          <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 8 }}>예상취급/분 · 예상한익/분 셀 클릭하여 수정</span>
+          <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 8 }}>예상취급/분 · 예상한익/분 셀 클릭하여 수정 · 평균/합계: 미입력 포함(실적 = 0, 가중분 = 총 편성)</span>
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ borderCollapse: 'collapse', fontSize: 11, width: '100%', minWidth: detailCols.reduce((s, c) => s + (detailWidths[c.h] ?? c.dw), 0), tableLayout: Object.keys(detailWidths).length > 0 ? 'fixed' : 'auto' }}>

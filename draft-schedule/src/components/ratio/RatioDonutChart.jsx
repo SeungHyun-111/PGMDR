@@ -3,7 +3,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from 'recharts'
 const TEAM_COLORS = [
   '#4a6cf7', '#16a34a', '#d97706', '#dc2626',
   '#7c3aed', '#0891b2', '#be185d', '#65a30d',
-  '#ea580c', '#6366f1', '#14b8a6', '#f43f5e'
+  '#ea580c', '#6366f1', '#14b8a6', '#f43f5e',
 ]
 
 export { TEAM_COLORS }
@@ -11,7 +11,17 @@ export { TEAM_COLORS }
 const RADIAN = Math.PI / 180
 const SHORT = name => (name || '').replace(/팀$/, '')
 
-// 안쪽 링(실제): 크면 팀명+% 2줄 내부 표기, 작으면 → 중심 홀 방향 지시선
+const sortRatioRows = (a, b) => {
+  if (a.name === '편성팀') return 1
+  if (b.name === '편성팀') return -1
+  if (a.name === '미편성') return 1
+  if (b.name === '미편성') return -1
+  const hasA = (a.target || 0) > 0
+  const hasB = (b.target || 0) > 0
+  if (hasA !== hasB) return hasB ? 1 : -1
+  return hasA ? (b.target - a.target) : (b.actual - a.actual)
+}
+
 const renderInnerLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct, name }) => {
   if (!pct || pct < 0.5) return null
   const cos = Math.cos(-midAngle * RADIAN)
@@ -31,7 +41,6 @@ const renderInnerLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct, nam
     )
   }
 
-  // 홀 안쪽으로 지시선 — 바깥 링 지시선과 같은 각도 축
   const sx = cx + (innerRadius - 1) * cos
   const sy = cy + (innerRadius - 1) * sin
   const lx = cx + 28 * cos
@@ -47,7 +56,6 @@ const renderInnerLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct, nam
   )
 }
 
-// 바깥 링(목표): 크면 팀명+% 2줄 내부 표기, 작으면 → 차트 외부 꺾임 지시선
 const renderOuterLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct, name }) => {
   if (!pct || pct < 0.5) return null
   const cos = Math.cos(-midAngle * RADIAN)
@@ -94,7 +102,7 @@ function CustomTooltip({ active, payload }) {
   return (
     <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 12px', fontSize: 11, boxShadow: '0 2px 8px rgba(0,0,0,.1)' }}>
       <div style={{ fontWeight: 700, marginBottom: 4, color: 'var(--text)' }}>{d.name}</div>
-      <div style={{ color: 'var(--text2)' }}>{d.value?.toLocaleString()} 분 ({d.payload?.pct?.toFixed(1)}%)</div>
+      <div style={{ color: 'var(--text2)' }}>{d.value?.toLocaleString()}분 ({d.payload?.pct?.toFixed(1)}%)</div>
     </div>
   )
 }
@@ -104,15 +112,7 @@ export default function RatioDonutChart({ chartData }) {
 
   const totalTarget = chartData.reduce((acc, d) => acc + (d.target || 0), 0)
   const totalActual = chartData.reduce((acc, d) => acc + (d.actual || 0), 0)
-
-  const sortedData = [...chartData].sort((a, b) => {
-    if (a.name === '편성팀') return 1
-    if (b.name === '편성팀') return -1
-    const hasA = (a.target || 0) > 0
-    const hasB = (b.target || 0) > 0
-    if (hasA !== hasB) return hasB ? 1 : -1
-    return hasA ? (b.target - a.target) : (b.actual - a.actual)
-  })
+  const sortedData = [...chartData].sort(sortRatioRows)
 
   const outerData = sortedData
     .filter(d => (d.target || 0) > 0)
@@ -126,14 +126,14 @@ export default function RatioDonutChart({ chartData }) {
     <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '20px 24px', marginBottom: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>팀별 편성비중 비교</div>
-        <div style={{ display: 'flex', gap: 12, marginLeft: 'auto', fontSize: 11, color: 'var(--text3)' }}>
+        <div style={{ display: 'flex', gap: 12, marginLeft: 'auto', fontSize: 11, color: 'var(--text2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <div style={{ width: 20, height: 8, borderRadius: 2, background: 'var(--text3)', opacity: 0.5 }} />
-            <span>바깥: 목표</span>
+            <div style={{ width: 20, height: 8, borderRadius: 2, background: 'var(--text3)', opacity: 0.7 }} />
+            <span>바깥원: 목표</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <div style={{ width: 20, height: 8, borderRadius: 2, background: 'var(--text2)' }} />
-            <span>안쪽: 실제</span>
+            <span>안쪽원: 실제 + 미편성</span>
           </div>
         </div>
       </div>
@@ -184,8 +184,8 @@ export default function RatioDonutChart({ chartData }) {
                 <div style={{ width: 10, height: 10, borderRadius: '50%', background: d.color, flexShrink: 0 }} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: hasTarget ? 3 : 0 }}>
-                    <span style={{ fontSize: 11, fontWeight: 600, color: hasTarget ? 'var(--text)' : 'var(--text3)' }}>{d.name}</span>
-                    <span style={{ fontSize: 10, fontWeight: 700, color: achievePct >= 100 ? 'var(--green)' : achievePct >= 80 ? 'var(--yellow)' : hasTarget ? 'var(--red)' : 'var(--text3)' }}>
+                    <span style={{ fontSize: 11, fontWeight: 600, color: d.name === '미편성' ? '#64748b' : hasTarget ? 'var(--text)' : 'var(--text3)' }}>{d.name}</span>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: achievePct >= 100 ? 'var(--green)' : achievePct >= 80 ? 'var(--yellow)' : hasTarget ? 'var(--red)' : d.color }}>
                       {achievePct !== null ? `${achievePct}%` : d.actual.toLocaleString()}
                     </span>
                   </div>

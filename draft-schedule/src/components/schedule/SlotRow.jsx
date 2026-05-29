@@ -66,20 +66,23 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
   }
 
   const moveBlock = async ({ blockKey, ch, mode }) => {
-    const { scheduleBlocks, returnBlockToSidebar } = useScheduleStore.getState()
+    const { scheduleBlocks, returnBlockToSidebar, _writeLog } = useScheduleStore.getState()
     const draggedBlock = scheduleBlocks[blockKey]
     if (!draggedBlock) return
 
     const { newKey, targetWeightedMin } = buildDropContext(ch)
     const targetBlock = scheduleBlocks[newKey]
     if (newKey === blockKey) return
+    const sourceKey = blockKey
+    const sourceChannel = sourceKey.endsWith('_CA') ? 'CA' : sourceKey.endsWith('_IP') ? 'IP' : 'ALL'
+    const sourceWeightedMin = draggedBlock.weightedMin || 0
 
     const fillSourceWithDefault = async () => {
       if (!dropConfirm?.fillSource) return
-      const sourceChannel = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
       await saveBlock(blockKey, {
         ...makeDefaultBlock(draggedBlock, sourceChannel),
         uniqueKey: genKey('0'),
+        __skipLog: true,
       })
     }
 
@@ -88,20 +91,59 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
         ...getCompetitionItems(targetBlock),
         ...getCompetitionItems(draggedBlock),
       ]
-      await removeBlock(blockKey)
+      const competitionBlock = makeCompetitionBlock({ slot, blockKey: newKey, channel: ch, weightedMin: targetWeightedMin, items })
+      await removeBlock(blockKey, { skipLog: true })
       await saveBlock(newKey, {
-        ...makeCompetitionBlock({ slot, blockKey: newKey, channel: ch, weightedMin: targetWeightedMin, items }),
+        ...competitionBlock,
+        __skipLog: true,
       })
       await fillSourceWithDefault()
+      await _writeLog('경쟁생성', newKey, targetBlock, competitionBlock, {
+        scope: 'schedule',
+        detail: `${draggedBlock.dateKey || ''} ${draggedBlock.timeText || ''} ${draggedBlock.channel || ''} 상품을 ${slot.dateKey} ${slot.timeText} ${ch} 슬롯의 경쟁으로 이동`,
+      })
+      return
+    }
+
+    if (targetBlock && !targetBlock.isDefault && mode === 'swap') {
+      const movedBlock = {
+        ...draggedBlock,
+        slotId: slot.slotId,
+        blockKey: newKey,
+        dateKey: slot.dateKey,
+        timeText: slot.timeText,
+        durationMin: slot.durationMin,
+        weightedMin: targetWeightedMin,
+        channel: ch,
+      }
+      const swappedBlock = {
+        ...targetBlock,
+        slotId: draggedBlock.slotId,
+        blockKey: sourceKey,
+        dateKey: draggedBlock.dateKey,
+        timeText: draggedBlock.timeText,
+        durationMin: draggedBlock.durationMin,
+        weightedMin: sourceWeightedMin,
+        channel: sourceChannel,
+      }
+
+      await saveBlock(sourceKey, { ...swappedBlock, __skipLog: true })
+      await saveBlock(newKey, { ...movedBlock, __skipLog: true })
+
+      const sourceLabel = `${draggedBlock.dateKey || ''} ${draggedBlock.timeText || ''} ${draggedBlock.channel || ''}`.trim()
+      const targetLabel = `${slot.dateKey} ${slot.timeText} ${ch}`.trim()
+      await _writeLog('맞교환', newKey, targetBlock, movedBlock, {
+        scope: 'schedule',
+        detail: `맞교환: ${draggedBlock.pgmCodeName || '-'} ${sourceLabel} → ${targetLabel}, ${targetBlock.pgmCodeName || '-'} ${targetLabel} → ${sourceLabel}`,
+      })
       return
     }
 
     if (targetBlock && !targetBlock.isDefault && mode === 'replace') {
-      await returnBlockToSidebar(targetBlock)
+      await returnBlockToSidebar(targetBlock, { skipLog: true })
     }
 
-    await removeBlock(blockKey)
-    await saveBlock(newKey, {
+    const movedBlock = {
       ...draggedBlock,
       slotId: slot.slotId,
       blockKey: newKey,
@@ -110,8 +152,24 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
       durationMin: slot.durationMin,
       weightedMin: targetWeightedMin,
       channel: ch,
+    }
+
+    await removeBlock(blockKey, { skipLog: true })
+    await saveBlock(newKey, {
+      ...movedBlock,
+      __skipLog: true,
     })
     await fillSourceWithDefault()
+
+    const sourceLabel = `${draggedBlock.dateKey || ''} ${draggedBlock.timeText || ''} ${draggedBlock.channel || ''}`.trim()
+    const targetLabel = `${slot.dateKey} ${slot.timeText} ${ch}`.trim()
+    const detail = targetBlock && !targetBlock.isDefault
+      ? `편성변경: ${sourceLabel} → ${targetLabel}, 기존상품 처리: 사이드바 이동${dropConfirm?.fillSource ? ', 원 슬롯 [편성팀] 생성' : ''}`
+      : `이동슬롯: ${sourceLabel} → ${targetLabel}${dropConfirm?.fillSource ? ', 원 슬롯 [편성팀] 생성' : ''}`
+    await _writeLog(targetBlock && !targetBlock.isDefault ? '편성변경' : '이동', newKey, targetBlock || draggedBlock, movedBlock, {
+      scope: 'schedule',
+      detail,
+    })
   }
 
   const executeConfirmedDrop = async (action) => {
@@ -171,7 +229,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
           sourceName: draggedBlock.pgmCodeName || '-',
           targetName: targetBlock.pgmCodeName || '-',
           slotLabel: `${slot.dateKey} ${slot.timeText}`,
-          defaultAction: 'replace',
+          defaultAction: 'swap',
           fillSource: false,
         })
       } else {
@@ -316,8 +374,11 @@ function DropPreviewBlock({ block, style }) {
 function DropConfirmModal({ data, onCancel, onApply, onChange }) {
   const isOccupied = data.variant === 'occupied'
   const isBlockMove = data.kind === 'block'
+  const isSwap = isOccupied && isBlockMove
   const title = isOccupied ? '이미 편성된 슬롯입니다' : '편성 블록을 이동할까요?'
-  const description = isOccupied
+  const description = isSwap
+    ? `[${data.sourceName}]와 [${data.targetName}]의 방송 위치를 맞교환합니다.`
+    : isOccupied
     ? `[${data.targetName}] 슬롯에 [${data.sourceName}]을 적용합니다.`
     : `[${data.sourceName}]을 ${data.slotLabel} 슬롯으로 이동합니다. 기존 슬롯은 비워집니다.`
 
@@ -334,7 +395,9 @@ function DropConfirmModal({ data, onCancel, onApply, onChange }) {
         <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.55, marginBottom: 10 }}>{description}</div>
         {isOccupied && (
           <div style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.5, marginBottom: 16 }}>
-            경쟁은 두 상품을 함께 표시하고, 변경은 기존 편성을 사이드바로 돌린 뒤 새 상품으로 바꿉니다.
+            {isSwap
+              ? '경쟁은 두 상품을 함께 표시하고, 맞교환은 두 상품의 슬롯 위치를 서로 바꿉니다.'
+              : '경쟁은 두 상품을 함께 표시하고, 변경은 기존 편성을 사이드바로 돌린 뒤 새 상품으로 바꿉니다.'}
           </div>
         )}
         {isBlockMove && (
@@ -363,7 +426,7 @@ function DropConfirmModal({ data, onCancel, onApply, onChange }) {
           <button onClick={() => onApply(data.defaultAction)}
             autoFocus
             style={{ flex: 1, padding: '8px 0', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-            {isOccupied ? '변경' : '이동'}
+            {isSwap ? '맞교환' : isOccupied ? '변경' : '이동'}
           </button>
         </div>
       </div>

@@ -61,6 +61,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
     if (useScheduleStore.getState().isViewerMode) return
 
     const { proposalItems, scheduleBlocks: currentBlocks } = useScheduleStore.getState()
+    const { _writeLog } = useScheduleStore.getState()
     const item = proposalItems.find(p => uniqueKey ? p.uniqueKey === uniqueKey : p.itemId === itemId)
     if (!item) return
 
@@ -79,7 +80,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
     // perfKey가 없으면 undefined로 두어 Firebase에 null 저장 방지
 
     if (existingBlock && !existingBlock.isDefault && mode === 'replace') {
-      await returnBlockToSidebar(existingBlock)
+      await returnBlockToSidebar(existingBlock, { skipLog: true })
     } else if (existingBlock && !existingBlock.isDefault) {
       const items = [
         ...getCompetitionItems(existingBlock),
@@ -92,7 +93,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
       return
     }
 
-    await saveBlock(blockKey, {
+    const newBlock = {
       slotId: slot.slotId, blockKey,
       dateKey: slot.dateKey, timeText: slot.timeText,
       durationMin: slot.durationMin, weightedMin,
@@ -113,7 +114,18 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
       ...(perfKey ? { perfKey } : {}),
       isDefault: false,
       assignedAt: Date.now(),
+    }
+
+    await saveBlock(blockKey, {
+      ...newBlock,
+      ...(existingBlock && !existingBlock.isDefault && mode === 'replace' ? { __skipLog: true } : {}),
     })
+    if (existingBlock && !existingBlock.isDefault && mode === 'replace') {
+      await _writeLog('편성변경', blockKey, existingBlock, newBlock, {
+        scope: 'schedule',
+        detail: '편성변경: 기존상품 처리: 사이드바 이동',
+      })
+    }
     await scheduleItem(itemId, item.uniqueKey)
   }
 

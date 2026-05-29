@@ -14,18 +14,20 @@ export function createBlockActions(setState, getState) {
       const { startDate, poolType, scheduleBlocks, weightedMinTargets } = getState()
       const weekKey = `${startDate}_${poolType}`
       const before = scheduleBlocks[blockKey] || null
+      const skipLog = !!patch.__skipLog
+      const { __skipLog, ...cleanPatch } = patch
       const normalizedPatch = {
-        ...patch,
-        ...(patch.mdTeam  !== undefined && { mdTeam:  normalizeTeamName(patch.mdTeam,  weightedMinTargets) }),
-        ...(patch.orgName !== undefined && { orgName: normalizeTeamName(patch.orgName, weightedMinTargets) }),
+        ...cleanPatch,
+        ...(cleanPatch.mdTeam  !== undefined && { mdTeam:  normalizeTeamName(cleanPatch.mdTeam,  weightedMinTargets) }),
+        ...(cleanPatch.orgName !== undefined && { orgName: normalizeTeamName(cleanPatch.orgName, weightedMinTargets) }),
       }
       await update(ref(db, `sessions/${weekKey}/scheduleBlocks/${blockKey}`), normalizedPatch)
-      if (patch.isDefault !== true) {
-        getState()._writeLog(before ? '수정' : '편성', blockKey, before, { ...before, ...patch })
+      if (!skipLog && cleanPatch.isDefault !== true) {
+        getState()._writeLog(before ? '수정' : '편성', blockKey, before, { ...before, ...cleanPatch })
       }
     },
 
-    async removeBlock(blockKey) {
+    async removeBlock(blockKey, options = {}) {
       const { startDate, poolType, scheduleBlocks } = getState()
       const weekKey = `${startDate}_${poolType}`
       const block = scheduleBlocks[blockKey]
@@ -77,7 +79,7 @@ export function createBlockActions(setState, getState) {
         }
       }
 
-      if (block && !block.isDefault) {
+      if (!options.skipLog && block && !block.isDefault) {
         getState()._writeLog('삭제', blockKey, block, null)
       }
 
@@ -233,9 +235,9 @@ export function createBlockActions(setState, getState) {
     },
 
     // 반환된 아이템의 effectiveItemId를 리턴 (pinnedReturn 위치 지정에 사용)
-    async returnBlockToSidebar(block) {
+    async returnBlockToSidebar(block, options = {}) {
       if (block.isCompeting) return null
-      await getState().removeBlock(block.blockKey || block.slotId)
+      await getState().removeBlock(block.blockKey || block.slotId, options)
 
       const { startDate, poolType } = getState()
       const weekKey = `${startDate}_${poolType}`

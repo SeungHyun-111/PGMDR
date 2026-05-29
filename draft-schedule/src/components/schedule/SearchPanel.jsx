@@ -54,6 +54,9 @@ function StatsTable({ rows, colType }) {
   if (!rows.length) return <div style={{ fontSize: 10, color: 'var(--text3)', padding: '6px 8px' }}>-</div>
   return (
     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+      <caption style={{ captionSide: 'top', padding: '2px 8px 5px', fontSize: 9, color: 'var(--text3)', textAlign: 'left' }}>
+        취급/한익 평균: 실적 미입력 제외
+      </caption>
       <thead>
         <tr>
           <th style={{ ...thS, textAlign: 'left' }}>구분</th>

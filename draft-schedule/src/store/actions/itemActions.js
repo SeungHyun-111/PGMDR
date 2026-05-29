@@ -60,6 +60,10 @@ export function createItemActions(setState, getState) {
       if (resolvedIdx < 0) return
       const weekKey = `${startDate}_${poolType}`
       await update(ref(db, `sessions/${weekKey}/gasData/proposalItems/${resolvedIdx}`), patch)
+      getState()._writeLog('수정', '', stateItem || null, { ...(stateItem || {}), ...patch }, {
+        scope: 'sidebar',
+        detail: Object.keys(patch).map(key => `${key}: ${stateItem?.[key] ?? '-'} → ${patch[key] ?? '-'}`).join(', '),
+      })
       setState(s => {
         const allProposalItems = s.allProposalItems.map(p =>
           matches(p) ? buildProposalItem({ ...p, ...patch }) : p
@@ -78,6 +82,10 @@ export function createItemActions(setState, getState) {
       // _fbIdx는 내부 메타 — Firebase에는 저장하지 않음
       const newItem = { ...itemData, itemId: `manual_${Date.now()}`, uniqueKey: genKey('1') }
       await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${fbIdx}`), newItem)
+      getState()._writeLog('추가', '', null, newItem, {
+        scope: 'sidebar',
+        detail: '사이드바 상품 추가',
+      })
       setState(s => {
         const allProposalItems = [...s.allProposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx })]
         return {
@@ -96,6 +104,10 @@ export function createItemActions(setState, getState) {
       if (item._fbIdx !== undefined && item._fbIdx !== null) {
         await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${item._fbIdx}`), null)
       }
+      getState()._writeLog('삭제', '', item, null, {
+        scope: 'sidebar',
+        detail: '사이드바 상품 삭제',
+      })
       setState(s => {
         const allProposalItems = s.allProposalItems.filter(p => !matches(p))
         return {
@@ -116,6 +128,10 @@ export function createItemActions(setState, getState) {
       delete rest._fbIdx
       const newItem = { ...rest, itemId: `dup_${Date.now()}`, uniqueKey: genKey('1') }
       await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${fbIdx}`), newItem)
+      getState()._writeLog('복사', '', orig, newItem, {
+        scope: 'sidebar',
+        detail: `원본: ${orig.pgmCodeName || '-'}`,
+      })
       setState(s => {
         const allProposalItems = [...s.allProposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx })]
         return {
@@ -126,10 +142,17 @@ export function createItemActions(setState, getState) {
     },
 
     async scheduleItem(itemId, uniqueKey) {
-      const { startDate, poolType } = getState()
+      const { startDate, poolType, allProposalItems, proposalItems } = getState()
       const weekKey = `${startDate}_${poolType}`
+      const item = [...allProposalItems, ...proposalItems].find(p => uniqueKey ? p.uniqueKey === uniqueKey : p.itemId === itemId)
       if (itemId) await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${itemId}`), true)
       if (uniqueKey) await set(ref(db, `sessions/${weekKey}/scheduledUniqueKeys/${uniqueKey}`), true)
+      if (item) {
+        getState()._writeLog('편성', '', item, item, {
+          scope: 'sidebar',
+          detail: '편성 처리: 사이드바 목록에서 제외',
+        })
+      }
       setState(s => {
         const scheduledItemIds = itemId ? { ...s.scheduledItemIds, [itemId]: true } : s.scheduledItemIds
         const scheduledUniqueKeys = uniqueKey ? { ...s.scheduledUniqueKeys, [uniqueKey]: true } : s.scheduledUniqueKeys
@@ -142,9 +165,15 @@ export function createItemActions(setState, getState) {
     },
 
     async toggleSplitSlot(slotId) {
-      const { startDate, poolType, splitSlots } = getState()
+      const { startDate, poolType, splitSlots, pgmSlots } = getState()
       const weekKey = `${startDate}_${poolType}`
-      await set(ref(db, `sessions/${weekKey}/splitSlots/${slotId}`), splitSlots[slotId] ? null : true)
+      const slot = pgmSlots.find(s => s.slotId === slotId) || { slotId }
+      const nextSplit = !splitSlots[slotId]
+      await set(ref(db, `sessions/${weekKey}/splitSlots/${slotId}`), nextSplit ? true : null)
+      getState()._writeLog(nextSplit ? '채널나누기' : '채널합치기', slotId, slot, { ...slot, channel: nextSplit ? 'CA/IP' : 'ALL' }, {
+        scope: 'schedule',
+        detail: nextSplit ? '채널나누기: ALL → CA/IP' : '채널합치기: CA/IP → ALL',
+      })
     },
 
     async toggleStarred(itemId) {

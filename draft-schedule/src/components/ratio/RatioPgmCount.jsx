@@ -146,6 +146,9 @@ function PgmCard({ title, colLabel, colKeyFn, colRenderer, blocks, rowType, perf
         </div>
         {showPerf && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700 }}>
+              평균: 실적 미입력 제외
+            </span>
             <span style={{ fontSize: 11, color: 'var(--green)', fontWeight: 700 }}>
               취급/분 {grand.avgSp.toLocaleString()} · 이익/분 {grand.avgPp.toLocaleString()}
             </span>

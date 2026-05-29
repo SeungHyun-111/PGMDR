@@ -55,6 +55,10 @@ export function createTimeSlotActions(setState, getState) {
         if (ipBlock) fbPatch[`scheduleBlocks/${slotId}_IP`] = { ...ipBlock, durationMin: firstDur, weightedMin: ipWeighted }
       }
       await update(ref(db, `sessions/${weekKey}`), fbPatch)
+      getState()._writeLog('시간나누기', slotId, slot, { ...slot, durationMin: firstDur, weightedMin: firstWm }, {
+        scope: 'schedule',
+        detail: `시간나누기: ${slot.timeText} ${slot.durationMin}분 → ${slot.timeText} ${firstDur}분 + ${newTimeText} ${secondDur}분`,
+      })
     },
 
     // 슬롯 시간 삭제: slotId 슬롯 제거 → 앞 슬롯이 그 시간을 흡수
@@ -99,6 +103,10 @@ export function createTimeSlotActions(setState, getState) {
         if (ip) fbPatch[`scheduleBlocks/${prev.slotId}_IP`] = { ...ip, durationMin: newDur, weightedMin: ipWeighted }
       }
       await update(ref(db, `sessions/${weekKey}`), fbPatch)
+      getState()._writeLog('시간삭제', slotId, slot, null, {
+        scope: 'schedule',
+        detail: `시간삭제: ${slot.timeText} 슬롯 삭제, 이전 슬롯 ${prev.timeText}에 합산`,
+      })
     },
   }
 }
