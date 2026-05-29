@@ -12,6 +12,8 @@ export default function ProductTooltip({ item, perfMap, entityProps, pos }) {
     ['가용가중분1', item.availableWeightedMin1 ? item.availableWeightedMin1 + '분' : '-'],
     ['가용가중분2', item.availableWeightedMin2 ? item.availableWeightedMin2 + '분' : '-'],
     ['잔여편성',    item.remainingSchedule || '-'],
+    ['메모코드',    item.memoCode || '-'],
+    ['편성C',       item.scheduleComment || '-'],
     ['기타요청',    item.requestNote || '-'],
   ]
 

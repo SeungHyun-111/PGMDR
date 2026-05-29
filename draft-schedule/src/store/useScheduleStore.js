@@ -18,6 +18,7 @@ const useScheduleStore = create((setState, getState) => ({
   userName:  localStorage.getItem('userName') || '',
 
   pgmSlots:           [],
+  allProposalItems:   [],
   proposalItems:      [],
   preScheduleRows:    [],
   weightedMinTargets: [],
@@ -31,6 +32,7 @@ const useScheduleStore = create((setState, getState) => ({
   customSlots:      {},
   starred:          {},
   scheduledItemIds: {},
+  scheduledUniqueKeys: {},
   manualInputs:     {},
   lastUpdated:      null,
 

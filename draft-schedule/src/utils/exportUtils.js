@@ -422,7 +422,7 @@ function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, p
       mdCategory: block.mdCategory || null, dateKey: block.dateKey || null,
       timeText: block.timeText || null, durationMin: block.durationMin || null,
       weightedMin: block.weightedMin || null, memoCode: block.memoCode || null,
-      scheduleComment: block.scheduleComment || null, annotation: block.annotation || null,
+      scheduleComment: block.scheduleComment || null, requestNote: block.requestNote || null, annotation: block.annotation || null,
       lastPerf: lastPerf ? { broadcastDate: lastPerf.broadcastDate, spw: lastPerf.salesPerWeightedMin, ppw: lastPerf.profitPerWeightedMin } : null,
     })
 
@@ -493,7 +493,7 @@ function attachTip(el){
         h+='</div>';
       });
     } else {
-      [['팀',d.mdTeam],['채널',d.channel],['거래형태',d.dealType],['신상품구분',d.newProductType],['카테고리',d.mdCategory],['방송일시',(d.dateKey||'')+' '+(d.timeText||'')],['방송시간',(d.durationMin||'-')+'분'],['가중분',d.weightedMin],['메모코드',d.memoCode],['편성C',d.scheduleComment]].forEach(function(lr){h+=row(lr[0],lr[1])});
+      [['팀',d.mdTeam],['채널',d.channel],['거래형태',d.dealType],['신상품구분',d.newProductType],['카테고리',d.mdCategory],['방송일시',(d.dateKey||'')+' '+(d.timeText||'')],['방송시간',(d.durationMin||'-')+'분'],['가중분',d.weightedMin],['메모코드',d.memoCode],['편성C',d.scheduleComment],['기타요청',d.requestNote]].forEach(function(lr){h+=row(lr[0],lr[1])});
       if(d.annotation)h+=row('첨삭',d.annotation,'#d97706');
       if(d.lastPerf){
         h+='<div style="border-top:1px solid #e2e4ef;margin:6px 0"></div><div style="font-size:10px;font-weight:700;color:#8b90ab;margin-bottom:4px">직전 실적 ('+r(d.lastPerf.broadcastDate)+')</div>';

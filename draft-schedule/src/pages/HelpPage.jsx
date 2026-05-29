@@ -106,7 +106,7 @@ const COLLAB_ROWS = [
 
 // ── 계산 로직 ─────────────────────────────────────────────────────────────
 const CALC_ROWS = [
-  { name: 'uniqueKey',         formula: '0_블록키 (기본/선편성)\n1_xxx (제안상품·복귀)\n2_slotId (선편성)\n3_xxx (경쟁/복사)', note: '모든 카드의 불변 고유 식별자. 세션 생성 시 부여, 이동/변환 시 유지. entityProps·manualInputs 조회 키.' },
+  { name: 'uniqueKey 표준',    formula: '0_{Firebase push key} 시스템/전사블록\n1_{Firebase push key} 제안상품·복귀·복사·수동추가\n2_{Firebase push key} 선편성\n3_{Firebase push key} 경쟁묶음', note: 'src/utils/uniqueKey.js의 genKey(prefix)로만 발급한다.' },
   { name: 'entityProps 머지',  formula: '{ ...block, ...(entityProps[block.uniqueKey] || {}) }', note: 'firebaseSubscribe에서 scheduleBlocks 구독 시 자동 적용. 컴포넌트에서 별도 처리 불필요.' },
   { name: 'perfKey',           formula: 'dealTypeConverted + pgmCodeName', note: '실적 조회 키. GAS에서 생성, React에서도 동일 로직으로 구성.' },
   { name: 'getEffectiveProfit', formula: 'manualInputs[item.uniqueKey].expectedProfitPerWeightedMin\n  ?? perfMap[item.perfKey].profitPerWeightedMin', note: 'uniqueKey로 수기 입력 조회, perfKey로 실적DB 조회. 수기 입력 우선 적용.' },

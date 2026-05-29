@@ -1,1 +1,12 @@
-export const genKey = prefix => `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`
+import { db, ref, push } from '../api/firebase'
+
+export const UNIQUE_KEY_PREFIX = {
+  SYSTEM: '0',
+  PROPOSAL: '1',
+  PRE_SCHEDULE: '2',
+  COMPETITION: '3',
+}
+
+export function genKey(prefix) {
+  return `${prefix}_${push(ref(db, 'entityKeys')).key}`
+}

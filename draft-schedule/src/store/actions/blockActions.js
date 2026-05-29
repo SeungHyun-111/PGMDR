@@ -4,7 +4,8 @@ import { resolveEntity } from '../../utils/mergeEntity'
 import { splitWeightedMin } from '../../utils/weightedMin'
 import { normalizeTeamName } from '../../utils/teamName'
 import { genKey } from '../../utils/uniqueKey'
-import { competitionItemKey, competitionItemToBlock, getCompetitionItems } from '../../utils/competition'
+import { competitionItemKey, competitionItemToBlock, getCompetitionItems, makeCompetitionBlock } from '../../utils/competition'
+import { filterUnscheduledItems, upsertByItemId } from '../../utils/proposalVisibility'
 
 export function createBlockActions(setState, getState) {
   return {
@@ -36,6 +37,9 @@ export function createBlockActions(setState, getState) {
           if (it.itemId) {
             await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${it.itemId}`), null)
           }
+          if (it.uniqueKey) {
+            await set(ref(db, `sessions/${weekKey}/scheduledUniqueKeys/${it.uniqueKey}`), null)
+          }
         }
         const snap = await get(ref(db, `sessions/${weekKey}/gasData/proposalItems`))
         const raw  = snap.exists() ? snap.val() : {}
@@ -43,7 +47,7 @@ export function createBlockActions(setState, getState) {
         setState(s => {
           const toAdd = []
           for (const it of compItems) {
-            if (s.proposalItems.some(p => p.itemId === it.itemId)) continue
+            if (s.allProposalItems.some(p => it.uniqueKey ? p.uniqueKey === it.uniqueKey : p.itemId === it.itemId)) continue
             const orig = it.itemId ? allItems.filter(Boolean).find(p => p.itemId === it.itemId) : null
             if (orig) {
               toAdd.push(buildProposalItem(orig))
@@ -55,10 +59,22 @@ export function createBlockActions(setState, getState) {
               }))
             }
           }
-          return toAdd.length ? { proposalItems: [...s.proposalItems, ...toAdd] } : s
+          if (!toAdd.length) {
+            return {
+              proposalItems: filterUnscheduledItems(s.allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+            }
+          }
+          const allProposalItems = toAdd.reduce((list, item) => upsertByItemId(list, item), s.allProposalItems)
+          return {
+            allProposalItems,
+            proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+          }
         })
       } else if (block?.itemId && !block.isDefault) {
         await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${block.itemId}`), null)
+        if (block.uniqueKey) {
+          await set(ref(db, `sessions/${weekKey}/scheduledUniqueKeys/${block.uniqueKey}`), null)
+        }
       }
 
       if (block && !block.isDefault) {
@@ -88,6 +104,7 @@ export function createBlockActions(setState, getState) {
       if (selectedItem) {
         updates[`scheduleBlocks/${blockKey}`] = competitionItemToBlock(selectedItem, block)
         if (selectedItem.itemId) updates[`scheduledItemIds/${selectedItem.itemId}`] = true
+        if (selectedItem.uniqueKey) updates[`scheduledUniqueKeys/${selectedItem.uniqueKey}`] = true
       } else if (mode === 'default') {
         const sourceChannel = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
         updates[`scheduleBlocks/${blockKey}`] = {
@@ -100,8 +117,8 @@ export function createBlockActions(setState, getState) {
       getState()._writeLog('경쟁해제', blockKey, block, updates[`scheduleBlocks/${blockKey}`] || null)
     },
 
-    async changeBlockChannel(block, newChannel, patch) {
-      const { startDate, poolType, splitSlots, pgmSlots, weightedMinTargets } = getState()
+    async changeBlockChannel(block, newChannel, patch, options = {}) {
+      const { startDate, poolType, splitSlots, pgmSlots, scheduleBlocks, weightedMinTargets } = getState()
       patch = {
         ...patch,
         ...(patch.mdTeam  !== undefined && { mdTeam:  normalizeTeamName(patch.mdTeam,  weightedMinTargets) }),
@@ -112,15 +129,33 @@ export function createBlockActions(setState, getState) {
       const slot    = pgmSlots.find(s => s.slotId === slotId)
       if (!slot) return
 
-      const origChannel = block.blockKey?.endsWith('_CA') ? 'CA'
-        : block.blockKey?.endsWith('_IP') ? 'IP' : 'ALL'
+      const fromKey = block.blockKey || block.slotId
+      const origChannel = fromKey?.endsWith('_CA') ? 'CA'
+        : fromKey?.endsWith('_IP') ? 'IP' : 'ALL'
       const isSplit = !!splitSlots[slotId]
+      const { mode } = options
 
       if (newChannel !== 'ALL' && !isSplit) {
         // ── ALL → CA or IP : 슬롯 분리 ──────────────────
         const { caWeighted, ipWeighted } = splitWeightedMin(slot.weightedMin, slot.dateKey, slot.timeText)
         const wm     = newChannel === 'CA' ? caWeighted : ipWeighted
         const newKey = `${slotId}_${newChannel}`
+        const targetBlock = scheduleBlocks[newKey]
+        if (targetBlock && targetBlock !== block && !mode) {
+          return makeChannelConflict({ kind: 'target', block, targetBlock, fromChannel: origChannel, toChannel: newChannel, canSwap: false })
+        }
+        if (targetBlock && mode === 'sidebar') {
+          await getState().returnBlockToSidebar(targetBlock)
+        } else if (targetBlock && mode === 'compete') {
+          const items = [...getCompetitionItems(targetBlock), ...getCompetitionItems({ ...block, ...patch })]
+          await update(ref(db, `sessions/${weekKey}`), {
+            [`splitSlots/${slotId}`]: true,
+            [`scheduleBlocks/${slotId}`]: null,
+            [`scheduleBlocks/${newKey}`]: makeCompetitionBlock({ slot, blockKey: newKey, channel: newChannel, weightedMin: wm, items }),
+          })
+          getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
+          return { ok: true }
+        }
         await update(ref(db, `sessions/${weekKey}`), {
           [`splitSlots/${slotId}`]: true,
           [`scheduleBlocks/${slotId}`]: null,
@@ -130,20 +165,71 @@ export function createBlockActions(setState, getState) {
       } else if (newChannel === 'ALL' && isSplit) {
         // ── CA/IP → ALL : 슬롯 합치기 ───────────────────
         const otherCh = origChannel === 'CA' ? 'IP' : 'CA'
+        const otherBlock = scheduleBlocks[`${slotId}_${otherCh}`]
+        if (otherBlock && !mode) {
+          return makeChannelConflict({ kind: 'merge', block, targetBlock: otherBlock, fromChannel: origChannel, toChannel: newChannel, canSwap: false })
+        }
+        if (otherBlock && mode === 'sidebar') {
+          await getState().returnBlockToSidebar(otherBlock)
+        } else if (otherBlock && mode === 'compete') {
+          const items = [...getCompetitionItems(otherBlock), ...getCompetitionItems({ ...block, ...patch })]
+          await update(ref(db, `sessions/${weekKey}`), {
+            [`scheduleBlocks/${slotId}_${otherCh}`]: null,
+            [`scheduleBlocks/${fromKey}`]: null,
+            [`splitSlots/${slotId}`]: null,
+            [`scheduleBlocks/${slotId}`]: makeCompetitionBlock({ slot, blockKey: slotId, channel: 'ALL', weightedMin: slot.weightedMin, items }),
+          })
+          getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
+          return { ok: true }
+        }
         await update(ref(db, `sessions/${weekKey}`), {
           [`scheduleBlocks/${slotId}_${otherCh}`]: null,
-          [`scheduleBlocks/${block.blockKey}`]: null,
+          [`scheduleBlocks/${fromKey}`]: null,
           [`splitSlots/${slotId}`]: null,
           [`scheduleBlocks/${slotId}`]: { ...block, ...patch, blockKey: slotId, channel: 'ALL', weightedMin: slot.weightedMin, isDefault: false },
         })
 
+      } else if (newChannel !== 'ALL' && isSplit && origChannel !== newChannel) {
+        // ── CA ↔ IP : 실제 half-slot key 이동 ─────────────
+        const { caWeighted, ipWeighted } = splitWeightedMin(slot.weightedMin, slot.dateKey, slot.timeText)
+        const wm = newChannel === 'CA' ? caWeighted : ipWeighted
+        const origWm = origChannel === 'CA' ? caWeighted : ipWeighted
+        const newKey = `${slotId}_${newChannel}`
+        const targetBlock = scheduleBlocks[newKey]
+        if (targetBlock && !mode) {
+          return makeChannelConflict({ kind: 'target', block, targetBlock, fromChannel: origChannel, toChannel: newChannel, canSwap: true })
+        }
+        if (targetBlock && mode === 'sidebar') {
+          await getState().returnBlockToSidebar(targetBlock)
+        } else if (targetBlock && mode === 'compete') {
+          const items = [...getCompetitionItems(targetBlock), ...getCompetitionItems({ ...block, ...patch })]
+          await update(ref(db, `sessions/${weekKey}`), {
+            [`scheduleBlocks/${fromKey}`]: null,
+            [`scheduleBlocks/${newKey}`]: makeCompetitionBlock({ slot, blockKey: newKey, channel: newChannel, weightedMin: wm, items }),
+          })
+          getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
+          return { ok: true }
+        } else if (targetBlock && mode === 'swap') {
+          await update(ref(db, `sessions/${weekKey}`), {
+            [`scheduleBlocks/${fromKey}`]: { ...targetBlock, blockKey: fromKey, channel: origChannel, weightedMin: origWm, isDefault: false },
+            [`scheduleBlocks/${newKey}`]: { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false },
+          })
+          getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
+          return { ok: true }
+        }
+        await update(ref(db, `sessions/${weekKey}`), {
+          [`scheduleBlocks/${fromKey}`]: null,
+          [`scheduleBlocks/${newKey}`]: { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false },
+        })
+
       } else {
         // ── 구조 변경 없음 (이미 분리 상태에서 CA↔IP 등) ──
-        await update(ref(db, `sessions/${weekKey}/scheduleBlocks/${block.blockKey}`),
+        await update(ref(db, `sessions/${weekKey}/scheduleBlocks/${fromKey}`),
           { ...patch, channel: newChannel })
       }
 
-      getState()._writeLog('채널변경', block.blockKey, block, { ...block, ...patch, channel: newChannel })
+      getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
+      return { ok: true }
     },
 
     // 반환된 아이템의 effectiveItemId를 리턴 (pinnedReturn 위치 지정에 사용)
@@ -164,7 +250,11 @@ export function createBlockActions(setState, getState) {
 
         const { entityProps } = getState()
         setState(s => {
-          if (s.proposalItems.some(p => p.itemId === block.itemId)) return s
+          if (s.allProposalItems.some(p => block.uniqueKey ? p.uniqueKey === block.uniqueKey : p.itemId === block.itemId)) {
+            return {
+              proposalItems: filterUnscheduledItems(s.allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+            }
+          }
           // orig에 entityProps 머지 (편집된 속성 반영), 없으면 블록 데이터로 fallback
           const item = orig ? resolveEntity(orig, entityProps) : {
             itemId:            block.itemId,
@@ -177,10 +267,15 @@ export function createBlockActions(setState, getState) {
             dealTypeConverted: block.dealTypeConverted  || block.dealType || '',
             dealTypeChar:      block.dealTypeChar       || '',
             memoCode:          block.memoCode           || '',
+            requestNote:       block.requestNote        || '',
             newProductType:    block.newProductType     || '',
             perfKey:           block.perfKey            || null,
           }
-          return { proposalItems: [...s.proposalItems, buildProposalItem(item)] }
+          const allProposalItems = upsertByItemId(s.allProposalItems, buildProposalItem(item))
+          return {
+            allProposalItems,
+            proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+          }
         })
         return block.itemId
       } else {
@@ -197,13 +292,18 @@ export function createBlockActions(setState, getState) {
           dealTypeConverted: block.dealTypeConverted  || block.dealType || '',
           dealTypeChar:      block.dealTypeChar       || '',
           memoCode:          block.memoCode           || '',
+          requestNote:       block.requestNote        || '',
           newProductType:    block.newProductType     || '',
           perfKey:           block.perfKey            || null,
         }
         await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${newItemId}`), itemData)
-        setState(s => ({
-          proposalItems: [...s.proposalItems, buildProposalItem({ ...itemData, _fbIdx: newItemId })],
-        }))
+        setState(s => {
+          const allProposalItems = upsertByItemId(s.allProposalItems, buildProposalItem({ ...itemData, _fbIdx: newItemId }))
+          return {
+            allProposalItems,
+            proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+          }
+        })
         return newItemId
       }
     },
@@ -213,6 +313,7 @@ export function createBlockActions(setState, getState) {
 async function restoreCompetitionItems({ setState, weekKey, items }) {
   for (const it of items) {
     if (it.itemId) await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${it.itemId}`), null)
+    if (it.uniqueKey) await set(ref(db, `sessions/${weekKey}/scheduledUniqueKeys/${it.uniqueKey}`), null)
   }
 
   const snap = await get(ref(db, `sessions/${weekKey}/gasData/proposalItems`))
@@ -222,7 +323,7 @@ async function restoreCompetitionItems({ setState, weekKey, items }) {
   setState(s => {
     const toAdd = []
     for (const it of items) {
-      if (it.itemId && s.proposalItems.some(p => p.itemId === it.itemId)) continue
+      if (s.allProposalItems.some(p => it.uniqueKey ? p.uniqueKey === it.uniqueKey : p.itemId === it.itemId)) continue
       const orig = it.itemId ? allItems.filter(Boolean).find(p => p.itemId === it.itemId) : null
       if (orig) {
         toAdd.push(buildProposalItem(orig))
@@ -233,6 +334,28 @@ async function restoreCompetitionItems({ setState, weekKey, items }) {
         }))
       }
     }
-    return toAdd.length ? { proposalItems: [...s.proposalItems, ...toAdd] } : s
+    if (!toAdd.length) {
+      return {
+        proposalItems: filterUnscheduledItems(s.allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+      }
+    }
+    const allProposalItems = toAdd.reduce((list, item) => upsertByItemId(list, item), s.allProposalItems)
+    return {
+      allProposalItems,
+      proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+    }
   })
+}
+
+function makeChannelConflict({ kind, block, targetBlock, fromChannel, toChannel, canSwap }) {
+  return {
+    conflict: true,
+    kind,
+    fromChannel,
+    toChannel,
+    canSwap,
+    sourceName: block?.pgmCodeName || '-',
+    targetName: targetBlock?.pgmCodeName || '-',
+    targetBlockKey: targetBlock?.blockKey || targetBlock?.slotId || '',
+  }
 }

@@ -65,6 +65,7 @@ export default function ProductCard({ item, perfMap }) {
   const handleDragStart = (e) => {
     setDragging(true)
     e.dataTransfer.setData('itemId', item.itemId)
+    if (item.uniqueKey) e.dataTransfer.setData('uniqueKey', item.uniqueKey)
     e.dataTransfer.effectAllowed = 'move'
 
     const ghost = buildDragGhost(item)
@@ -148,6 +149,16 @@ export default function ProductCard({ item, perfMap }) {
             {item.newProductType}
           </span>
         )}
+        {item.memoCode && (
+          <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'rgba(74,108,247,.16)', color: 'var(--accent)', fontWeight: 700 }}>
+            {item.memoCode}
+          </span>
+        )}
+        {item.scheduleComment && (
+          <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'rgba(22,163,74,.14)', color: 'var(--green)', fontWeight: 700, maxWidth: 92, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {item.scheduleComment}
+          </span>
+        )}
       </div>
 
       <div style={{ display: 'flex', gap: 8, fontSize: 10 }}>
@@ -169,7 +180,7 @@ export default function ProductCard({ item, perfMap }) {
         onClick={e => e.stopPropagation()}
         style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 6, zIndex: 9999, boxShadow: '0 4px 16px rgba(0,0,0,.4)', padding: '4px 0', minWidth: 120 }}>
         <button
-          onClick={() => { duplicateProposalItem(item.itemId); setCtxMenu(null) }}
+          onClick={() => { duplicateProposalItem(item.itemId, item.uniqueKey); setCtxMenu(null) }}
           style={{ display: 'block', width: '100%', padding: '7px 14px', background: 'none', border: 'none', textAlign: 'left', fontSize: 12, color: 'var(--text)', cursor: 'pointer' }}>
           복사
         </button>
@@ -189,7 +200,7 @@ export default function ProductCard({ item, perfMap }) {
         onCancel={() => setDeleteConfirm(false)}
         onConfirm={() => {
           setDeleteConfirm(false)
-          deleteProposalItem(item.itemId)
+          deleteProposalItem(item.itemId, item.uniqueKey)
         }}
       />
     )}

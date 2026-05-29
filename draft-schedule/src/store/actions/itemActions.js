@@ -2,7 +2,8 @@ import { db, ref, set, update, get } from '../../api/firebase'
 import { buildProposalItem } from '../helpers/blockBuilders'
 import { genKey } from '../../utils/uniqueKey'
 import { normalizeItemsTeamNames } from '../../utils/teamName'
-import { applyEntityProps } from '../../utils/mergeEntity'
+import { applyEntityProps, extractEntityFields } from '../../utils/mergeEntity'
+import { filterUnscheduledItems } from '../../utils/proposalVisibility'
 
 export function createItemActions(setState, getState) {
   return {
@@ -18,13 +19,26 @@ export function createItemActions(setState, getState) {
         const entries = Array.isArray(raw)
           ? raw.map((v, i) => ({ ...v, _fbIdx: i }))
           : Object.entries(raw).map(([k, v]) => ({ ...v, _fbIdx: k }))
-        const { weightedMinTargets, entityProps } = getState()
+        const uniqueKeyUpdates = {}
+        const normalizedEntries = entries.map(item => {
+          if (item.uniqueKey) return item
+          const uniqueKey = genKey('1')
+          const next = { ...item, uniqueKey }
+          uniqueKeyUpdates[`gasData/proposalItems/${item._fbIdx}/uniqueKey`] = uniqueKey
+          uniqueKeyUpdates[`entityProps/${uniqueKey}`] = extractEntityFields(buildProposalItem(next))
+          return next
+        })
+        if (Object.keys(uniqueKeyUpdates).length > 0) {
+          await update(ref(db, `sessions/${weekKey}`), uniqueKeyUpdates)
+        }
+        const { weightedMinTargets, entityProps, scheduledItemIds, scheduledUniqueKeys } = getState()
         const items = applyEntityProps(
-          normalizeItemsTeamNames(entries.map(buildProposalItem), weightedMinTargets),
+          normalizeItemsTeamNames(normalizedEntries.map(buildProposalItem), weightedMinTargets),
           entityProps
         )
         setState({
-          proposalItems:      items,
+          allProposalItems:   items,
+          proposalItems:      filterUnscheduledItems(items, scheduledItemIds, scheduledUniqueKeys),
           proposalLoaded:     true,
           isLoadingProposals: false,
         })
@@ -33,62 +47,98 @@ export function createItemActions(setState, getState) {
       }
     },
 
-    async updateProposalItem(itemId, fbIdx, patch) {
-      const { startDate, poolType, proposalItems } = getState()
+    async updateProposalItem(itemId, fbIdx, patch, uniqueKey) {
+      const { startDate, poolType, allProposalItems, proposalItems } = getState()
       // fbIdx가 없으면 현재 state 순서로 보정
+      const matches = item => uniqueKey ? item.uniqueKey === uniqueKey : item.itemId === itemId
+      const stateItem = allProposalItems.find(matches) || proposalItems.find(matches)
+      const stateIdx = allProposalItems.findIndex(matches)
+      const visibleIdx = proposalItems.findIndex(matches)
       const resolvedIdx = (fbIdx !== undefined && fbIdx !== null)
         ? fbIdx
-        : proposalItems.findIndex(p => p.itemId === itemId)
+        : stateItem?._fbIdx ?? (stateIdx >= 0 ? stateIdx : visibleIdx)
       if (resolvedIdx < 0) return
       const weekKey = `${startDate}_${poolType}`
       await update(ref(db, `sessions/${weekKey}/gasData/proposalItems/${resolvedIdx}`), patch)
-      setState(s => ({
-        proposalItems: s.proposalItems.map(p =>
-          p.itemId === itemId ? buildProposalItem({ ...p, ...patch }) : p
-        ),
-      }))
+      setState(s => {
+        const allProposalItems = s.allProposalItems.map(p =>
+          matches(p) ? buildProposalItem({ ...p, ...patch }) : p
+        )
+        return {
+          allProposalItems,
+          proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+        }
+      })
     },
 
     async addProposalItem(itemData) {
-      const { startDate, poolType, proposalItems } = getState()
+      const { startDate, poolType, allProposalItems } = getState()
       const weekKey = `${startDate}_${poolType}`
-      const fbIdx = proposalItems.length
+      const fbIdx = allProposalItems.length
       // _fbIdx는 내부 메타 — Firebase에는 저장하지 않음
       const newItem = { ...itemData, itemId: `manual_${Date.now()}`, uniqueKey: genKey('1') }
       await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${fbIdx}`), newItem)
-      setState(s => ({
-        proposalItems: [...s.proposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx })],
-      }))
+      setState(s => {
+        const allProposalItems = [...s.allProposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx })]
+        return {
+          allProposalItems,
+          proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+        }
+      })
     },
 
-    async deleteProposalItem(itemId) {
-      const { startDate, poolType, proposalItems } = getState()
+    async deleteProposalItem(itemId, uniqueKey) {
+      const { startDate, poolType, allProposalItems, proposalItems } = getState()
       const weekKey = `${startDate}_${poolType}`
-      const item = proposalItems.find(p => p.itemId === itemId)
+      const matches = item => uniqueKey ? item.uniqueKey === uniqueKey : item.itemId === itemId
+      const item = allProposalItems.find(matches) || proposalItems.find(matches)
       if (!item) return
       if (item._fbIdx !== undefined && item._fbIdx !== null) {
         await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${item._fbIdx}`), null)
       }
-      setState(s => ({ proposalItems: s.proposalItems.filter(p => p.itemId !== itemId) }))
+      setState(s => {
+        const allProposalItems = s.allProposalItems.filter(p => !matches(p))
+        return {
+          allProposalItems,
+          proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+        }
+      })
     },
 
-    async duplicateProposalItem(itemId) {
-      const { startDate, poolType, proposalItems } = getState()
+    async duplicateProposalItem(itemId, uniqueKey) {
+      const { startDate, poolType, allProposalItems, proposalItems } = getState()
       const weekKey = `${startDate}_${poolType}`
-      const orig = proposalItems.find(p => p.itemId === itemId)
+      const matches = item => uniqueKey ? item.uniqueKey === uniqueKey : item.itemId === itemId
+      const orig = allProposalItems.find(matches) || proposalItems.find(matches)
       if (!orig) return
-      const fbIdx = proposalItems.length
-      const { _fbIdx, ...rest } = orig
+      const fbIdx = allProposalItems.length
+      const rest = { ...orig }
+      delete rest._fbIdx
       const newItem = { ...rest, itemId: `dup_${Date.now()}`, uniqueKey: genKey('1') }
       await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${fbIdx}`), newItem)
-      setState(s => ({ proposalItems: [...s.proposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx })] }))
+      setState(s => {
+        const allProposalItems = [...s.allProposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx })]
+        return {
+          allProposalItems,
+          proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+        }
+      })
     },
 
-    async scheduleItem(itemId) {
+    async scheduleItem(itemId, uniqueKey) {
       const { startDate, poolType } = getState()
       const weekKey = `${startDate}_${poolType}`
-      await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${itemId}`), true)
-      setState(s => ({ proposalItems: s.proposalItems.filter(p => p.itemId !== itemId) }))
+      if (itemId) await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${itemId}`), true)
+      if (uniqueKey) await set(ref(db, `sessions/${weekKey}/scheduledUniqueKeys/${uniqueKey}`), true)
+      setState(s => {
+        const scheduledItemIds = itemId ? { ...s.scheduledItemIds, [itemId]: true } : s.scheduledItemIds
+        const scheduledUniqueKeys = uniqueKey ? { ...s.scheduledUniqueKeys, [uniqueKey]: true } : s.scheduledUniqueKeys
+        return {
+          scheduledItemIds,
+          scheduledUniqueKeys,
+          proposalItems: filterUnscheduledItems(s.allProposalItems, scheduledItemIds, scheduledUniqueKeys),
+        }
+      })
     },
 
     async toggleSplitSlot(slotId) {

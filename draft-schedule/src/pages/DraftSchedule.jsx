@@ -57,11 +57,11 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
     setSetupPopup(false)
   }
 
-  const handleBlockDrop = async (slot, channel, itemId, isSplit, mode = 'compete') => {
+  const handleBlockDrop = async (slot, channel, itemId, isSplit, mode = 'compete', uniqueKey = '') => {
     if (useScheduleStore.getState().isViewerMode) return
 
     const { proposalItems, scheduleBlocks: currentBlocks } = useScheduleStore.getState()
-    const item = proposalItems.find(p => p.itemId === itemId)
+    const item = proposalItems.find(p => uniqueKey ? p.uniqueKey === uniqueKey : p.itemId === itemId)
     if (!item) return
 
     const blockKey = isSplit ? `${slot.slotId}_${channel}` : slot.slotId
@@ -88,7 +88,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
       await saveBlock(blockKey, {
         ...makeCompetitionBlock({ slot, blockKey, channel, weightedMin, items }),
       })
-      await scheduleItem(itemId)
+      await scheduleItem(itemId, item.uniqueKey)
       return
     }
 
@@ -108,11 +108,13 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
       dealTypeConverted,
       newProductType: item.newProductType || '',
       memoCode: item.memoCode || '',
+      scheduleComment: item.scheduleComment || '',
+      requestNote: item.requestNote || '',
       ...(perfKey ? { perfKey } : {}),
       isDefault: false,
       assignedAt: Date.now(),
     })
-    await scheduleItem(itemId)
+    await scheduleItem(itemId, item.uniqueKey)
   }
 
   if (isLoading) return <LoadingScreen />

@@ -3,8 +3,8 @@ import { useState, useEffect, memo } from 'react'
 import ScheduleBlock from './ScheduleBlock'
 import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
 import { splitWeightedMin } from '../../utils/weightedMin'
-import { db, ref, push } from '../../api/firebase'
 import { getCompetitionItems, makeCompetitionBlock } from '../../utils/competition'
+import { genKey } from '../../utils/uniqueKey'
 
 function blockMatches(block, keyword) {
   if (!keyword) return true
@@ -79,7 +79,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
       const sourceChannel = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
       await saveBlock(blockKey, {
         ...makeDefaultBlock(draggedBlock, sourceChannel),
-        uniqueKey: `0_${push(ref(db, 'entityKeys')).key}`,
+        uniqueKey: genKey('0'),
       })
     }
 
@@ -120,7 +120,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
     setDropConfirm(null)
 
     if (pending.kind === 'item') {
-      await onDrop(slot, pending.ch, pending.itemId, isSplit, action)
+      await onDrop(slot, pending.ch, pending.itemId, isSplit, action, pending.uniqueKey)
       return
     }
 
@@ -152,6 +152,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
     ch = stableCh
     const isBlock = e.dataTransfer.getData('isBlock')
     const itemId = e.dataTransfer.getData('itemId')
+    const uniqueKey = e.dataTransfer.getData('uniqueKey')
     const blockKey = e.dataTransfer.getData('blockKey')
     const { newKey } = buildDropContext(ch)
     const { scheduleBlocks, proposalItems } = useScheduleStore.getState()
@@ -186,20 +187,22 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
         })
       }
     } else if (itemId) {
+      const item = proposalItems.find(p => uniqueKey ? p.uniqueKey === uniqueKey : p.itemId === itemId)
+      if (!item) return
       if (targetBlock && !targetBlock.isDefault) {
-        const item = proposalItems.find(p => p.itemId === itemId)
         setDropConfirm({
           kind: 'item',
           variant: 'occupied',
           ch,
-          itemId,
+          itemId: item.itemId,
+          uniqueKey: item.uniqueKey,
           sourceName: item?.pgmCodeName || '-',
           targetName: targetBlock.pgmCodeName || '-',
           slotLabel: `${slot.dateKey} ${slot.timeText}`,
           defaultAction: 'replace',
         })
       } else {
-        onDrop(slot, ch, itemId, isSplit)
+        onDrop(slot, ch, item.itemId, isSplit, 'compete', item.uniqueKey)
       }
     }
   }

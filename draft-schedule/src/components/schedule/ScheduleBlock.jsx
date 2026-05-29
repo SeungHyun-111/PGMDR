@@ -4,8 +4,8 @@ import BlockEditModal from '../modal/BlockEditModal'
 import ConfirmActionModal from '../common/ConfirmActionModal'
 import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
 import { getDealTypeChar } from '../../constants/dealTypes'
-import { db, ref, push } from '../../api/firebase'
 import { competitionItemKey, getCompetitionItems } from '../../utils/competition'
+import { genKey } from '../../utils/uniqueKey'
 
 function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, dimmed = false, readOnly = false }) {
   const [hover, setHover]               = useState(false)
@@ -26,7 +26,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
     const sourceChannel = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
     await saveBlock(blockKey, {
       ...makeDefaultBlock(targetBlock, sourceChannel),
-      uniqueKey: `0_${push(ref(db, 'entityKeys')).key}`,
+      uniqueKey: genKey('0'),
     })
     setFillReturnSlot(false)
   }
@@ -312,7 +312,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
               const sourceChannel = pending.blockKey.endsWith('_CA') ? 'CA' : pending.blockKey.endsWith('_IP') ? 'IP' : 'ALL'
               await saveBlock(pending.blockKey, {
                 ...makeDefaultBlock(block, sourceChannel),
-                uniqueKey: `0_${push(ref(db, 'entityKeys')).key}`,
+                uniqueKey: genKey('0'),
               })
             }
             setFillReturnSlot(false)
@@ -480,6 +480,7 @@ function BlockTooltip({ block, lastPerf, manual, pos }) {
     ['가중분',   block.weightedMin || '-'],
     ['메모코드', block.memoCode || '-'],
     ['편성C',    block.scheduleComment || '-'],
+    ['기타요청', block.requestNote || '-'],
     ...(block.annotation ? [['첨삭', block.annotation]] : []),
   ]
 

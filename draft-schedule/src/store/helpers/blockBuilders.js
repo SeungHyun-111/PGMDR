@@ -1,6 +1,7 @@
 import { normalizeDealType, makePerfKey } from '../../hooks/usePerformanceMap'
 import { splitWeightedMin } from '../../utils/weightedMin'
 import { encodeKey, decodeKey } from '../../utils/firebaseKey'
+import { genKey } from '../../utils/uniqueKey'
 
 function normalizeTime(t) {
   if (!t) return ''
@@ -36,7 +37,7 @@ export function makeDefaultBlock(slot, channel = 'ALL') {
     pgmCodeName: '[편성팀]', orgName: '편성팀', mdTeam: '편성팀',
     memoCode: '[전사블록]',
     perfKey: makePerfKey('', '[편성팀]'),
-    uniqueKey: `0_${blockKey}`,
+    uniqueKey: genKey('0'),
     isDefault: false, assignedAt: Date.now(),
   }
 }
@@ -89,7 +90,7 @@ export function buildPreScheduleBlocks(pgmSlots, preScheduleRows, existingBlocks
       dealTypeChar: pre.dealTypeChar || '',
       mdCategory: pre.mdCategory || '',
       perfKey: pgmCodeName ? makePerfKey(dealTypeConverted, pgmCodeName) : null,
-      uniqueKey: `2_${slot.slotId}`,
+      uniqueKey: genKey('2'),
       isPreSchedule: true, isDefault: false, assignedAt: Date.now(),
     }
   })

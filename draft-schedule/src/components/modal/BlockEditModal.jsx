@@ -34,12 +34,12 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
     newProductType:    block.newProductType    || '',
     timeText:          block.timeText          || '',
     memoCode:          block.memoCode          || '',
+    requestNote:       block.requestNote       || '',
     scheduleComment:   block.scheduleComment   || '',
     annotation:        block.annotation        || '',
   })
 
   const teamNames = weightedMinTargets.map(t => t.teamName).filter(Boolean)
-  const teamTarget = weightedMinTargets.find(t => t.teamName === form.mdTeam) || null
 
   const currentPerfKey = makePerfKey(form.dealTypeConverted || form.dealType, form.pgmCodeName)
   const lastPerf = currentPerfKey ? (perfMap[currentPerfKey] || null) : null
@@ -49,6 +49,7 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
   const [manualSales,  setManualSales]  = useState(manual.expectedSalesPerWeightedMin  ?? '')
   const [manualProfit, setManualProfit] = useState(manual.expectedProfitPerWeightedMin ?? '')
   const [saveState, setSaveState] = useState('idle')
+  const [channelConflict, setChannelConflict] = useState(null)
 
   const setField = (key, val) => setForm(prev => {
     const next = { ...prev, [key]: val }
@@ -56,41 +57,82 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
     return next
   })
 
-  const handleSave = async () => {
+  const buildEntityPatch = () => {
+    const dealTypeConverted = form.dealTypeConverted || form.dealType
+    const perfKey = makePerfKey(dealTypeConverted, form.pgmCodeName)
+    return extractEntityFields({
+      ...form,
+      dealTypeConverted,
+      orgName: form.mdTeam,
+      ...(perfKey ? { perfKey } : {}),
+    })
+  }
+
+  const persistEntityAndManual = async (entityPatch) => {
+    if (block.uniqueKey) {
+      await saveEntityProps(block.uniqueKey, entityPatch)
+    }
+    if (manualKey) {
+      await saveManualInput(manualKey, {
+        expectedSalesPerWeightedMin:  manualSales  === '' ? null : Number(manualSales),
+        expectedProfitPerWeightedMin: manualProfit === '' ? null : Number(manualProfit),
+      })
+    }
+  }
+
+  const commitSave = async (channelMode) => {
     if (saveState !== 'idle') return
     setSaveState('saving')
     try {
-      const dealTypeConverted = form.dealTypeConverted || form.dealType
-      const perfKey = makePerfKey(dealTypeConverted, form.pgmCodeName)
-
-      // 엔티티 필드 → entityProps (uniqueKey 기반 단일 저장소)
-      const entityPatch = extractEntityFields({
-        ...form,
-        dealTypeConverted,
-        orgName: form.mdTeam,
-        ...(perfKey ? { perfKey } : {}),
-      })
-      if (block.uniqueKey) {
-        await saveEntityProps(block.uniqueKey, entityPatch)
-      }
+      const entityPatch = buildEntityPatch()
 
       // 슬롯 필드만 scheduleBlocks에 저장 (채널 변경 포함)
       const origChannel = block.blockKey?.endsWith('_CA') ? 'CA'
         : block.blockKey?.endsWith('_IP') ? 'IP' : 'ALL'
 
       if (form.channel !== origChannel) {
-        await changeBlockChannel(block, form.channel, { ...entityPatch, channel: form.channel, isDefault: false })
+        const result = await changeBlockChannel(
+          block,
+          form.channel,
+          { ...entityPatch, channel: form.channel, isDefault: false },
+          channelMode ? { mode: channelMode } : {}
+        )
+        if (result?.conflict) {
+          setChannelConflict({ ...result, entityPatch })
+          setSaveState('idle')
+          return
+        }
       } else {
         await saveBlock(blockKey, { ...entityPatch, channel: form.channel, isDefault: false })
       }
 
-      if (manualKey) {
-        await saveManualInput(manualKey, {
-          expectedSalesPerWeightedMin:  manualSales  === '' ? null : Number(manualSales),
-          expectedProfitPerWeightedMin: manualProfit === '' ? null : Number(manualProfit),
-        })
-      }
+      await persistEntityAndManual(entityPatch)
 
+      setSaveState('saved')
+      setTimeout(onClose, 700)
+    } catch {
+      setSaveState('idle')
+    }
+  }
+
+  const handleSave = () => commitSave()
+
+  const resolveChannelConflict = async (mode) => {
+    if (!channelConflict || saveState !== 'idle') return
+    setSaveState('saving')
+    try {
+      const result = await changeBlockChannel(
+        block,
+        form.channel,
+        { ...channelConflict.entityPatch, channel: form.channel, isDefault: false },
+        { mode }
+      )
+      if (result?.conflict) {
+        setSaveState('idle')
+        return
+      }
+      await persistEntityAndManual(channelConflict.entityPatch)
+      setChannelConflict(null)
       setSaveState('saved')
       setTimeout(onClose, 700)
     } catch {
@@ -171,6 +213,10 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
           <textarea value={form.scheduleComment} onChange={e => setField('scheduleComment', e.target.value)} rows={2}
             placeholder="# 포함 시 블록에 표시" style={{ ...inp, resize: 'vertical' }} />
         </Field>
+        <Field label="기타요청사항">
+          <textarea value={form.requestNote} onChange={e => setField('requestNote', e.target.value)} rows={2}
+            style={{ ...inp, resize: 'vertical' }} />
+        </Field>
         <Field label="첨삭">
           <textarea value={form.annotation} onChange={e => setField('annotation', e.target.value)} rows={2}
             style={{ ...inp, resize: 'vertical' }} />
@@ -233,6 +279,46 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
           </button>
         </div>
       </div>
+      {channelConflict && (
+        <div
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.48)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          onClick={() => setChannelConflict(null)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{ width: 420, background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 10, padding: '20px 22px', boxShadow: '0 16px 48px rgba(0,0,0,.5)' }}
+          >
+            <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text)', marginBottom: 8 }}>채널 위치 충돌</div>
+            <div style={{ fontSize: 12, color: 'var(--text2)', lineHeight: 1.55, marginBottom: 14 }}>
+              <strong style={{ color: 'var(--text)' }}>{channelConflict.sourceName}</strong> 상품을 {channelConflict.fromChannel}에서 {channelConflict.toChannel}로 이동하려고 합니다.
+              <br />
+              {channelConflict.kind === 'merge' ? '합쳐질 반대 채널' : '이동할 채널'}에는 이미 <strong style={{ color: 'var(--text)' }}>{channelConflict.targetName}</strong> 상품이 있습니다.
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <button onClick={() => resolveChannelConflict('sidebar')} disabled={saveState !== 'idle'}
+                style={{ padding: '9px 12px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: saveState === 'idle' ? 'pointer' : 'default', textAlign: 'left' }}>
+                기존 상품 사이드바로 보내고 이동
+              </button>
+              <button onClick={() => resolveChannelConflict('compete')} disabled={saveState !== 'idle'}
+                style={{ padding: '9px 12px', background: 'var(--yellow)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: saveState === 'idle' ? 'pointer' : 'default', textAlign: 'left' }}>
+                두 상품을 경쟁으로 묶기
+              </button>
+              {channelConflict.canSwap && (
+                <button onClick={() => resolveChannelConflict('swap')} disabled={saveState !== 'idle'}
+                  style={{ padding: '9px 12px', background: 'var(--bg4)', border: '1px solid var(--border2)', color: 'var(--text)', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: saveState === 'idle' ? 'pointer' : 'default', textAlign: 'left' }}>
+                  두 상품 위치 맞교환
+                </button>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+              <button onClick={() => setChannelConflict(null)} disabled={saveState !== 'idle'}
+                style={{ flex: 1, padding: '8px 0', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: saveState === 'idle' ? 'pointer' : 'default' }}>
+                취소
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

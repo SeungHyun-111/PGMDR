@@ -4,9 +4,9 @@ import ProductCard from './ProductCard'
 import ProductFilters from './ProductFilters'
 import SidebarExpanded from './SidebarExpanded'
 import ConfirmActionModal from '../common/ConfirmActionModal'
-import { db, ref, push } from '../../api/firebase'
 import { DEAL_TYPES } from '../../constants/dealTypes'
 import { CATEGORIES } from '../../constants/categories'
+import { genKey } from '../../utils/uniqueKey'
 
 const NEW_PRODUCT_TYPES = ['기존', '신상품', '재녹화', '재편집']
 const inp = { background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 4, fontSize: 11, width: '100%', boxSizing: 'border-box' }
@@ -21,6 +21,8 @@ const ADD_FIELDS = [
   { key: 'preferredTime',         label: '희망시간' },
   { key: 'availableWeightedMin1', label: '가용가중분' },
   { key: 'remainingSchedule',     label: '잔여편성' },
+  { key: 'memoCode',              label: '메모코드' },
+  { key: 'scheduleComment',       label: '편성C' },
   { key: 'requestNote',           label: '기타요청' },
 ]
 
@@ -150,7 +152,7 @@ export default function Sidebar({ isOpen, onToggle }) {
       const sourceChannel = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
       await saveBlock(blockKey, {
         ...makeDefaultBlock(block, sourceChannel),
-        uniqueKey: `0_${push(ref(db, 'entityKeys')).key}`,
+        uniqueKey: genKey('0'),
       })
     }
     setFillReturnSlot(false)
@@ -246,7 +248,7 @@ export default function Sidebar({ isOpen, onToggle }) {
           ) : (
             <>
               {visibleItems.slice(0, visibleCount).map((item) => (
-                <div key={item.itemId} style={highlightId === item.itemId ? { animation: 'cardPop .9s ease-out', borderRadius: 6 } : undefined}>
+                <div key={item.uniqueKey || item.itemId} style={highlightId === item.itemId ? { animation: 'cardPop .9s ease-out', borderRadius: 6 } : undefined}>
                   {blockDragOver?.insertBeforeId === item.itemId && (
                     <div style={{ height: 2, borderRadius: 1, background: 'var(--accent)', margin: '1px 0 3px' }} />
                   )}
@@ -276,11 +278,11 @@ export default function Sidebar({ isOpen, onToggle }) {
             <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 16 }}>GAS 새로고침 시 원본으로 초기화됩니다.</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {ADD_FIELDS.map(f => (
-                <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 3, gridColumn: f.key === 'requestNote' ? '1 / -1' : undefined }}>
+                <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 3, gridColumn: ['requestNote', 'scheduleComment'].includes(f.key) ? '1 / -1' : undefined }}>
                   <label style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>
                     {f.label}{f.required && <span style={{ color: 'var(--red)' }}> *</span>}
                   </label>
-                  {f.key === 'requestNote' ? (
+                  {['requestNote', 'scheduleComment'].includes(f.key) ? (
                     <textarea value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))}
                       rows={2} style={{ ...inp, resize: 'vertical' }} />
                   ) : f.options ? (

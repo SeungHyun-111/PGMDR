@@ -4,10 +4,11 @@ import { subscribeRealtimePaths, unsubscribeAll } from '../helpers/firebaseSubsc
 import { normalizeBlocksTeamNames } from '../../utils/teamName'
 import { genKey } from '../../utils/uniqueKey'
 import { extractEntityFields, applyEntityProps } from '../../utils/mergeEntity'
+import { getCompetitionItems } from '../../utils/competition'
 
-const PGM_TEAM_ITEMS = Array.from({ length: 10 }, (_, i) => ({
+const createPgmTeamItems = () => Array.from({ length: 10 }, (_, i) => ({
   itemId: `pgmteam_default_${i + 1}`,
-  uniqueKey: `0_pgmteam_${i + 1}`,
+  uniqueKey: genKey('0'),
   pgmCodeName: '[편성팀]',
   mdTeam: '편성팀',
   orgName: '편성팀',
@@ -33,7 +34,7 @@ export function createSessionActions(setState, getState) {
           const now = Date.now()
           const proposalItems = [
             ...(gasData.proposalItems || []).map(item => ({ ...item, uniqueKey: genKey('1') })),
-            ...PGM_TEAM_ITEMS,
+            ...createPgmTeamItems(),
           ]
           await set(ref(db, `sessions/${weekKey}/gasData`), {
             ...gasData,
@@ -69,7 +70,7 @@ export function createSessionActions(setState, getState) {
       const weekKey = `${startDate}_${poolType}`
       const [
         metaSnap, pgmSnap, perfMapSnap, preSnap, weightedSnap, targetSnap,
-        blocksSnap, splitSnap, customSlotsSnap, starredSnap, scheduledSnap, inputsSnap, entitySnap, updatedSnap
+        blocksSnap, splitSnap, customSlotsSnap, starredSnap, scheduledSnap, scheduledUniqueSnap, inputsSnap, entitySnap, updatedSnap
       ] = await Promise.all([
         get(ref(db, `sessions/${weekKey}/gasData/meta`)),
         get(ref(db, `sessions/${weekKey}/gasData/pgmSlots`)),
@@ -82,6 +83,7 @@ export function createSessionActions(setState, getState) {
         get(ref(db, `sessions/${weekKey}/customSlots`)),
         get(ref(db, `sessions/${weekKey}/starred`)),
         get(ref(db, `sessions/${weekKey}/scheduledItemIds`)),
+        get(ref(db, `sessions/${weekKey}/scheduledUniqueKeys`)),
         get(ref(db, `sessions/${weekKey}/manualInputs`)),
         get(ref(db, `sessions/${weekKey}/entityProps`)),
         get(ref(db, `sessions/${weekKey}/lastUpdated`)),
@@ -98,6 +100,21 @@ export function createSessionActions(setState, getState) {
       const weightedMinTargets = weightedSnap.exists() ? Object.values(weightedSnap.val()) : []
 
       const normalizedBlocks = normalizeBlocksTeamNames(rawBlocks, weightedMinTargets)
+      const storedScheduledUniqueKeys = scheduledUniqueSnap.exists() ? scheduledUniqueSnap.val() : {}
+      const scheduledUniqueKeys = { ...storedScheduledUniqueKeys }
+      Object.values(rawBlocks).forEach(block => {
+        if (!block || block.isDefault) return
+        if (block.isCompeting) {
+          getCompetitionItems(block).forEach(item => {
+            if (item?.uniqueKey) scheduledUniqueKeys[item.uniqueKey] = true
+          })
+          return
+        }
+        if (block.uniqueKey) scheduledUniqueKeys[block.uniqueKey] = true
+      })
+      if (Object.keys(scheduledUniqueKeys).length > Object.keys(storedScheduledUniqueKeys).length) {
+        await set(ref(db, `sessions/${weekKey}/scheduledUniqueKeys`), scheduledUniqueKeys)
+      }
 
       setState({
         startDate, endDate: meta.endDate || '', poolType,
@@ -113,6 +130,7 @@ export function createSessionActions(setState, getState) {
         customSlots,
         starred:            starredSnap.exists()  ? starredSnap.val()               : {},
         scheduledItemIds:   scheduledSnap.exists()? scheduledSnap.val()             : {},
+        scheduledUniqueKeys,
         manualInputs:       inputsSnap.exists()   ? inputsSnap.val() : {},
         lastUpdated:        updatedSnap.exists()  ? updatedSnap.val()               : null,
         isLoaded: true, isLoading: false, proposalLoaded: false,
@@ -135,8 +153,8 @@ export function createSessionActions(setState, getState) {
         weightedMinTargets: [], targetMetrics: null,
         scheduleBlocks: {}, _rawBlocks: {}, entityProps: {},
         splitSlots: {}, customSlots: {}, starred: {},
-        scheduledItemIds: {}, manualInputs: {}, lastUpdated: null,
-        proposalItems: [], proposalLoaded: false,
+        scheduledItemIds: {}, scheduledUniqueKeys: {}, manualInputs: {}, lastUpdated: null,
+        allProposalItems: [], proposalItems: [], proposalLoaded: false,
       })
       const weekKey = `${startDate}_${poolType}`
       await set(ref(db, `sessions/${weekKey}`), null)

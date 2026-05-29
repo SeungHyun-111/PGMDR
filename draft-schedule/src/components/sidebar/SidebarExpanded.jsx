@@ -1,11 +1,11 @@
-import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react'
+import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
 import { buildDragGhost } from './ProductCard'
 import ConfirmActionModal from '../common/ConfirmActionModal'
 import { getLastPerf } from '../../utils/entityKey'
-import { db, ref, push } from '../../api/firebase'
 import { DEAL_TYPES } from '../../constants/dealTypes'
 import { CATEGORIES } from '../../constants/categories'
+import { genKey } from '../../utils/uniqueKey'
 
 const NEW_PRODUCT_TYPES = ['기존', '신상품', '재녹화', '재편집']
 
@@ -23,13 +23,20 @@ const COLS = [
   { key: 'preferredTime',         label: '희망시간',     w: 68 },
   { key: 'availableWeightedMin1', label: '가용가중분',   w: 68 },
   { key: 'remainingSchedule',     label: '잔여편성',     w: 56 },
+  { key: 'memoCode',              label: '메모코드',     w: 90 },
+  { key: 'scheduleComment',       label: '편성C',        w: 120 },
   { key: 'requestNote',           label: '기타요청',     w: 220 },
 ]
 
 const EDITABLE = new Set([
   'pgmCodeName', 'mdTeam', 'mdCategory', 'dealTypeConverted', 'newProductType',
   'mainPrice', 'fixedFee', 'preferredTime', 'availableWeightedMin1',
-  'remainingSchedule', 'requestNote',
+  'remainingSchedule', 'memoCode', 'scheduleComment', 'requestNote',
+])
+
+const ENTITY_EDIT_FIELDS = new Set([
+  'pgmCodeName', 'mdTeam', 'mdCategory', 'dealTypeConverted', 'newProductType',
+  'memoCode', 'scheduleComment', 'requestNote',
 ])
 
 const ADD_FIELDS = [
@@ -43,13 +50,16 @@ const ADD_FIELDS = [
   { key: 'preferredTime',         label: '희망시간' },
   { key: 'availableWeightedMin1', label: '가용가중분' },
   { key: 'remainingSchedule',     label: '잔여편성' },
+  { key: 'memoCode',              label: '메모코드' },
+  { key: 'scheduleComment',       label: '편성C' },
   { key: 'requestNote',           label: '기타요청' },
 ]
 
 const inp = { background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 4, fontSize: 11, width: '100%', boxSizing: 'border-box' }
+const MIN_COL_WIDTH = 44
 
 export default function SidebarExpanded({ items, onClose }) {
-  const { perfMap, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar, weightedMinTargets, entityProps, saveBlock } = useScheduleStore()
+  const { perfMap, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar, weightedMinTargets, entityProps, saveBlock, saveEntityProps } = useScheduleStore()
   const [keyword, setKeyword]       = useState('')
   const [teamFilter, setTeamFilter] = useState('전체')
   const [starOnly, setStarOnly]     = useState(false)
@@ -68,6 +78,9 @@ export default function SidebarExpanded({ items, onClose }) {
   const [fillReturnSlot, setFillReturnSlot] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null) // { itemId, name }
   const [ctxMenu, setCtxMenu]             = useState(null) // { x, y, itemId }
+  const [colWidths, setColWidths] = useState(() =>
+    Object.fromEntries(COLS.map(col => [col.key, col.w]))
+  )
 
   useEffect(() => {
     document.documentElement.style.setProperty('--panel-h', panelHeight + 'px')
@@ -83,6 +96,27 @@ export default function SidebarExpanded({ items, onClose }) {
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
   }, [panelHeight])
+
+  const startColumnResize = useCallback((e, key) => {
+    e.preventDefault()
+    e.stopPropagation()
+    const startX = e.clientX
+    const startW = colWidths[key] || COLS.find(col => col.key === key)?.w || MIN_COL_WIDTH
+    const onMove = mv => {
+      const nextW = Math.max(MIN_COL_WIDTH, startW + mv.clientX - startX)
+      setColWidths(prev => ({ ...prev, [key]: nextW }))
+    }
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [colWidths])
 
   const teams = useMemo(() => {
     const set = new Set(items.map(i => i.mdTeam || '').filter(Boolean))
@@ -122,7 +156,7 @@ export default function SidebarExpanded({ items, onClose }) {
         : String(va).localeCompare(String(vb), 'ko')
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [items, keyword, teamFilter, sortKey, sortDir, perfMap])
+  }, [items, keyword, teamFilter, starOnly, starred, sortKey, sortDir, perfMap])
 
   const visibleRows = useMemo(() => {
     if (!pinnedReturn) return displayed
@@ -139,6 +173,11 @@ export default function SidebarExpanded({ items, onClose }) {
     }
     return list
   }, [displayed, pinnedReturn])
+
+  const tableWidth = useMemo(
+    () => 26 + COLS.reduce((sum, col) => sum + (colWidths[col.key] || col.w), 0),
+    [colWidths]
+  )
 
   const handleTableDragOver = (e) => {
     if (!e.dataTransfer.types.includes('blockkey')) return
@@ -167,7 +206,7 @@ export default function SidebarExpanded({ items, onClose }) {
       const sourceChannel = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
       await saveBlock(blockKey, {
         ...makeDefaultBlock(block, sourceChannel),
-        uniqueKey: `0_${push(ref(db, 'entityKeys')).key}`,
+        uniqueKey: genKey('0'),
       })
     }
     setFillReturnSlot(false)
@@ -203,17 +242,23 @@ export default function SidebarExpanded({ items, onClose }) {
 
   const startEdit = (item, col) => {
     if (col.perf || !EDITABLE.has(col.key)) return
-    setEditing({ itemId: item.itemId, colKey: col.key, fbIdx: item._fbIdx })
+    setEditing({ itemId: item.itemId, uniqueKey: item.uniqueKey, colKey: col.key, fbIdx: item._fbIdx })
     setEditValue(String(item[col.key] ?? ''))
   }
 
   const commitEdit = async item => {
     if (!editing) return
-    const { colKey, fbIdx } = editing
+    const { colKey, fbIdx, uniqueKey } = editing
     const newVal = editValue.trim()
     const oldVal = String(item[colKey] ?? '')
     if (newVal !== oldVal) {
-      await updateProposalItem(item.itemId, fbIdx, { [colKey]: newVal })
+      await updateProposalItem(item.itemId, fbIdx, { [colKey]: newVal }, uniqueKey)
+      if (item.uniqueKey && ENTITY_EDIT_FIELDS.has(colKey)) {
+        const patch = { [colKey]: newVal }
+        if (colKey === 'dealTypeConverted') patch.dealType = newVal
+        if (colKey === 'mdTeam') patch.orgName = newVal
+        await saveEntityProps(item.uniqueKey, patch)
+      }
     }
     setEditing(null)
   }
@@ -240,6 +285,7 @@ export default function SidebarExpanded({ items, onClose }) {
     whiteSpace: 'nowrap',
     userSelect: 'none',
     letterSpacing: '.06em',
+    boxSizing: 'border-box',
   }
 
   return (
@@ -306,22 +352,91 @@ export default function SidebarExpanded({ items, onClose }) {
 
       {/* 테이블 */}
       <div
-        style={{ flex: 1, overflow: 'auto', background: blockDragOver ? 'rgba(74,108,247,.04)' : 'var(--bg)', transition: 'background .1s' }}
+        className="sidebar-expanded-table-scroll"
+        style={{ flex: 1, overflow: 'auto', overflowX: 'auto', background: blockDragOver ? 'rgba(74,108,247,.04)' : 'var(--bg)', transition: 'background .1s' }}
         onDragOver={handleTableDragOver}
         onDragLeave={handleTableDragLeave}
         onDrop={handleTableDrop}
       >
-        <style>{`@keyframes rowPop{0%{outline:2px solid var(--accent)}100%{outline:0}}`}</style>
-        <table style={{ borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+        <style>{`
+          @keyframes rowPop{0%{outline:2px solid var(--accent)}100%{outline:0}}
+          .sidebar-expanded-table-scroll {
+            scrollbar-width: auto;
+            scrollbar-color: var(--border2) var(--bg3);
+          }
+          .sidebar-expanded-table-scroll::-webkit-scrollbar {
+            width: 16px;
+            height: 18px;
+          }
+          .sidebar-expanded-table-scroll::-webkit-scrollbar-track {
+            background: var(--bg3);
+            border-top: 1px solid var(--border);
+          }
+          .sidebar-expanded-table-scroll::-webkit-scrollbar-thumb {
+            background: var(--border2);
+            border: 4px solid var(--bg3);
+            border-radius: 999px;
+          }
+          .sidebar-expanded-table-scroll::-webkit-scrollbar-thumb:hover {
+            background: var(--text3);
+          }
+          .sidebar-expanded-table-scroll::-webkit-scrollbar-button:horizontal {
+            width: 22px;
+            background-color: var(--bg4);
+            border-top: 1px solid var(--border);
+            background-repeat: no-repeat;
+            background-position: center;
+            background-size: 10px 10px;
+          }
+          .sidebar-expanded-table-scroll::-webkit-scrollbar-button:horizontal:decrement {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M6.8 1.5 3.2 5l3.6 3.5' fill='none' stroke='%238b90ab' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+          }
+          .sidebar-expanded-table-scroll::-webkit-scrollbar-button:horizontal:increment {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M3.2 1.5 6.8 5 3.2 8.5' fill='none' stroke='%238b90ab' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+          }
+          .sidebar-expanded-table-scroll::-webkit-scrollbar-button:vertical {
+            height: 18px;
+            background: var(--bg4);
+          }
+        `}</style>
+        <table style={{ borderCollapse: 'collapse', fontSize: 11, tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
           <thead>
             <tr>
               <th style={{ ...th, width: 26, textAlign: 'center', fontSize: 12, color: 'var(--yellow)', cursor: 'default' }}>★</th>
               {COLS.map(col => {
                 const active = sortKey === col.key
+                const width = colWidths[col.key] || col.w
                 return (
                   <th key={col.key}
                     onClick={() => handleSort(col.key)}
-                    style={{ ...th, width: col.w, cursor: 'pointer', color: active ? 'var(--accent)' : 'var(--text2)' }}>
+                    style={{ ...th, width, minWidth: width, cursor: 'pointer', color: active ? 'var(--accent)' : 'var(--text2)' }}>
+                    <span
+                      onMouseDown={e => startColumnResize(e, col.key)}
+                      onClick={e => e.stopPropagation()}
+                      title="열 너비 조정"
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        right: -7,
+                        width: 14,
+                        height: '100%',
+                        cursor: 'col-resize',
+                        zIndex: 2,
+                        display: 'flex',
+                        alignItems: 'stretch',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <span
+                        style={{
+                          width: 1,
+                          height: '100%',
+                          background: active ? 'var(--accent)' : 'var(--border2)',
+                          opacity: 0.95,
+                          pointerEvents: 'none',
+                        }}
+                      />
+                    </span>
                     {col.label}{active ? (sortDir === 'asc' ? ' ↑' : ' ↓') : ''}
                   </th>
                 )
@@ -332,13 +447,12 @@ export default function SidebarExpanded({ items, onClose }) {
             {visibleRows.map((item, rowIdx) => {
               const lastPerf  = getLastPerf(item, entityProps, perfMap)
               const isStarred = !!starred[item.itemId]
-              const isNew     = !!item.newProductType
               const stripeBg  = rowIdx % 2 === 0 ? 'var(--bg)' : 'var(--bg2)'
               const baseBg    = isStarred ? 'rgba(217,119,6,.10)' : stripeBg
               const isHighlighted = highlightId === item.itemId
 
               return (
-                <React.Fragment key={item.itemId}>
+                <React.Fragment key={item.uniqueKey || item.itemId}>
                   {blockDragOver?.insertBeforeId === item.itemId && (
                     <tr style={{ pointerEvents: 'none' }}>
                       <td colSpan={COLS.length + 1} style={{ padding: 0, height: 2, background: 'var(--accent)' }} />
@@ -347,9 +461,14 @@ export default function SidebarExpanded({ items, onClose }) {
                 <tr
                   data-item-id={item.itemId}
                   draggable
-                  onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, itemId: item.itemId }) }}
+                  onContextMenu={e => { e.preventDefault(); setCtxMenu({ x: e.clientX, y: e.clientY, itemId: item.itemId, uniqueKey: item.uniqueKey }) }}
                   onDragStart={e => {
+                    if (e.target.closest('input,textarea,select')) {
+                      e.preventDefault()
+                      return
+                    }
                     e.dataTransfer.setData('itemId', item.itemId)
+                    if (item.uniqueKey) e.dataTransfer.setData('uniqueKey', item.uniqueKey)
                     e.dataTransfer.effectAllowed = 'move'
                     const ghost = buildDragGhost(item)
                     document.body.appendChild(ghost)
@@ -376,8 +495,9 @@ export default function SidebarExpanded({ items, onClose }) {
                   </td>
 
                   {COLS.map(col => {
-                    const isEditing = editing?.itemId === item.itemId && editing?.colKey === col.key
+                    const isEditing = (editing?.uniqueKey ? editing.uniqueKey === item.uniqueKey : editing?.itemId === item.itemId) && editing?.colKey === col.key
                     const editable  = !col.perf && EDITABLE.has(col.key)
+                    const width = colWidths[col.key] || col.w
 
                     let val = '-'
                     let color = 'var(--text)'
@@ -410,25 +530,47 @@ export default function SidebarExpanded({ items, onClose }) {
                           whiteSpace: 'nowrap',
                           overflow: 'hidden',
                           textOverflow: isEditing ? 'unset' : 'ellipsis',
-                          maxWidth: col.w,
+                          width,
+                          minWidth: width,
+                          maxWidth: width,
                           lineHeight: 1.4,
                           verticalAlign: 'middle',
                           cursor: editable ? 'text' : 'default',
                           background: isEditing ? 'var(--bg4)' : undefined,
                         }}>
                         {isEditing ? (
-                          <input
-                            autoFocus
-                            value={editValue}
-                            onChange={e => setEditValue(e.target.value)}
-                            onBlur={() => commitEdit(item)}
-                            onKeyDown={e => {
-                              if (e.key === 'Enter') { e.preventDefault(); commitEdit(item) }
-                              if (e.key === 'Escape') setEditing(null)
-                            }}
-                            onClick={e => e.stopPropagation()}
-                            style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 11, outline: 'none', padding: 0 }}
-                          />
+                          ['requestNote', 'scheduleComment'].includes(col.key) ? (
+                            <textarea
+                              autoFocus
+                              value={editValue}
+                              onChange={e => setEditValue(e.target.value)}
+                              onBlur={() => commitEdit(item)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitEdit(item) }
+                                if (e.key === 'Escape') setEditing(null)
+                              }}
+                              onClick={e => e.stopPropagation()}
+                              onMouseDown={e => e.stopPropagation()}
+                              onDragStart={e => e.stopPropagation()}
+                              rows={2}
+                              style={{ width: '100%', minWidth: 150, background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 11, outline: 'none', padding: 0, resize: 'vertical' }}
+                            />
+                          ) : (
+                            <input
+                              autoFocus
+                              value={editValue}
+                              onChange={e => setEditValue(e.target.value)}
+                              onBlur={() => commitEdit(item)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') { e.preventDefault(); commitEdit(item) }
+                                if (e.key === 'Escape') setEditing(null)
+                              }}
+                              onClick={e => e.stopPropagation()}
+                              onMouseDown={e => e.stopPropagation()}
+                              onDragStart={e => e.stopPropagation()}
+                              style={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 11, outline: 'none', padding: 0 }}
+                            />
+                          )
                         ) : val}
                       </td>
                     )
@@ -450,7 +592,7 @@ export default function SidebarExpanded({ items, onClose }) {
       {ctxMenu && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9998 }} onClick={() => setCtxMenu(null)} onContextMenu={e => e.preventDefault()}>
           <div style={{ position: 'fixed', top: ctxMenu.y, left: ctxMenu.x, background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 6, boxShadow: '0 4px 16px rgba(0,0,0,.35)', zIndex: 9999, overflow: 'hidden', minWidth: 120 }}>
-            <button onClick={() => { duplicateProposalItem(ctxMenu.itemId); setCtxMenu(null) }}
+            <button onClick={() => { duplicateProposalItem(ctxMenu.itemId, ctxMenu.uniqueKey); setCtxMenu(null) }}
               style={{ display: 'block', width: '100%', padding: '9px 14px', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 12, cursor: 'pointer' }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--bg4)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
@@ -458,8 +600,8 @@ export default function SidebarExpanded({ items, onClose }) {
             </button>
             <div style={{ height: 1, background: 'var(--border)' }} />
             <button onClick={() => {
-              const item = visibleRows.find(row => row.itemId === ctxMenu.itemId)
-              setDeleteConfirm({ itemId: ctxMenu.itemId, name: item?.pgmCodeName || '-' })
+              const item = visibleRows.find(row => ctxMenu.uniqueKey ? row.uniqueKey === ctxMenu.uniqueKey : row.itemId === ctxMenu.itemId)
+              setDeleteConfirm({ itemId: ctxMenu.itemId, uniqueKey: ctxMenu.uniqueKey, name: item?.pgmCodeName || '-' })
               setCtxMenu(null)
             }}
               style={{ display: 'block', width: '100%', padding: '9px 14px', textAlign: 'left', background: 'transparent', border: 'none', color: 'var(--red)', fontSize: 12, cursor: 'pointer' }}
@@ -480,11 +622,11 @@ export default function SidebarExpanded({ items, onClose }) {
             <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 16 }}>GAS 새로고침 시 원본으로 초기화됩니다.</div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               {ADD_FIELDS.map(f => (
-                <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 3, gridColumn: f.key === 'requestNote' ? '1 / -1' : undefined }}>
+                <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 3, gridColumn: ['requestNote', 'scheduleComment'].includes(f.key) ? '1 / -1' : undefined }}>
                   <label style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>
                     {f.label}{f.required && <span style={{ color: 'var(--red)' }}> *</span>}
                   </label>
-                  {f.key === 'requestNote' ? (
+                  {['requestNote', 'scheduleComment'].includes(f.key) ? (
                     <textarea value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))}
                       rows={2} style={{ ...inp, resize: 'vertical' }} />
                   ) : f.options ? (
@@ -539,7 +681,7 @@ export default function SidebarExpanded({ items, onClose }) {
           onConfirm={() => {
             const pending = deleteConfirm
             setDeleteConfirm(null)
-            deleteProposalItem(pending.itemId)
+            deleteProposalItem(pending.itemId, pending.uniqueKey)
           }}
         />
       )}

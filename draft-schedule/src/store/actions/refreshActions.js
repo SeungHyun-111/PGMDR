@@ -3,6 +3,28 @@ import { db, ref, set, update } from '../../api/firebase'
 import { buildPreScheduleBlocks, buildDefaultBlocks, buildSlot, buildProposalItem, encodePerfMap, buildPerfMapFromGas } from '../helpers/blockBuilders'
 import { genKey } from '../../utils/uniqueKey'
 import { normalizeItemsTeamNames } from '../../utils/teamName'
+import { filterUnscheduledItems } from '../../utils/proposalVisibility'
+
+function withStableUniqueKeys(items, previousItems = []) {
+  const itemIdCounts = previousItems.reduce((counts, item) => {
+    if (!item?.itemId) return counts
+    counts[item.itemId] = (counts[item.itemId] || 0) + 1
+    return counts
+  }, {})
+  const singlePreviousByItemId = new Map(
+    previousItems
+      .filter(item => item?.itemId && itemIdCounts[item.itemId] === 1)
+      .map(item => [item.itemId, item])
+  )
+
+  return items.map((item, i) => ({
+    ...item,
+    uniqueKey: item.uniqueKey
+      || previousItems[i]?.uniqueKey
+      || singlePreviousByItemId.get(item.itemId)?.uniqueKey
+      || genKey('1'),
+  }))
+}
 
 export function createRefreshActions(setState, getState) {
   return {
@@ -40,11 +62,17 @@ export function createRefreshActions(setState, getState) {
         const data = await fetchRefreshProposals(poolType)
         const weekKey = `${startDate}_${poolType}`
         const now = Date.now()
-        await update(ref(db, `sessions/${weekKey}/gasData`), { proposalItems: data.proposalItems })
+        const { weightedMinTargets, allProposalItems, scheduledItemIds, scheduledUniqueKeys } = getState()
+        const proposalItemsRaw = withStableUniqueKeys(data.proposalItems || [], allProposalItems)
+        await update(ref(db, `sessions/${weekKey}/gasData`), { proposalItems: proposalItemsRaw })
         await update(ref(db, `sessions/${weekKey}/lastUpdated`), { proposal: now })
-        const { weightedMinTargets } = getState()
+        const allItems = normalizeItemsTeamNames(
+          proposalItemsRaw.map((item, i) => buildProposalItem({ ...item, _fbIdx: i })),
+          weightedMinTargets
+        )
         setState(s => ({
-          proposalItems:      normalizeItemsTeamNames(data.proposalItems.map((item, i) => buildProposalItem({ ...item, _fbIdx: i, uniqueKey: genKey('1') })), weightedMinTargets),
+          allProposalItems:   allItems,
+          proposalItems:      filterUnscheduledItems(allItems, scheduledItemIds, scheduledUniqueKeys),
           proposalLoaded:     true,
           isLoadingProposals: false,
           lastUpdated: { ...s.lastUpdated, proposal: now },
@@ -65,7 +93,7 @@ export function createRefreshActions(setState, getState) {
 
     // ── GAS 전체 재동기화 ─────────────────────────────────
     async refreshAllGasData() {
-      const { startDate, poolType, scheduleBlocks } = getState()
+      const { startDate, poolType, scheduleBlocks, allProposalItems, scheduledItemIds, scheduledUniqueKeys } = getState()
       setState({ isLoadingGasAll: true })
       try {
         const { fetchInitData } = await import('../../api/gas')
@@ -74,8 +102,10 @@ export function createRefreshActions(setState, getState) {
         const now = Date.now()
 
         // gasData 전체를 정규화하여 Firebase에 덮어씀
+        const proposalItemsRaw = withStableUniqueKeys(gasData.proposalItems || [], allProposalItems)
         await set(ref(db, `sessions/${weekKey}/gasData`), {
           ...gasData,
+          proposalItems: proposalItemsRaw,
           perfMap: encodePerfMap(gasData.perfMap || {}),
         })
         await set(ref(db, `sessions/${weekKey}/lastUpdated`), {
@@ -92,7 +122,7 @@ export function createRefreshActions(setState, getState) {
         await update(ref(db, `sessions/${weekKey}/scheduleBlocks`), { ...defBlocks, ...preBlocks })
 
         const proposalItems = normalizeItemsTeamNames(
-          (gasData.proposalItems || []).map((item, i) => buildProposalItem({ ...item, _fbIdx: i, uniqueKey: genKey('1') })),
+          proposalItemsRaw.map((item, i) => buildProposalItem({ ...item, _fbIdx: i })),
           getState().weightedMinTargets
         )
 
@@ -101,7 +131,8 @@ export function createRefreshActions(setState, getState) {
           pgmSlots:        pgmSlotsNew,
           perfMap,
           preScheduleRows: gasData.preScheduleRows || [],
-          proposalItems,
+          allProposalItems: proposalItems,
+          proposalItems: filterUnscheduledItems(proposalItems, scheduledItemIds, scheduledUniqueKeys),
           proposalLoaded:  true,
           isLoadingGasAll: false,
           lastUpdated: { ...s.lastUpdated, pgm: now, proposal: now, performance: now, preSchedule: now },
