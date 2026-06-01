@@ -138,10 +138,15 @@ export function createSessionActions(setState, getState) {
         entityProps
       )
 
+      const versionMeta = versionMetaSnap.exists() ? versionMetaSnap.val() : {}
+      const shouldUseViewerMode = shouldDefaultToViewerMode(resolvedVersionId, versionMeta)
+      if (shouldUseViewerMode) localStorage.setItem('isViewerMode', 'true')
+
       setState({
         startDate, endDate: meta.endDate || '', poolType,
         currentVersionId: resolvedVersionId,
-        versionMeta: versionMetaSnap.exists() ? versionMetaSnap.val() : {},
+        versionMeta,
+        ...(shouldUseViewerMode ? { isViewerMode: true } : {}),
         pgmSlots,
         perfMap,
         preScheduleRows:    preSnap.exists()      ? preSnap.val()      : [],
@@ -202,6 +207,7 @@ export function createSessionActions(setState, getState) {
         })
         setState(s => ({
           isPublishingSales: false,
+          isViewerMode: true,
           versionMeta: {
             ...(s.versionMeta || {}),
             [VERSION_SALES]: {
@@ -211,6 +217,7 @@ export function createSessionActions(setState, getState) {
             },
           },
         }))
+        localStorage.setItem('isViewerMode', 'true')
       } catch (e) {
         setState({ error: e.message, isPublishingSales: false })
       }
@@ -245,6 +252,10 @@ export function createSessionActions(setState, getState) {
       ])
     },
   }
+}
+
+function shouldDefaultToViewerMode(versionId, versionMeta) {
+  return versionId === VERSION_DRAFT && !!versionMeta?.[VERSION_SALES]?.publishedAt
 }
 
 async function writePublishLogs(weekKey, { timestamp, userName, before, after }) {
