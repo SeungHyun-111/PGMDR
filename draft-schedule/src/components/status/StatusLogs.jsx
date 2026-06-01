@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
 import { db, ref, get } from '../../api/firebase'
+import { VERSION_DRAFT } from '../../utils/sessionVersion'
 
 const PAGE_SIZE = 300
 const MIN_COL_WIDTH = 52
@@ -172,7 +173,12 @@ function LogTable({ title, rows, cols, emptyText }) {
   )
 }
 
-export default function StatusLogs({ logs, startDate, poolType }) {
+const isLogForVersion = (log, versionId) => {
+  const logVersionId = log?.versionId || VERSION_DRAFT
+  return logVersionId === (versionId || VERSION_DRAFT)
+}
+
+export default function StatusLogs({ logs, startDate, poolType, versionId }) {
   const [limit, setLimit] = useState(PAGE_SIZE)
   const [keyword, setKeyword] = useState('')
   const [activeKeyword, setActiveKeyword] = useState('')
@@ -204,7 +210,7 @@ export default function StatusLogs({ logs, startDate, poolType }) {
       const snap = await get(ref(db, `sessions/${startDate}_${poolType}/logs`))
       const val = snap.val() || {}
       const rows = Object.values(val).filter(log =>
-        productName(log?.before).toLowerCase().includes(q)
+        isLogForVersion(log, versionId) && productName(log?.before).toLowerCase().includes(q)
       )
       setSearchRows(rows)
       setActiveKeyword(keyword.trim())

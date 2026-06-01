@@ -18,8 +18,9 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
   const [competitionSelect, setCompetitionSelect] = useState(null)
   const [annotationPopup, setAnnotationPopup] = useState(false)
   const [annotationText, setAnnotationText]   = useState('')
-  const { returnBlockToSidebar: returnBlockToSidebarRaw, releaseCompetition, perfMap, manualInputs } = useScheduleStore()
+  const { returnBlockToSidebar: returnBlockToSidebarRaw, releaseCompetition, perfMap, manualInputs, runUndoBatch } = useScheduleStore()
   const returnBlockToSidebar = async (targetBlock) => {
+    await runUndoBatch(`사이드바 반환 되돌리기: ${targetBlock.pgmCodeName || targetBlock.blockKey || targetBlock.slotId}`, async () => {
     await returnBlockToSidebarRaw(targetBlock)
     if (!fillReturnSlot) return
     const blockKey = targetBlock.blockKey || targetBlock.slotId
@@ -29,6 +30,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
       uniqueKey: genKey('0'),
     })
     setFillReturnSlot(false)
+    })
   }
   const removeBlock = (blockKey) => {
     setDeleteConfirm({ blockKey, type: block.isCompeting ? 'releaseCompetition' : 'delete' })
@@ -184,16 +186,14 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
         <span style={{ fontSize, fontWeight: 600, color: textColor, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, minWidth: 0 }}>
           {block.pgmCodeName}
         </span>
-        {(block.weightedMin || 0) > 0 && (
-          <span style={{ fontSize: badgeSz, color: isColored ? 'rgba(255,255,255,.45)' : 'var(--text3)', whiteSpace: 'nowrap', flexShrink: 0 }}>
-            {block.weightedMin}
+        {(hasHash || block.weightedMin != null) && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: badgeSz + 2, color: '#000', whiteSpace: 'nowrap', flexShrink: 0, fontWeight: 800 }}>
+            {hasHash && <span>#</span>}
+            {block.weightedMin != null && <span>{block.weightedMin}</span>}
           </span>
         )}
         {hasAnnotation && (
           <div style={{ position: 'absolute', top: 0, right: 0, width: 0, height: 0, borderStyle: 'solid', borderWidth: '0 8px 8px 0', borderColor: `transparent var(--yellow) transparent transparent` }} />
-        )}
-        {hasHash && (
-          <div style={{ position: 'absolute', bottom: 1, right: 3, fontSize: 8, color: 'rgba(100,220,100,.8)', fontWeight: 700 }}>#</div>
         )}
       </div>
 

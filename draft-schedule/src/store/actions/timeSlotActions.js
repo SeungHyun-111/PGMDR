@@ -56,6 +56,7 @@ export function createTimeSlotActions(setState, getState) {
         if (caBlock) fbPatch[`scheduleBlocks/${slotId}_CA`] = { ...caBlock, durationMin: firstDur, weightedMin: caWeighted }
         if (ipBlock) fbPatch[`scheduleBlocks/${slotId}_IP`] = { ...ipBlock, durationMin: firstDur, weightedMin: ipWeighted }
       }
+      recordVersionPatchUndo(getState, versionPath, '시간 나누기 되돌리기', fbPatch)
       await update(ref(db, versionPath), fbPatch)
       getState()._writeLog('시간나누기', slotId, slot, { ...slot, durationMin: firstDur, weightedMin: firstWm }, {
         scope: 'schedule',
@@ -105,6 +106,7 @@ export function createTimeSlotActions(setState, getState) {
         if (ca) fbPatch[`scheduleBlocks/${prev.slotId}_CA`] = { ...ca, durationMin: newDur, weightedMin: caWeighted }
         if (ip) fbPatch[`scheduleBlocks/${prev.slotId}_IP`] = { ...ip, durationMin: newDur, weightedMin: ipWeighted }
       }
+      recordVersionPatchUndo(getState, versionPath, '시간 삭제 되돌리기', fbPatch)
       await update(ref(db, versionPath), fbPatch)
       getState()._writeLog('시간삭제', slotId, slot, null, {
         scope: 'schedule',
@@ -112,4 +114,25 @@ export function createTimeSlotActions(setState, getState) {
       })
     },
   }
+}
+
+function recordVersionPatchUndo(getState, versionPath, label, updates) {
+  Object.entries(updates || {}).forEach(([relativePath, after]) => {
+    getState().recordUndoChange(label, {
+      path: `${versionPath}/${relativePath}`,
+      before: readStatePath(getState(), relativePath),
+      after,
+      description: relativePath,
+    })
+  })
+}
+
+function readStatePath(state, relativePath) {
+  const [root, ...parts] = relativePath.split('/')
+  let value = state[root]
+  for (const part of parts) {
+    if (value == null) return null
+    value = value[part]
+  }
+  return value === undefined ? null : value
 }

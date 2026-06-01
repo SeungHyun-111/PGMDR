@@ -7,6 +7,7 @@ import StatusScheduled from '../components/status/StatusScheduled'
 import StatusUnscheduled from '../components/status/StatusUnscheduled'
 import StatusLogs from '../components/status/StatusLogs'
 import { GRADES, GRADE_META, getGrade, getEffectiveProfit } from '../utils/grade'
+import { VERSION_DRAFT } from '../utils/sessionVersion'
 
 const TEAM_COLORS = ['#818cf8','#34d399','#fb923c','#60a5fa','#f472b6','#a78bfa','#4ade80','#f87171','#fbbf24','#2dd4bf']
 
@@ -152,7 +153,7 @@ function GradeDonutChart({ items, selectedGrade, onGradeSelect }) {
 
 // ── 메인 페이지 ───────────────────────────────────────────────────────────
 export default function ScheduleStatus() {
-  const { scheduleBlocks, proposalItems, startDate, poolType, perfMap, manualInputs } = useScheduleStore()
+  const { scheduleBlocks, proposalItems, startDate, poolType, perfMap, manualInputs, currentVersionId } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const [tab, setTab]             = useState('all')
   const [selectedGrade, setSelectedGrade] = useState(null)
@@ -201,9 +202,11 @@ export default function ScheduleStatus() {
     if (!startDate) return
     get(ref(db, `sessions/${startDate}_${poolType}/logs`)).then(snap => {
       const val = snap.val() || {}
-      setLogs(Object.values(val).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)))
+      setLogs(Object.values(val)
+        .filter(log => (log?.versionId || VERSION_DRAFT) === (currentVersionId || VERSION_DRAFT))
+        .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)))
     })
-  }, [startDate, poolType])
+  }, [startDate, poolType, currentVersionId])
 
   const handleGradeSelect = g => { setSelectedGrade(prev => prev === g ? null : g) }
 
@@ -260,7 +263,7 @@ export default function ScheduleStatus() {
       )}
       {tab === 'scheduled'   && <StatusScheduled   rows={filteredBlocks} competing={competingBlocks} perfMap={perfMap} manualInputs={manualInputs} />}
       {tab === 'unscheduled' && <StatusUnscheduled rows={filteredItems}  perfMap={perfMap} manualInputs={manualInputs} />}
-      {tab === 'logs'        && <StatusLogs logs={logs} startDate={startDate} poolType={poolType} />}
+      {tab === 'logs'        && <StatusLogs logs={logs} startDate={startDate} poolType={poolType} versionId={currentVersionId} />}
     </div>
   )
 }

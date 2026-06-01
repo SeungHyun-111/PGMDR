@@ -12,7 +12,7 @@ const TOOLBAR_HEIGHT = 32
 const MIN_ROW_HEIGHT = 28
 
 export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
-  const { pgmSlots, customSlots, scheduleBlocks, saveBlock, removeBlock, splitSlots, toggleSplitSlot, splitSlotTime, deleteSlotTime, gridSearch, setGridSearch, setSearchPanelOpen, isViewerMode, setViewerMode } = useScheduleStore()
+  const { pgmSlots, customSlots, scheduleBlocks, saveBlock, removeBlock, splitSlots, toggleSplitSlot, splitSlotTime, deleteSlotTime, gridSearch, setGridSearch, setSearchPanelOpen, isViewerMode, setViewerMode, runUndoBatch } = useScheduleStore()
   const viewerMode = readOnly || isViewerMode
   const containerRef = useRef(null)
   const [containerWidth, setContainerWidth] = useState(1200)
@@ -130,13 +130,13 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
   const handleDeleteSlotTime = async slot => {
     if (viewerMode) return
     setCtxMenu(null)
-    await deleteSlotTime(slot.slotId)
+    await runUndoBatch(`시간 삭제 되돌리기: ${slot.dateKey} ${slot.timeText}`, () => deleteSlotTime(slot.slotId))
   }
 
   const handleTimeSplitConfirm = async () => {
     if (viewerMode) return
     if (!timeSplitModal || !timeSplitInput.trim()) return
-    await splitSlotTime(timeSplitModal.slotId, timeSplitInput.trim())
+    await runUndoBatch(`시간 나누기 되돌리기: ${timeSplitModal.dateKey} ${timeSplitModal.timeText}`, () => splitSlotTime(timeSplitModal.slotId, timeSplitInput.trim()))
     setTimeSplitModal(null)
     setTimeSplitInput('')
   }
@@ -165,6 +165,7 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
     const { slotId, slot, mode, singleBlock, caBlock, ipBlock } = splitPopup
     const { caWeighted, ipWeighted } = splitWeightedMin(slot.weightedMin, slot.dateKey, slot.timeText)
 
+    await runUndoBatch(`채널 ${mode === 'split' ? '분리' : '합치기'} 되돌리기: ${slot.dateKey} ${slot.timeText}`, async () => {
     if (mode === 'split') {
       await toggleSplitSlot(slotId)
       if (singleBlock && !singleBlock.isDefault) {
@@ -186,6 +187,7 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
         await removeBlock(`${slotId}_${choice}`)
       }
     }
+    })
     setSplitPopup(null)
   }
 
@@ -326,6 +328,7 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
                   const [h, m] = slot.timeText.split(':')
                   const isSplit   = !!splitSlots[slot.slotId]
                   const isCustom  = !!slot.isCustom
+                  const timeFontSize = Math.min(13, Math.max(10, rowH * 0.28 + 2)) - (isSplit ? 2 : 0)
                   return (
                     <div key={slot.slotId}
                       style={{
@@ -342,7 +345,7 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
                       }}
                       onContextMenu={e => handleTimeAxisRightClick(e, slot, slots)}
                     >
-                      <span style={{ fontSize: Math.min(11, Math.max(8, rowH * 0.28)), color: isSplit ? 'var(--red)' : isCustom ? 'var(--accent)' : 'var(--text2)', fontWeight: 600, whiteSpace: 'nowrap', letterSpacing: '-0.3px' }}>
+                      <span style={{ fontSize: timeFontSize, color: '#000', fontWeight: 800, whiteSpace: 'nowrap', letterSpacing: 0 }}>
                         {String(h).padStart(2,'0')}:{String(m).padStart(2,'0')}
                       </span>
                     </div>

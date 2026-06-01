@@ -9,6 +9,9 @@ import { VERSION_DRAFT } from '../utils/sessionVersion'
 
 export { makeDefaultBlock } from './helpers/blockBuilders'
 
+const MAX_UNDO_STACK = 50
+const compactValue = value => value === undefined ? null : value
+
 const useScheduleStore = create((setState, getState) => ({
   // ── 상태 ──────────────────────────────
   isLoaded:   false,
@@ -39,6 +42,9 @@ const useScheduleStore = create((setState, getState) => ({
   scheduledUniqueKeys: {},
   manualInputs:     {},
   lastUpdated:      null,
+  undoStack:        [],
+  pendingUndo:      null,
+  _undoBatch:       null,
 
   isViewerMode: localStorage.getItem('isViewerMode') === 'true',
   setViewerMode: (v) => {
@@ -51,6 +57,91 @@ const useScheduleStore = create((setState, getState) => ({
   setGridSearch: (q) => setState({ gridSearch: q }),
   searchPanelOpen: false,
   setSearchPanelOpen: (v) => setState({ searchPanelOpen: typeof v === 'function' ? v(getState().searchPanelOpen) : v }),
+
+  beginUndoBatch(label) {
+    setState({ _undoBatch: { label, changes: [], createdAt: Date.now() } })
+  },
+
+  endUndoBatch() {
+    const batch = getState()._undoBatch
+    if (!batch) return
+    setState({ _undoBatch: null })
+    if (batch.changes.length > 0) getState()._pushUndoEntry(batch)
+  },
+
+  cancelUndoBatch() {
+    setState({ _undoBatch: null })
+  },
+
+  async runUndoBatch(label, fn) {
+    const hadBatch = !!getState()._undoBatch
+    if (!hadBatch) getState().beginUndoBatch(label)
+    try {
+      const result = await fn()
+      if (!hadBatch) getState().endUndoBatch()
+      return result
+    } catch (e) {
+      if (!hadBatch) getState().cancelUndoBatch()
+      throw e
+    }
+  },
+
+  _pushUndoEntry(entry) {
+    if (!entry?.changes?.length) return
+    setState(s => ({
+      undoStack: [
+        {
+          ...entry,
+          id: entry.id || `undo_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+          createdAt: entry.createdAt || Date.now(),
+        },
+        ...s.undoStack,
+      ].slice(0, MAX_UNDO_STACK),
+    }))
+  },
+
+  recordUndoChange(label, change) {
+    if (!change?.path) return
+    const normalized = {
+      ...change,
+      before: compactValue(change.before),
+      after: compactValue(change.after),
+    }
+    if (JSON.stringify(normalized.before) === JSON.stringify(normalized.after)) return
+    const batch = getState()._undoBatch
+    if (batch) {
+      setState({ _undoBatch: { ...batch, changes: [...batch.changes, normalized] } })
+      return
+    }
+    getState()._pushUndoEntry({
+      label,
+      changes: [normalized],
+      createdAt: Date.now(),
+    })
+  },
+
+  requestUndo() {
+    const entry = getState().undoStack[0]
+    if (!entry) return false
+    setState({ pendingUndo: entry })
+    return true
+  },
+
+  cancelUndo() {
+    setState({ pendingUndo: null })
+  },
+
+  async confirmUndo() {
+    const entry = getState().pendingUndo
+    if (!entry) return
+    setState({ pendingUndo: null })
+    for (const change of [...entry.changes].reverse()) {
+      await set(ref(db, change.path), compactValue(change.before))
+    }
+    setState(s => ({
+      undoStack: s.undoStack.filter(item => item.id !== entry.id),
+    }))
+  },
 
   proposalLoaded:         false,
   isLoadingProposals:     false,

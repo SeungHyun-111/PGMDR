@@ -23,6 +23,12 @@ export function createBlockActions(setState, getState) {
         ...(cleanPatch.mdTeam  !== undefined && { mdTeam:  normalizeTeamName(cleanPatch.mdTeam,  weightedMinTargets) }),
         ...(cleanPatch.orgName !== undefined && { orgName: normalizeTeamName(cleanPatch.orgName, weightedMinTargets) }),
       }
+      getState().recordUndoChange('블록 저장 되돌리기', {
+        path: `${versionPath}/scheduleBlocks/${blockKey}`,
+        before,
+        after: { ...before, ...normalizedPatch },
+        description: `${before ? '블록 수정' : '블록 편성'}: ${normalizedPatch.pgmCodeName || before?.pgmCodeName || blockKey}`,
+      })
       await update(ref(db, `${versionPath}/scheduleBlocks/${blockKey}`), normalizedPatch)
       if (!skipLog && cleanPatch.isDefault !== true) {
         getState()._writeLog(before ? '수정' : '편성', blockKey, before, { ...before, ...cleanPatch })
@@ -34,15 +40,31 @@ export function createBlockActions(setState, getState) {
       const weekKey = `${startDate}_${poolType}`
       const versionPath = getCurrentVersionPath(getState, weekKey)
       const block = scheduleBlocks[blockKey]
+      const undoChanges = []
+      const ownsUndoBatch = !getState()._undoBatch
+      if (ownsUndoBatch) getState().beginUndoBatch('블록 삭제/반환 되돌리기')
 
+      try {
       if (block?.isCompeting) {
         // 경쟁 해제: item1/item2 양쪽 scheduledItemIds 제거 + 사이드바 복원
         const compItems = getCompetitionItems(block)
         for (const it of compItems) {
           if (it.itemId) {
+            undoChanges.push({
+              path: `${versionPath}/scheduledItemIds/${it.itemId}`,
+              before: true,
+              after: null,
+              description: `편성 체크 해제: ${it.pgmCodeName || it.itemId}`,
+            })
             await set(ref(db, `${versionPath}/scheduledItemIds/${it.itemId}`), null)
           }
           if (it.uniqueKey) {
+            undoChanges.push({
+              path: `${versionPath}/scheduledUniqueKeys/${it.uniqueKey}`,
+              before: true,
+              after: null,
+              description: `편성 키 해제: ${it.pgmCodeName || it.uniqueKey}`,
+            })
             await set(ref(db, `${versionPath}/scheduledUniqueKeys/${it.uniqueKey}`), null)
           }
         }
@@ -76,8 +98,20 @@ export function createBlockActions(setState, getState) {
           }
         })
       } else if (block?.itemId && !block.isDefault) {
+        undoChanges.push({
+          path: `${versionPath}/scheduledItemIds/${block.itemId}`,
+          before: true,
+          after: null,
+          description: `편성 체크 해제: ${block.pgmCodeName || block.itemId}`,
+        })
         await set(ref(db, `${versionPath}/scheduledItemIds/${block.itemId}`), null)
         if (block.uniqueKey) {
+          undoChanges.push({
+            path: `${versionPath}/scheduledUniqueKeys/${block.uniqueKey}`,
+            before: true,
+            after: null,
+            description: `편성 키 해제: ${block.pgmCodeName || block.uniqueKey}`,
+          })
           await set(ref(db, `${versionPath}/scheduledUniqueKeys/${block.uniqueKey}`), null)
         }
       }
@@ -87,6 +121,20 @@ export function createBlockActions(setState, getState) {
       }
 
       await set(ref(db, `${versionPath}/scheduleBlocks/${blockKey}`), null)
+      if (block) {
+        getState().recordUndoChange('블록 삭제/반환 되돌리기', {
+          path: `${versionPath}/scheduleBlocks/${blockKey}`,
+          before: block,
+          after: null,
+          description: `블록 복원: ${block.pgmCodeName || blockKey}`,
+        })
+        undoChanges.forEach(change => getState().recordUndoChange('블록 삭제/반환 되돌리기', change))
+      }
+      if (ownsUndoBatch) getState().endUndoBatch()
+      } catch (e) {
+        if (ownsUndoBatch) getState().cancelUndoBatch()
+        throw e
+      }
     },
 
     // 채널 변경 + 그리드 분리/합치기 동시 처리
@@ -104,23 +152,33 @@ export function createBlockActions(setState, getState) {
         ? items.filter((_, i) => i !== selectedIndex)
         : items
 
-      await restoreCompetitionItems({ setState, versionPath, items: restoreItems })
+      const ownsUndoBatch = !getState()._undoBatch
+      if (ownsUndoBatch) getState().beginUndoBatch('경쟁 해제 되돌리기')
 
-      const updates = { [`scheduleBlocks/${blockKey}`]: null }
-      if (selectedItem) {
-        updates[`scheduleBlocks/${blockKey}`] = competitionItemToBlock(selectedItem, block)
-        if (selectedItem.itemId) updates[`scheduledItemIds/${selectedItem.itemId}`] = true
-        if (selectedItem.uniqueKey) updates[`scheduledUniqueKeys/${selectedItem.uniqueKey}`] = true
-      } else if (mode === 'default') {
-        const sourceChannel = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
-        updates[`scheduleBlocks/${blockKey}`] = {
-          ...makeDefaultBlock(block, sourceChannel),
-          uniqueKey: genKey('0'),
+      try {
+        await restoreCompetitionItems({ setState, getState, versionPath, items: restoreItems })
+
+        const updates = { [`scheduleBlocks/${blockKey}`]: null }
+        if (selectedItem) {
+          updates[`scheduleBlocks/${blockKey}`] = competitionItemToBlock(selectedItem, block)
+          if (selectedItem.itemId) updates[`scheduledItemIds/${selectedItem.itemId}`] = true
+          if (selectedItem.uniqueKey) updates[`scheduledUniqueKeys/${selectedItem.uniqueKey}`] = true
+        } else if (mode === 'default') {
+          const sourceChannel = blockKey.endsWith('_CA') ? 'CA' : blockKey.endsWith('_IP') ? 'IP' : 'ALL'
+          updates[`scheduleBlocks/${blockKey}`] = {
+            ...makeDefaultBlock(block, sourceChannel),
+            uniqueKey: genKey('0'),
+          }
         }
-      }
 
-      await update(ref(db, versionPath), updates)
-      getState()._writeLog('경쟁해제', blockKey, block, updates[`scheduleBlocks/${blockKey}`] || null)
+        recordVersionPatchUndo(getState, versionPath, '경쟁 해제 되돌리기', updates)
+        await update(ref(db, versionPath), updates)
+        getState()._writeLog('경쟁해제', blockKey, block, updates[`scheduleBlocks/${blockKey}`] || null)
+        if (ownsUndoBatch) getState().endUndoBatch()
+      } catch (e) {
+        if (ownsUndoBatch) getState().cancelUndoBatch()
+        throw e
+      }
     },
 
     async changeBlockChannel(block, newChannel, patch, options = {}) {
@@ -155,7 +213,7 @@ export function createBlockActions(setState, getState) {
           await getState().returnBlockToSidebar(targetBlock)
         } else if (targetBlock && mode === 'compete') {
           const items = [...getCompetitionItems(targetBlock), ...getCompetitionItems({ ...block, ...patch })]
-          await update(ref(db, versionPath), {
+          await updateVersionPatch(getState, versionPath, '채널 변경 되돌리기', {
             [`splitSlots/${slotId}`]: true,
             [`scheduleBlocks/${slotId}`]: null,
             [`scheduleBlocks/${newKey}`]: makeCompetitionBlock({ slot, blockKey: newKey, channel: newChannel, weightedMin: wm, items }),
@@ -163,7 +221,7 @@ export function createBlockActions(setState, getState) {
           getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
           return { ok: true }
         }
-        await update(ref(db, versionPath), {
+        await updateVersionPatch(getState, versionPath, '채널 변경 되돌리기', {
           [`splitSlots/${slotId}`]: true,
           [`scheduleBlocks/${slotId}`]: null,
           [`scheduleBlocks/${newKey}`]: { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false },
@@ -180,7 +238,7 @@ export function createBlockActions(setState, getState) {
           await getState().returnBlockToSidebar(otherBlock)
         } else if (otherBlock && mode === 'compete') {
           const items = [...getCompetitionItems(otherBlock), ...getCompetitionItems({ ...block, ...patch })]
-          await update(ref(db, versionPath), {
+          await updateVersionPatch(getState, versionPath, '채널 변경 되돌리기', {
             [`scheduleBlocks/${slotId}_${otherCh}`]: null,
             [`scheduleBlocks/${fromKey}`]: null,
             [`splitSlots/${slotId}`]: null,
@@ -189,7 +247,7 @@ export function createBlockActions(setState, getState) {
           getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
           return { ok: true }
         }
-        await update(ref(db, versionPath), {
+        await updateVersionPatch(getState, versionPath, '채널 변경 되돌리기', {
           [`scheduleBlocks/${slotId}_${otherCh}`]: null,
           [`scheduleBlocks/${fromKey}`]: null,
           [`splitSlots/${slotId}`]: null,
@@ -210,29 +268,30 @@ export function createBlockActions(setState, getState) {
           await getState().returnBlockToSidebar(targetBlock)
         } else if (targetBlock && mode === 'compete') {
           const items = [...getCompetitionItems(targetBlock), ...getCompetitionItems({ ...block, ...patch })]
-          await update(ref(db, versionPath), {
+          await updateVersionPatch(getState, versionPath, '채널 변경 되돌리기', {
             [`scheduleBlocks/${fromKey}`]: null,
             [`scheduleBlocks/${newKey}`]: makeCompetitionBlock({ slot, blockKey: newKey, channel: newChannel, weightedMin: wm, items }),
           })
           getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
           return { ok: true }
         } else if (targetBlock && mode === 'swap') {
-          await update(ref(db, versionPath), {
+          await updateVersionPatch(getState, versionPath, '채널 변경 되돌리기', {
             [`scheduleBlocks/${fromKey}`]: { ...targetBlock, blockKey: fromKey, channel: origChannel, weightedMin: origWm, isDefault: false },
             [`scheduleBlocks/${newKey}`]: { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false },
           })
           getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
           return { ok: true }
         }
-        await update(ref(db, versionPath), {
+        await updateVersionPatch(getState, versionPath, '채널 변경 되돌리기', {
           [`scheduleBlocks/${fromKey}`]: null,
           [`scheduleBlocks/${newKey}`]: { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false },
         })
 
       } else {
         // ── 구조 변경 없음 (이미 분리 상태에서 CA↔IP 등) ──
-        await update(ref(db, `${versionPath}/scheduleBlocks/${fromKey}`),
-          { ...patch, channel: newChannel })
+        await updateVersionPatch(getState, versionPath, '채널 변경 되돌리기', {
+          [`scheduleBlocks/${fromKey}`]: { ...patch, channel: newChannel },
+        })
       }
 
       getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
@@ -304,6 +363,12 @@ export function createBlockActions(setState, getState) {
           newProductType:    block.newProductType     || '',
           perfKey:           block.perfKey            || null,
         }
+        getState().recordUndoChange('사이드바 반환 되돌리기', {
+          path: `${versionPath}/proposalItems/${newItemId}`,
+          before: null,
+          after: itemData,
+          description: `제안상품 생성 취소: ${itemData.pgmCodeName || newItemId}`,
+        })
         await set(ref(db, `${versionPath}/proposalItems/${newItemId}`), itemData)
         setState(s => {
           const allProposalItems = upsertByItemId(s.allProposalItems, buildProposalItem({ ...itemData, _fbIdx: newItemId }))
@@ -318,10 +383,28 @@ export function createBlockActions(setState, getState) {
   }
 }
 
-async function restoreCompetitionItems({ setState, versionPath, items }) {
+async function restoreCompetitionItems({ setState, getState, versionPath, items }) {
   for (const it of items) {
-    if (it.itemId) await set(ref(db, `${versionPath}/scheduledItemIds/${it.itemId}`), null)
-    if (it.uniqueKey) await set(ref(db, `${versionPath}/scheduledUniqueKeys/${it.uniqueKey}`), null)
+    if (it.itemId) {
+      const path = `scheduledItemIds/${it.itemId}`
+      getState?.().recordUndoChange('경쟁 해제 되돌리기', {
+        path: `${versionPath}/${path}`,
+        before: readStatePath(getState(), path),
+        after: null,
+        description: path,
+      })
+      await set(ref(db, `${versionPath}/${path}`), null)
+    }
+    if (it.uniqueKey) {
+      const path = `scheduledUniqueKeys/${it.uniqueKey}`
+      getState?.().recordUndoChange('경쟁 해제 되돌리기', {
+        path: `${versionPath}/${path}`,
+        before: readStatePath(getState(), path),
+        after: null,
+        description: path,
+      })
+      await set(ref(db, `${versionPath}/${path}`), null)
+    }
   }
 
   const snap = await get(ref(db, `${versionPath}/proposalItems`))
@@ -366,4 +449,30 @@ function makeChannelConflict({ kind, block, targetBlock, fromChannel, toChannel,
     targetName: targetBlock?.pgmCodeName || '-',
     targetBlockKey: targetBlock?.blockKey || targetBlock?.slotId || '',
   }
+}
+
+async function updateVersionPatch(getState, versionPath, label, updates) {
+  recordVersionPatchUndo(getState, versionPath, label, updates)
+  await update(ref(db, versionPath), updates)
+}
+
+function recordVersionPatchUndo(getState, versionPath, label, updates) {
+  Object.entries(updates || {}).forEach(([relativePath, after]) => {
+    getState().recordUndoChange(label, {
+      path: `${versionPath}/${relativePath}`,
+      before: readStatePath(getState(), relativePath),
+      after,
+      description: relativePath,
+    })
+  })
+}
+
+function readStatePath(state, relativePath) {
+  const [root, ...parts] = relativePath.split('/')
+  let value = state[root]
+  for (const part of parts) {
+    if (value == null) return null
+    value = value[part]
+  }
+  return value === undefined ? null : value
 }

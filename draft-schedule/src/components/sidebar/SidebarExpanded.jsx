@@ -59,7 +59,7 @@ const inp = { background: 'var(--bg4)', border: '1px solid var(--border)', color
 const MIN_COL_WIDTH = 44
 
 export default function SidebarExpanded({ items, onClose }) {
-  const { perfMap, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar, weightedMinTargets, entityProps, saveBlock, saveEntityProps } = useScheduleStore()
+  const { perfMap, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar, weightedMinTargets, entityProps, saveBlock, saveEntityProps, runUndoBatch } = useScheduleStore()
   const [keyword, setKeyword]       = useState('')
   const [teamFilter, setTeamFilter] = useState('전체')
   const [starOnly, setStarOnly]     = useState(false)
@@ -200,6 +200,7 @@ export default function SidebarExpanded({ items, onClose }) {
   }
 
   const completeReturnBlock = async ({ block, insertBeforeId }) => {
+    await runUndoBatch(`사이드바 반환 되돌리기: ${block.pgmCodeName || block.blockKey || block.slotId}`, async () => {
     const effectiveItemId = await returnBlockToSidebar(block)
     if (fillReturnSlot) {
       const blockKey = block.blockKey || block.slotId
@@ -215,6 +216,7 @@ export default function SidebarExpanded({ items, onClose }) {
       setHighlightId(effectiveItemId)
       setTimeout(() => setHighlightId(null), 1800)
     }
+    })
   }
 
   const handleTableDrop = async (e) => {
@@ -252,6 +254,7 @@ export default function SidebarExpanded({ items, onClose }) {
     const newVal = editValue.trim()
     const oldVal = String(item[colKey] ?? '')
     if (newVal !== oldVal) {
+      await runUndoBatch(`사이드바 상품 수정 되돌리기: ${item.pgmCodeName || item.itemId}`, async () => {
       await updateProposalItem(item.itemId, fbIdx, { [colKey]: newVal }, uniqueKey)
       if (item.uniqueKey && ENTITY_EDIT_FIELDS.has(colKey)) {
         const patch = { [colKey]: newVal }
@@ -259,6 +262,7 @@ export default function SidebarExpanded({ items, onClose }) {
         if (colKey === 'mdTeam') patch.orgName = newVal
         await saveEntityProps(item.uniqueKey, patch)
       }
+      })
     }
     setEditing(null)
   }

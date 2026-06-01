@@ -61,10 +61,11 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
     if (useScheduleStore.getState().isViewerMode) return
 
     const { proposalItems, scheduleBlocks: currentBlocks } = useScheduleStore.getState()
-    const { _writeLog } = useScheduleStore.getState()
+    const { _writeLog, runUndoBatch } = useScheduleStore.getState()
     const item = proposalItems.find(p => uniqueKey ? p.uniqueKey === uniqueKey : p.itemId === itemId)
     if (!item) return
 
+    await runUndoBatch(`상품 편성 되돌리기: ${item.pgmCodeName || item.itemId || uniqueKey}`, async () => {
     const blockKey = isSplit ? `${slot.slotId}_${channel}` : slot.slotId
     const existingBlock = currentBlocks[blockKey]
 
@@ -127,6 +128,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
       })
     }
     await scheduleItem(itemId, item.uniqueKey)
+    })
   }
 
   if (isLoading) return <LoadingScreen />

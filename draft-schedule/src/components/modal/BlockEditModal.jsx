@@ -21,7 +21,7 @@ function Field({ label, children }) {
 }
 
 export default function BlockEditModal({ block, onClose, saveBlock }) {
-  const { perfMap, manualInputs, saveManualInput, saveEntityProps, removeBlock, changeBlockChannel, weightedMinTargets } = useScheduleStore()
+  const { perfMap, manualInputs, saveManualInput, saveEntityProps, removeBlock, changeBlockChannel, weightedMinTargets, runUndoBatch } = useScheduleStore()
   const blockKey = block.blockKey || block.slotId
 
   const initDealType = block.dealTypeConverted || block.dealType || ''
@@ -85,6 +85,8 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
     if (saveState !== 'idle') return
     setSaveState('saving')
     try {
+      let blockedByConflict = false
+      await runUndoBatch(`블록 수정 되돌리기: ${form.pgmCodeName || block.pgmCodeName || blockKey}`, async () => {
       const entityPatch = buildEntityPatch()
 
       // 슬롯 필드만 scheduleBlocks에 저장 (채널 변경 포함)
@@ -101,6 +103,7 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
         if (result?.conflict) {
           setChannelConflict({ ...result, entityPatch })
           setSaveState('idle')
+          blockedByConflict = true
           return
         }
       } else {
@@ -108,6 +111,8 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
       }
 
       await persistEntityAndManual(entityPatch)
+      })
+      if (blockedByConflict) return
 
       setSaveState('saved')
       setTimeout(onClose, 700)
@@ -122,6 +127,7 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
     if (!channelConflict || saveState !== 'idle') return
     setSaveState('saving')
     try {
+      await runUndoBatch(`채널 변경 되돌리기: ${form.pgmCodeName || block.pgmCodeName || blockKey}`, async () => {
       const result = await changeBlockChannel(
         block,
         form.channel,
@@ -133,6 +139,7 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
         return
       }
       await persistEntityAndManual(channelConflict.entityPatch)
+      })
       setChannelConflict(null)
       setSaveState('saved')
       setTimeout(onClose, 700)
@@ -141,9 +148,9 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
     }
   }
 
-  const handleDelete = () => {
+  const handleDelete = async () => {
     if (!window.confirm('이 블록을 편성표에서 제거하시겠습니까?')) return
-    removeBlock(blockKey)
+    await runUndoBatch(`블록 삭제 되돌리기: ${block.pgmCodeName || blockKey}`, () => removeBlock(blockKey))
     onClose()
   }
 

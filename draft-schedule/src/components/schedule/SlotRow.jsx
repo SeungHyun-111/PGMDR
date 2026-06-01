@@ -176,13 +176,15 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
     if (!dropConfirm) return
     const pending = dropConfirm
     setDropConfirm(null)
+    const { runUndoBatch } = useScheduleStore.getState()
 
-    if (pending.kind === 'item') {
-      await onDrop(slot, pending.ch, pending.itemId, isSplit, action, pending.uniqueKey)
-      return
-    }
-
-    await moveBlock({ blockKey: pending.blockKey, ch: pending.ch, mode: action })
+    await runUndoBatch(`${pending.kind === 'item' ? '상품 편성' : '블록 이동'} 되돌리기: ${pending.sourceName || '-'}`, async () => {
+      if (pending.kind === 'item') {
+        await onDrop(slot, pending.ch, pending.itemId, isSplit, action, pending.uniqueKey)
+        return
+      }
+      await moveBlock({ blockKey: pending.blockKey, ch: pending.ch, mode: action })
+    })
   }
 
   useEffect(() => {
@@ -268,7 +270,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
   const { caWeighted, ipWeighted } = isSplit
     ? splitWeightedMin(slot.weightedMin, slot.dateKey, slot.timeText)
     : { caWeighted: 0, ipWeighted: 0 }
-  const wmStyle = { position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', fontSize: Math.max(8, fontSize - 1), color: 'var(--text3)', opacity: 0.45, pointerEvents: 'none', fontWeight: 500, lineHeight: 1, userSelect: 'none' }
+  const wmStyle = { position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', fontSize: Math.max(10, fontSize + 1), color: '#000', pointerEvents: 'none', fontWeight: 800, lineHeight: 1, userSelect: 'none' }
   const dropHintStyle = {
     position: 'absolute',
     inset: 2,
@@ -315,7 +317,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
             {dropTarget === 'CA' && splitBlock_CA && !splitBlock_CA.isDefault && <DropPreviewBlock block={splitBlock_CA} style={previewBlockStyle} />}
             {splitBlock_CA && !splitBlock_CA.isDefault
               ? <ScheduleBlock block={splitBlock_CA} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(splitBlock_CA, teamFilter, gridSearch)} readOnly={readOnly} />
-              : caWeighted > 0 && <span style={wmStyle}>{caWeighted}</span>}
+              : caWeighted != null && <span style={wmStyle}>{caWeighted}</span>}
           </div>
           <div style={{ position: 'absolute', top: halfHeight, left: 0, right: 0, height: halfHeight, background: ipHover ? 'rgba(106,61,138,.2)' : 'transparent', transition: 'background .1s' }}
             onDragOver={e => handleDragOver(e, 'IP')} onDrop={e => handleDrop(e, 'IP')}
@@ -324,7 +326,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
             {dropTarget === 'IP' && splitBlock_IP && !splitBlock_IP.isDefault && <DropPreviewBlock block={splitBlock_IP} style={previewBlockStyle} />}
             {splitBlock_IP && !splitBlock_IP.isDefault
               ? <ScheduleBlock block={splitBlock_IP} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(splitBlock_IP, teamFilter, gridSearch)} readOnly={readOnly} />
-              : ipWeighted > 0 && <span style={wmStyle}>{ipWeighted}</span>}
+              : ipWeighted != null && <span style={wmStyle}>{ipWeighted}</span>}
           </div>
         </>
       ) : (
@@ -335,7 +337,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
           {dropTarget === 'ALL' && block && !block.isDefault && <DropPreviewBlock block={block} style={previewBlockStyle} />}
           {block && !block.isDefault
             ? <ScheduleBlock block={block} height={height} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(block, teamFilter, gridSearch)} readOnly={readOnly} />
-            : slot.weightedMin > 0 && <span style={wmStyle}>{slot.weightedMin}</span>}
+            : slot.weightedMin != null && <span style={wmStyle}>{slot.weightedMin}</span>}
         </div>
       )}
       {dropConfirm && (

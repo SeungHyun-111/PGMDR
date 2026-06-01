@@ -29,7 +29,7 @@ const ADD_FIELDS = [
 const PAGE_SIZE = 50
 
 export default function Sidebar({ isOpen, onToggle }) {
-  const { proposalItems, perfMap, starred, loadProposals, proposalLoaded, returnBlockToSidebar, addProposalItem, weightedMinTargets, saveBlock } = useScheduleStore()
+  const { proposalItems, perfMap, starred, loadProposals, proposalLoaded, returnBlockToSidebar, addProposalItem, weightedMinTargets, saveBlock, runUndoBatch } = useScheduleStore()
 
   const [filters, setFilters] = useState({
     keyword: '',
@@ -146,6 +146,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   }
 
   const completeReturnBlock = async ({ block, insertBeforeId }) => {
+    await runUndoBatch(`사이드바 반환 되돌리기: ${block.pgmCodeName || block.blockKey || block.slotId}`, async () => {
     const effectiveItemId = await returnBlockToSidebar(block)
     if (fillReturnSlot) {
       const blockKey = block.blockKey || block.slotId
@@ -161,6 +162,7 @@ export default function Sidebar({ isOpen, onToggle }) {
       setHighlightId(effectiveItemId)
       setTimeout(() => setHighlightId(null), 1800)
     }
+    })
   }
 
   const handleScrollDrop = async (e) => {

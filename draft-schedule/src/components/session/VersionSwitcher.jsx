@@ -19,6 +19,7 @@ export default function VersionSwitcher({ onToast }) {
   } = useScheduleStore()
 
   const salesPublishedAt = versionMeta?.[VERSION_SALES]?.publishedAt
+  const currentLabel = getVersionLabel(currentVersionId)
 
   const handleSelect = async (versionId) => {
     if (versionId === currentVersionId) return
@@ -86,6 +87,24 @@ export default function VersionSwitcher({ onToast }) {
       >
         {isPublishingSales ? '공유 중...' : salesPublishedAt ? '공유본 갱신' : '공유본 생성'}
       </button>
+      <div
+        title={`현재버전 ${currentLabel}`}
+        style={{
+          height: 26,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 9px',
+          borderRadius: 6,
+          border: '1px solid var(--border)',
+          background: 'var(--bg2)',
+          color: 'var(--text2)',
+          fontSize: 11,
+          fontWeight: 800,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        현재버전 {currentLabel}
+      </div>
     </div>
   )
 }
