@@ -238,6 +238,9 @@ export default function ScheduleStatus() {
       {tab !== 'logs' && (
         <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', marginBottom: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 10 }}>{chartTitle} <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 10 }}>— 한계이익/가중분 기준 · 등급 클릭 시 테이블 필터</span></div>
+          <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text2)', margin: '-4px 0 10px' }}>
+            등급 기준: S ≥50만 · A ≥45만 · B ≥40만 · C ≥35만 · D 미만
+          </div>
           <GradeDonutChart items={chartItems} selectedGrade={selectedGrade} onGradeSelect={handleGradeSelect} />
         </div>
       )}

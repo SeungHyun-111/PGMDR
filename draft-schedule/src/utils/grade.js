@@ -18,9 +18,19 @@ export function getGrade(profitPerMin) {
   return 'D'
 }
 
+export function isPgmTeamBlock(item) {
+  return item?.pgmCodeName === '[편성팀]' && item?.memoCode === '[전사블록]'
+}
+
+export function getManualInputKey(item) {
+  if (!item) return null
+  return isPgmTeamBlock(item) ? 'sim_pgm_team' : item.uniqueKey || null
+}
+
 export function getEffectiveProfit(item, perfMap, manualInputs) {
   if (!item) return null
-  const manual = item.uniqueKey ? ((manualInputs || {})[item.uniqueKey] || {}) : {}
+  const manualKey = getManualInputKey(item)
+  const manual = manualKey ? ((manualInputs || {})[manualKey] || {}) : {}
   const perf   = item.perfKey   ? ((perfMap     || {})[item.perfKey]   || {}) : {}
   const v = manual.expectedProfitPerWeightedMin ?? perf.profitPerWeightedMin ?? null
   return v === null ? null : Number(v)
@@ -28,7 +38,8 @@ export function getEffectiveProfit(item, perfMap, manualInputs) {
 
 export function getEffectiveMetrics(item, perfMap, manualInputs) {
   if (!item) return { salesPerMin: 0, profitPerMin: 0, source: 'missing' }
-  const manual = item.uniqueKey ? ((manualInputs || {})[item.uniqueKey] || {}) : {}
+  const manualKey = getManualInputKey(item)
+  const manual = manualKey ? ((manualInputs || {})[manualKey] || {}) : {}
   const perf = item.perfKey ? ((perfMap || {})[item.perfKey] || {}) : {}
   const hasManualSales = manual.expectedSalesPerWeightedMin !== undefined && manual.expectedSalesPerWeightedMin !== null && manual.expectedSalesPerWeightedMin !== ''
   const hasManualProfit = manual.expectedProfitPerWeightedMin !== undefined && manual.expectedProfitPerWeightedMin !== null && manual.expectedProfitPerWeightedMin !== ''

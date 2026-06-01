@@ -8,12 +8,12 @@ import useCategoryMap from '../hooks/useCategoryMap'
 import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
 import { getEffectivePgmSlots } from '../utils/effectiveSlots'
 import { timeToMin } from '../utils/weightedMin'
+import { getManualInputKey } from '../utils/grade'
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
 function calcForecast(block, perfMap, manualInputs) {
-  const isDefaultPgmTeam = block.pgmCodeName === '[편성팀]' && block.memoCode === '[전사블록]'
-  const manualKey = isDefaultPgmTeam ? 'sim_pgm_team' : block.uniqueKey
+  const manualKey = getManualInputKey(block)
   const manual = manualKey ? (manualInputs[manualKey] || {}) : {}
   const lastPerf = block.perfKey ? (perfMap[block.perfKey] || null) : null
 
