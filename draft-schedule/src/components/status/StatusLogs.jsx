@@ -37,6 +37,7 @@ const scheduleDetail = log => {
 const actionStyle = action => {
   if (['삭제', '시간삭제'].includes(action)) return { bg: '#fef2f2', color: 'var(--red)' }
   if (['편성', '추가'].includes(action)) return { bg: '#f0fdf4', color: 'var(--green)' }
+  if (['공유본 갱신'].includes(action)) return { bg: '#eef2ff', color: 'var(--accent)' }
   if (['채널변경', '채널나누기', '채널합치기', '시간나누기'].includes(action)) return { bg: '#eff6ff', color: 'var(--accent)' }
   if (['복사'].includes(action)) return { bg: '#fef9c3', color: '#854d0e' }
   return { bg: 'var(--bg4)', color: 'var(--text2)' }
@@ -191,7 +192,7 @@ export default function StatusLogs({ logs, startDate, poolType, versionId }) {
     [sourceLogs]
   )
   const visibleLogs = orderedLogs.slice(0, limit)
-  const scheduleLogs = visibleLogs.filter(log => (log.scope || 'schedule') === 'schedule')
+  const scheduleLogs = visibleLogs.filter(log => (log.scope || 'schedule') === 'schedule' || log.action === '공유본 갱신')
   const sidebarLogs = visibleLogs.filter(log => log.scope === 'sidebar')
   const hasMore = limit < orderedLogs.length
 

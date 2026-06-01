@@ -178,16 +178,27 @@ export function createSessionActions(setState, getState) {
     },
 
     async publishSalesVersion() {
-      const { startDate, poolType } = getState()
+      const { startDate, poolType, userName } = getState()
       if (!startDate || !poolType) return
       setState({ isPublishingSales: true })
       try {
         const weekKey = `${startDate}_${poolType}`
         const snapshot = buildVersionSnapshot(getState())
+        const publishedAt = snapshot.publishedAt
         await set(ref(db, getVersionPath(weekKey, VERSION_SALES)), snapshot)
         await set(ref(db, `sessions/${weekKey}/versionMeta/${VERSION_SALES}`), {
-          publishedAt: snapshot.publishedAt,
+          publishedAt,
           sourceVersionId: VERSION_DRAFT,
+        })
+        await writePublishLogs(weekKey, {
+          timestamp: publishedAt,
+          userName,
+          before: null,
+          after: {
+            publishedAt,
+            sourceVersionId: VERSION_DRAFT,
+            targetVersionId: VERSION_SALES,
+          },
         })
         setState(s => ({
           isPublishingSales: false,
@@ -195,7 +206,7 @@ export function createSessionActions(setState, getState) {
             ...(s.versionMeta || {}),
             [VERSION_SALES]: {
               ...((s.versionMeta || {})[VERSION_SALES] || {}),
-              publishedAt: snapshot.publishedAt,
+              publishedAt,
               sourceVersionId: VERSION_DRAFT,
             },
           },
@@ -234,6 +245,33 @@ export function createSessionActions(setState, getState) {
       ])
     },
   }
+}
+
+async function writePublishLogs(weekKey, { timestamp, userName, before, after }) {
+  const baseLog = {
+    timestamp,
+    action: '공유본 갱신',
+    blockKey: '',
+    pgmCodeName: '',
+    dateKey: '',
+    timeText: '',
+    channel: '',
+    userName: userName || '익명',
+    before,
+    after,
+    scope: 'schedule',
+    detail: '담당 작성본을 영업팀 공유본으로 갱신',
+  }
+  await Promise.all([
+    set(ref(db, `sessions/${weekKey}/logs/log_${timestamp}_${VERSION_DRAFT}`), {
+      ...baseLog,
+      versionId: VERSION_DRAFT,
+    }),
+    set(ref(db, `sessions/${weekKey}/logs/log_${timestamp}_${VERSION_SALES}`), {
+      ...baseLog,
+      versionId: VERSION_SALES,
+    }),
+  ])
 }
 
 async function ensureVersionData(weekKey, versionId) {
