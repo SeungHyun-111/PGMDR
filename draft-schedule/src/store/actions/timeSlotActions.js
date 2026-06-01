@@ -2,6 +2,7 @@ import { db, ref, set, update } from '../../api/firebase'
 import { timeToMin, minToTime } from '../../utils/weightedMin'
 import { splitWeightedMin } from '../../utils/weightedMin'
 import { getEffectivePgmSlots } from '../../utils/effectiveSlots'
+import { getCurrentVersionPath } from '../../utils/sessionVersion'
 
 export function createTimeSlotActions(setState, getState) {
   return {
@@ -9,6 +10,7 @@ export function createTimeSlotActions(setState, getState) {
     async splitSlotTime(slotId, newTimeText) {
       const { startDate, poolType, pgmSlots, customSlots, scheduleBlocks, splitSlots } = getState()
       const weekKey = `${startDate}_${poolType}`
+      const versionPath = getCurrentVersionPath(getState, weekKey)
       const effective = getEffectivePgmSlots(pgmSlots, customSlots)
       const slot = effective.find(s => s.slotId === slotId)
       if (!slot) return
@@ -54,7 +56,7 @@ export function createTimeSlotActions(setState, getState) {
         if (caBlock) fbPatch[`scheduleBlocks/${slotId}_CA`] = { ...caBlock, durationMin: firstDur, weightedMin: caWeighted }
         if (ipBlock) fbPatch[`scheduleBlocks/${slotId}_IP`] = { ...ipBlock, durationMin: firstDur, weightedMin: ipWeighted }
       }
-      await update(ref(db, `sessions/${weekKey}`), fbPatch)
+      await update(ref(db, versionPath), fbPatch)
       getState()._writeLog('시간나누기', slotId, slot, { ...slot, durationMin: firstDur, weightedMin: firstWm }, {
         scope: 'schedule',
         detail: `시간나누기: ${slot.timeText} ${slot.durationMin}분 → ${slot.timeText} ${firstDur}분 + ${newTimeText} ${secondDur}분`,
@@ -65,6 +67,7 @@ export function createTimeSlotActions(setState, getState) {
     async deleteSlotTime(slotId) {
       const { startDate, poolType, pgmSlots, customSlots, scheduleBlocks, splitSlots } = getState()
       const weekKey = `${startDate}_${poolType}`
+      const versionPath = getCurrentVersionPath(getState, weekKey)
       const effective = getEffectivePgmSlots(pgmSlots, customSlots)
       const slot = effective.find(s => s.slotId === slotId)
       if (!slot) return
@@ -102,7 +105,7 @@ export function createTimeSlotActions(setState, getState) {
         if (ca) fbPatch[`scheduleBlocks/${prev.slotId}_CA`] = { ...ca, durationMin: newDur, weightedMin: caWeighted }
         if (ip) fbPatch[`scheduleBlocks/${prev.slotId}_IP`] = { ...ip, durationMin: newDur, weightedMin: ipWeighted }
       }
-      await update(ref(db, `sessions/${weekKey}`), fbPatch)
+      await update(ref(db, versionPath), fbPatch)
       getState()._writeLog('시간삭제', slotId, slot, null, {
         scope: 'schedule',
         detail: `시간삭제: ${slot.timeText} 슬롯 삭제, 이전 슬롯 ${prev.timeText}에 합산`,

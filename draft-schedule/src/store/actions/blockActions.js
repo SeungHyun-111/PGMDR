@@ -6,6 +6,7 @@ import { normalizeTeamName } from '../../utils/teamName'
 import { genKey } from '../../utils/uniqueKey'
 import { competitionItemKey, competitionItemToBlock, getCompetitionItems, makeCompetitionBlock } from '../../utils/competition'
 import { filterUnscheduledItems, upsertByItemId } from '../../utils/proposalVisibility'
+import { getCurrentVersionPath } from '../../utils/sessionVersion'
 
 export function createBlockActions(setState, getState) {
   return {
@@ -13,6 +14,7 @@ export function createBlockActions(setState, getState) {
     async saveBlock(blockKey, patch) {
       const { startDate, poolType, scheduleBlocks, weightedMinTargets } = getState()
       const weekKey = `${startDate}_${poolType}`
+      const versionPath = getCurrentVersionPath(getState, weekKey)
       const before = scheduleBlocks[blockKey] || null
       const skipLog = !!patch.__skipLog
       const { __skipLog, ...cleanPatch } = patch
@@ -21,7 +23,7 @@ export function createBlockActions(setState, getState) {
         ...(cleanPatch.mdTeam  !== undefined && { mdTeam:  normalizeTeamName(cleanPatch.mdTeam,  weightedMinTargets) }),
         ...(cleanPatch.orgName !== undefined && { orgName: normalizeTeamName(cleanPatch.orgName, weightedMinTargets) }),
       }
-      await update(ref(db, `sessions/${weekKey}/scheduleBlocks/${blockKey}`), normalizedPatch)
+      await update(ref(db, `${versionPath}/scheduleBlocks/${blockKey}`), normalizedPatch)
       if (!skipLog && cleanPatch.isDefault !== true) {
         getState()._writeLog(before ? '수정' : '편성', blockKey, before, { ...before, ...cleanPatch })
       }
@@ -30,6 +32,7 @@ export function createBlockActions(setState, getState) {
     async removeBlock(blockKey, options = {}) {
       const { startDate, poolType, scheduleBlocks } = getState()
       const weekKey = `${startDate}_${poolType}`
+      const versionPath = getCurrentVersionPath(getState, weekKey)
       const block = scheduleBlocks[blockKey]
 
       if (block?.isCompeting) {
@@ -37,13 +40,13 @@ export function createBlockActions(setState, getState) {
         const compItems = getCompetitionItems(block)
         for (const it of compItems) {
           if (it.itemId) {
-            await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${it.itemId}`), null)
+            await set(ref(db, `${versionPath}/scheduledItemIds/${it.itemId}`), null)
           }
           if (it.uniqueKey) {
-            await set(ref(db, `sessions/${weekKey}/scheduledUniqueKeys/${it.uniqueKey}`), null)
+            await set(ref(db, `${versionPath}/scheduledUniqueKeys/${it.uniqueKey}`), null)
           }
         }
-        const snap = await get(ref(db, `sessions/${weekKey}/gasData/proposalItems`))
+        const snap = await get(ref(db, `${versionPath}/proposalItems`))
         const raw  = snap.exists() ? snap.val() : {}
         const allItems = Array.isArray(raw) ? raw : Object.values(raw)
         setState(s => {
@@ -73,9 +76,9 @@ export function createBlockActions(setState, getState) {
           }
         })
       } else if (block?.itemId && !block.isDefault) {
-        await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${block.itemId}`), null)
+        await set(ref(db, `${versionPath}/scheduledItemIds/${block.itemId}`), null)
         if (block.uniqueKey) {
-          await set(ref(db, `sessions/${weekKey}/scheduledUniqueKeys/${block.uniqueKey}`), null)
+          await set(ref(db, `${versionPath}/scheduledUniqueKeys/${block.uniqueKey}`), null)
         }
       }
 
@@ -83,13 +86,14 @@ export function createBlockActions(setState, getState) {
         getState()._writeLog('삭제', blockKey, block, null)
       }
 
-      await set(ref(db, `sessions/${weekKey}/scheduleBlocks/${blockKey}`), null)
+      await set(ref(db, `${versionPath}/scheduleBlocks/${blockKey}`), null)
     },
 
     // 채널 변경 + 그리드 분리/합치기 동시 처리
     async releaseCompetition(blockKey, { mode, selectedKey } = {}) {
       const { startDate, poolType, scheduleBlocks } = getState()
       const weekKey = `${startDate}_${poolType}`
+      const versionPath = getCurrentVersionPath(getState, weekKey)
       const block = scheduleBlocks[blockKey]
       if (!block?.isCompeting) return
 
@@ -100,7 +104,7 @@ export function createBlockActions(setState, getState) {
         ? items.filter((_, i) => i !== selectedIndex)
         : items
 
-      await restoreCompetitionItems({ setState, weekKey, items: restoreItems })
+      await restoreCompetitionItems({ setState, versionPath, items: restoreItems })
 
       const updates = { [`scheduleBlocks/${blockKey}`]: null }
       if (selectedItem) {
@@ -115,7 +119,7 @@ export function createBlockActions(setState, getState) {
         }
       }
 
-      await update(ref(db, `sessions/${weekKey}`), updates)
+      await update(ref(db, versionPath), updates)
       getState()._writeLog('경쟁해제', blockKey, block, updates[`scheduleBlocks/${blockKey}`] || null)
     },
 
@@ -127,6 +131,7 @@ export function createBlockActions(setState, getState) {
         ...(patch.orgName !== undefined && { orgName: normalizeTeamName(patch.orgName, weightedMinTargets) }),
       }
       const weekKey = `${startDate}_${poolType}`
+      const versionPath = getCurrentVersionPath(getState, weekKey)
       const slotId  = block.slotId
       const slot    = pgmSlots.find(s => s.slotId === slotId)
       if (!slot) return
@@ -150,7 +155,7 @@ export function createBlockActions(setState, getState) {
           await getState().returnBlockToSidebar(targetBlock)
         } else if (targetBlock && mode === 'compete') {
           const items = [...getCompetitionItems(targetBlock), ...getCompetitionItems({ ...block, ...patch })]
-          await update(ref(db, `sessions/${weekKey}`), {
+          await update(ref(db, versionPath), {
             [`splitSlots/${slotId}`]: true,
             [`scheduleBlocks/${slotId}`]: null,
             [`scheduleBlocks/${newKey}`]: makeCompetitionBlock({ slot, blockKey: newKey, channel: newChannel, weightedMin: wm, items }),
@@ -158,7 +163,7 @@ export function createBlockActions(setState, getState) {
           getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
           return { ok: true }
         }
-        await update(ref(db, `sessions/${weekKey}`), {
+        await update(ref(db, versionPath), {
           [`splitSlots/${slotId}`]: true,
           [`scheduleBlocks/${slotId}`]: null,
           [`scheduleBlocks/${newKey}`]: { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false },
@@ -175,7 +180,7 @@ export function createBlockActions(setState, getState) {
           await getState().returnBlockToSidebar(otherBlock)
         } else if (otherBlock && mode === 'compete') {
           const items = [...getCompetitionItems(otherBlock), ...getCompetitionItems({ ...block, ...patch })]
-          await update(ref(db, `sessions/${weekKey}`), {
+          await update(ref(db, versionPath), {
             [`scheduleBlocks/${slotId}_${otherCh}`]: null,
             [`scheduleBlocks/${fromKey}`]: null,
             [`splitSlots/${slotId}`]: null,
@@ -184,7 +189,7 @@ export function createBlockActions(setState, getState) {
           getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
           return { ok: true }
         }
-        await update(ref(db, `sessions/${weekKey}`), {
+        await update(ref(db, versionPath), {
           [`scheduleBlocks/${slotId}_${otherCh}`]: null,
           [`scheduleBlocks/${fromKey}`]: null,
           [`splitSlots/${slotId}`]: null,
@@ -205,28 +210,28 @@ export function createBlockActions(setState, getState) {
           await getState().returnBlockToSidebar(targetBlock)
         } else if (targetBlock && mode === 'compete') {
           const items = [...getCompetitionItems(targetBlock), ...getCompetitionItems({ ...block, ...patch })]
-          await update(ref(db, `sessions/${weekKey}`), {
+          await update(ref(db, versionPath), {
             [`scheduleBlocks/${fromKey}`]: null,
             [`scheduleBlocks/${newKey}`]: makeCompetitionBlock({ slot, blockKey: newKey, channel: newChannel, weightedMin: wm, items }),
           })
           getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
           return { ok: true }
         } else if (targetBlock && mode === 'swap') {
-          await update(ref(db, `sessions/${weekKey}`), {
+          await update(ref(db, versionPath), {
             [`scheduleBlocks/${fromKey}`]: { ...targetBlock, blockKey: fromKey, channel: origChannel, weightedMin: origWm, isDefault: false },
             [`scheduleBlocks/${newKey}`]: { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false },
           })
           getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
           return { ok: true }
         }
-        await update(ref(db, `sessions/${weekKey}`), {
+        await update(ref(db, versionPath), {
           [`scheduleBlocks/${fromKey}`]: null,
           [`scheduleBlocks/${newKey}`]: { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false },
         })
 
       } else {
         // ── 구조 변경 없음 (이미 분리 상태에서 CA↔IP 등) ──
-        await update(ref(db, `sessions/${weekKey}/scheduleBlocks/${fromKey}`),
+        await update(ref(db, `${versionPath}/scheduleBlocks/${fromKey}`),
           { ...patch, channel: newChannel })
       }
 
@@ -241,11 +246,12 @@ export function createBlockActions(setState, getState) {
 
       const { startDate, poolType } = getState()
       const weekKey = `${startDate}_${poolType}`
+      const versionPath = getCurrentVersionPath(getState, weekKey)
 
       if (block.itemId) {
         // 일반/수동추가 블록: gasData/proposalItems 원본 복원
         // Firebase는 배열도 객체로 반환하므로 Object.values 로 정규화
-        const snap = await get(ref(db, `sessions/${weekKey}/gasData/proposalItems`))
+        const snap = await get(ref(db, `${versionPath}/proposalItems`))
         const raw  = snap.exists() ? snap.val() : {}
         const all  = Array.isArray(raw) ? raw : Object.values(raw)
         const orig = all.filter(Boolean).find(p => p.itemId === block.itemId)
@@ -298,7 +304,7 @@ export function createBlockActions(setState, getState) {
           newProductType:    block.newProductType     || '',
           perfKey:           block.perfKey            || null,
         }
-        await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${newItemId}`), itemData)
+        await set(ref(db, `${versionPath}/proposalItems/${newItemId}`), itemData)
         setState(s => {
           const allProposalItems = upsertByItemId(s.allProposalItems, buildProposalItem({ ...itemData, _fbIdx: newItemId }))
           return {
@@ -312,13 +318,13 @@ export function createBlockActions(setState, getState) {
   }
 }
 
-async function restoreCompetitionItems({ setState, weekKey, items }) {
+async function restoreCompetitionItems({ setState, versionPath, items }) {
   for (const it of items) {
-    if (it.itemId) await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${it.itemId}`), null)
-    if (it.uniqueKey) await set(ref(db, `sessions/${weekKey}/scheduledUniqueKeys/${it.uniqueKey}`), null)
+    if (it.itemId) await set(ref(db, `${versionPath}/scheduledItemIds/${it.itemId}`), null)
+    if (it.uniqueKey) await set(ref(db, `${versionPath}/scheduledUniqueKeys/${it.uniqueKey}`), null)
   }
 
-  const snap = await get(ref(db, `sessions/${weekKey}/gasData/proposalItems`))
+  const snap = await get(ref(db, `${versionPath}/proposalItems`))
   const raw  = snap.exists() ? snap.val() : {}
   const allItems = Array.isArray(raw) ? raw : Object.values(raw)
 

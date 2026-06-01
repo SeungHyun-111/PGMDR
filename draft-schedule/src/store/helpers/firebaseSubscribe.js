@@ -2,6 +2,8 @@ import { db, ref, onValue } from '../../api/firebase'
 import { normalizeBlocksTeamNames } from '../../utils/teamName'
 import { applyEntityProps } from '../../utils/mergeEntity'
 import { filterUnscheduledItems } from '../../utils/proposalVisibility'
+import { buildProposalItem } from '../helpers/blockBuilders'
+import { getVersionPath } from '../../utils/sessionVersion'
 
 const _subs = {}
 
@@ -21,10 +23,11 @@ function buildMergedBlocks(rawBlocks, entityProps, weightedMinTargets) {
   return applyEntityProps(normalized, entityProps)
 }
 
-export function subscribeRealtimePaths(weekKey, setState, getState) {
+export function subscribeRealtimePaths(weekKey, versionId, setState, getState) {
   unsubscribeAll()
+  const versionPath = getVersionPath(weekKey, versionId)
   const paths = {
-    [`sessions/${weekKey}/scheduleBlocks`]: snap => {
+    [`${versionPath}/scheduleBlocks`]: snap => {
       const raw = snap.exists() ? snap.val() : {}
       const { weightedMinTargets, entityProps } = getState()
       setState({
@@ -32,7 +35,7 @@ export function subscribeRealtimePaths(weekKey, setState, getState) {
         scheduleBlocks: buildMergedBlocks(raw, entityProps, weightedMinTargets),
       })
     },
-    [`sessions/${weekKey}/entityProps`]: snap => {
+    [`${versionPath}/entityProps`]: snap => {
       const ep = snap.exists() ? snap.val() : {}
       const { _rawBlocks, weightedMinTargets, allProposalItems, scheduledItemIds, scheduledUniqueKeys } = getState()
       const allItems = applyEntityProps(allProposalItems, ep)
@@ -44,10 +47,22 @@ export function subscribeRealtimePaths(weekKey, setState, getState) {
         proposalItems:  filterUnscheduledItems(allItems, scheduledItemIds, scheduledUniqueKeys),
       })
     },
-    [`sessions/${weekKey}/splitSlots`]:       snap => setState({ splitSlots:       snap.exists() ? snap.val() : {} }),
-    [`sessions/${weekKey}/customSlots`]:      snap => setState({ customSlots:      snap.exists() ? snap.val() : {} }),
-    [`sessions/${weekKey}/starred`]:          snap => setState({ starred:          snap.exists() ? snap.val() : {} }),
-    [`sessions/${weekKey}/scheduledItemIds`]: snap => {
+    [`${versionPath}/proposalItems`]: snap => {
+      const raw = snap.exists() ? snap.val() : []
+      const entries = Array.isArray(raw)
+        ? raw.map((v, i) => ({ ...v, _fbIdx: i }))
+        : Object.entries(raw).map(([k, v]) => ({ ...v, _fbIdx: k }))
+      const { entityProps, scheduledItemIds, scheduledUniqueKeys } = getState()
+      const allProposalItems = applyEntityProps(entries.map(buildProposalItem), entityProps)
+      setState({
+        allProposalItems,
+        proposalItems: filterUnscheduledItems(allProposalItems, scheduledItemIds, scheduledUniqueKeys),
+      })
+    },
+    [`${versionPath}/splitSlots`]:       snap => setState({ splitSlots:       snap.exists() ? snap.val() : {} }),
+    [`${versionPath}/customSlots`]:      snap => setState({ customSlots:      snap.exists() ? snap.val() : {} }),
+    [`${versionPath}/starred`]:          snap => setState({ starred:          snap.exists() ? snap.val() : {} }),
+    [`${versionPath}/scheduledItemIds`]: snap => {
       const scheduledItemIds = snap.exists() ? snap.val() : {}
       const { allProposalItems, scheduledUniqueKeys } = getState()
       setState({
@@ -55,7 +70,7 @@ export function subscribeRealtimePaths(weekKey, setState, getState) {
         proposalItems: filterUnscheduledItems(allProposalItems, scheduledItemIds, scheduledUniqueKeys),
       })
     },
-    [`sessions/${weekKey}/scheduledUniqueKeys`]: snap => {
+    [`${versionPath}/scheduledUniqueKeys`]: snap => {
       const scheduledUniqueKeys = snap.exists() ? snap.val() : {}
       const { allProposalItems, scheduledItemIds } = getState()
       setState({
@@ -63,7 +78,7 @@ export function subscribeRealtimePaths(weekKey, setState, getState) {
         proposalItems: filterUnscheduledItems(allProposalItems, scheduledItemIds, scheduledUniqueKeys),
       })
     },
-    [`sessions/${weekKey}/manualInputs`]:     snap => setState({ manualInputs:     snap.exists() ? snap.val() : {} }),
+    [`${versionPath}/manualInputs`]:     snap => setState({ manualInputs:     snap.exists() ? snap.val() : {} }),
   }
   Object.entries(paths).forEach(([path, handler]) => subscribePath(path, handler))
 }

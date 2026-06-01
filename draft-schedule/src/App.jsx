@@ -11,6 +11,7 @@ import useScheduleStore from './store/useScheduleStore'
 import usePresence from './hooks/usePresence'
 import { applyTheme, getStoredTheme } from './styles/theme'
 import SessionSwitcher from './components/session/SessionSwitcher'
+import VersionSwitcher from './components/session/VersionSwitcher'
 
 const TABS = [
   { id: 'draft',    label: '초안 편성' },
@@ -162,6 +163,8 @@ export default function App() {
 
           {/* 접속 현황 */}
           {isLoaded && <PresenceBar />}
+
+          {isLoaded && <VersionSwitcher onToast={showToast} />}
 
           {isLoaded && lastUpdated && (
             <div style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', gap: 8 }}>

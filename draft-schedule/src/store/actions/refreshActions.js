@@ -4,6 +4,7 @@ import { buildPreScheduleBlocks, buildDefaultBlocks, buildSlot, buildProposalIte
 import { genKey } from '../../utils/uniqueKey'
 import { normalizeItemsTeamNames } from '../../utils/teamName'
 import { filterUnscheduledItems } from '../../utils/proposalVisibility'
+import { getCurrentVersionPath } from '../../utils/sessionVersion'
 
 function withStableUniqueKeys(items, previousItems = []) {
   const itemIdCounts = previousItems.reduce((counts, item) => {
@@ -61,10 +62,11 @@ export function createRefreshActions(setState, getState) {
         const { fetchRefreshProposals } = await import('../../api/gas')
         const data = await fetchRefreshProposals(poolType)
         const weekKey = `${startDate}_${poolType}`
+        const versionPath = getCurrentVersionPath(getState, weekKey)
         const now = Date.now()
         const { weightedMinTargets, allProposalItems, scheduledItemIds, scheduledUniqueKeys } = getState()
         const proposalItemsRaw = withStableUniqueKeys(data.proposalItems || [], allProposalItems)
-        await update(ref(db, `sessions/${weekKey}/gasData`), { proposalItems: proposalItemsRaw })
+        await update(ref(db, versionPath), { proposalItems: proposalItemsRaw })
         await update(ref(db, `sessions/${weekKey}/lastUpdated`), { proposal: now })
         const allItems = normalizeItemsTeamNames(
           proposalItemsRaw.map((item, i) => buildProposalItem({ ...item, _fbIdx: i })),
@@ -99,6 +101,7 @@ export function createRefreshActions(setState, getState) {
         const { fetchInitData } = await import('../../api/gas')
         const gasData = await fetchInitData(startDate, poolType)
         const weekKey = `${startDate}_${poolType}`
+        const versionPath = getCurrentVersionPath(getState, weekKey)
         const now = Date.now()
 
         // gasData 전체를 정규화하여 Firebase에 덮어씀
@@ -108,6 +111,7 @@ export function createRefreshActions(setState, getState) {
           proposalItems: proposalItemsRaw,
           perfMap: encodePerfMap(gasData.perfMap || {}),
         })
+        await update(ref(db, versionPath), { proposalItems: proposalItemsRaw })
         await set(ref(db, `sessions/${weekKey}/lastUpdated`), {
           pgm: now, proposal: now, performance: now, preSchedule: now,
         })
@@ -119,7 +123,7 @@ export function createRefreshActions(setState, getState) {
         )
         const preBlocks = buildPreScheduleBlocks(pgmSlotsNew, gasData.preScheduleRows || [], protectedBlocks)
         const defBlocks = buildDefaultBlocks(pgmSlotsNew, { ...protectedBlocks, ...preBlocks })
-        await update(ref(db, `sessions/${weekKey}/scheduleBlocks`), { ...defBlocks, ...preBlocks })
+        await update(ref(db, `${versionPath}/scheduleBlocks`), { ...defBlocks, ...preBlocks })
 
         const proposalItems = normalizeItemsTeamNames(
           proposalItemsRaw.map((item, i) => buildProposalItem({ ...item, _fbIdx: i })),
@@ -157,6 +161,7 @@ export function createRefreshActions(setState, getState) {
         const { fetchRefreshPreSchedule } = await import('../../api/gas')
         const data = await fetchRefreshPreSchedule()
         const weekKey = `${startDate}_${poolType}`
+        const versionPath = getCurrentVersionPath(getState, weekKey)
         const now = Date.now()
         const preScheduleRows = data.preScheduleRows || []
         await update(ref(db, `sessions/${weekKey}/gasData`), { preScheduleRows })
@@ -168,7 +173,7 @@ export function createRefreshActions(setState, getState) {
         )
         const newBlocks = buildPreScheduleBlocks(pgmSlots, preScheduleRows, protectedBlocks)
         if (Object.keys(newBlocks).length > 0) {
-          await update(ref(db, `sessions/${weekKey}/scheduleBlocks`), newBlocks)
+          await update(ref(db, `${versionPath}/scheduleBlocks`), newBlocks)
         }
         setState(s => ({
           preScheduleRows,

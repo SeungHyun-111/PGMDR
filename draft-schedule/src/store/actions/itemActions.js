@@ -4,6 +4,7 @@ import { genKey } from '../../utils/uniqueKey'
 import { normalizeItemsTeamNames } from '../../utils/teamName'
 import { applyEntityProps, extractEntityFields } from '../../utils/mergeEntity'
 import { filterUnscheduledItems } from '../../utils/proposalVisibility'
+import { getCurrentVersionPath } from '../../utils/sessionVersion'
 
 export function createItemActions(setState, getState) {
   return {
@@ -14,7 +15,8 @@ export function createItemActions(setState, getState) {
       setState({ isLoadingProposals: true })
       try {
         const weekKey = `${startDate}_${poolType}`
-        const snap = await get(ref(db, `sessions/${weekKey}/gasData/proposalItems`))
+        const versionPath = getCurrentVersionPath(getState, weekKey)
+        const snap = await get(ref(db, `${versionPath}/proposalItems`))
         const raw  = snap.exists() ? snap.val() : []
         const entries = Array.isArray(raw)
           ? raw.map((v, i) => ({ ...v, _fbIdx: i }))
@@ -24,12 +26,12 @@ export function createItemActions(setState, getState) {
           if (item.uniqueKey) return item
           const uniqueKey = genKey('1')
           const next = { ...item, uniqueKey }
-          uniqueKeyUpdates[`gasData/proposalItems/${item._fbIdx}/uniqueKey`] = uniqueKey
+          uniqueKeyUpdates[`proposalItems/${item._fbIdx}/uniqueKey`] = uniqueKey
           uniqueKeyUpdates[`entityProps/${uniqueKey}`] = extractEntityFields(buildProposalItem(next))
           return next
         })
         if (Object.keys(uniqueKeyUpdates).length > 0) {
-          await update(ref(db, `sessions/${weekKey}`), uniqueKeyUpdates)
+          await update(ref(db, versionPath), uniqueKeyUpdates)
         }
         const { weightedMinTargets, entityProps, scheduledItemIds, scheduledUniqueKeys } = getState()
         const items = applyEntityProps(
@@ -59,7 +61,8 @@ export function createItemActions(setState, getState) {
         : stateItem?._fbIdx ?? (stateIdx >= 0 ? stateIdx : visibleIdx)
       if (resolvedIdx < 0) return
       const weekKey = `${startDate}_${poolType}`
-      await update(ref(db, `sessions/${weekKey}/gasData/proposalItems/${resolvedIdx}`), patch)
+      const versionPath = getCurrentVersionPath(getState, weekKey)
+      await update(ref(db, `${versionPath}/proposalItems/${resolvedIdx}`), patch)
       getState()._writeLog('수정', '', stateItem || null, { ...(stateItem || {}), ...patch }, {
         scope: 'sidebar',
         detail: Object.keys(patch).map(key => `${key}: ${stateItem?.[key] ?? '-'} → ${patch[key] ?? '-'}`).join(', '),
@@ -78,10 +81,11 @@ export function createItemActions(setState, getState) {
     async addProposalItem(itemData) {
       const { startDate, poolType, allProposalItems } = getState()
       const weekKey = `${startDate}_${poolType}`
+      const versionPath = getCurrentVersionPath(getState, weekKey)
       const fbIdx = allProposalItems.length
       // _fbIdx는 내부 메타 — Firebase에는 저장하지 않음
       const newItem = { ...itemData, itemId: `manual_${Date.now()}`, uniqueKey: genKey('1') }
-      await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${fbIdx}`), newItem)
+      await set(ref(db, `${versionPath}/proposalItems/${fbIdx}`), newItem)
       getState()._writeLog('추가', '', null, newItem, {
         scope: 'sidebar',
         detail: '사이드바 상품 추가',
@@ -98,11 +102,12 @@ export function createItemActions(setState, getState) {
     async deleteProposalItem(itemId, uniqueKey) {
       const { startDate, poolType, allProposalItems, proposalItems } = getState()
       const weekKey = `${startDate}_${poolType}`
+      const versionPath = getCurrentVersionPath(getState, weekKey)
       const matches = item => uniqueKey ? item.uniqueKey === uniqueKey : item.itemId === itemId
       const item = allProposalItems.find(matches) || proposalItems.find(matches)
       if (!item) return
       if (item._fbIdx !== undefined && item._fbIdx !== null) {
-        await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${item._fbIdx}`), null)
+        await set(ref(db, `${versionPath}/proposalItems/${item._fbIdx}`), null)
       }
       getState()._writeLog('삭제', '', item, null, {
         scope: 'sidebar',
@@ -120,6 +125,7 @@ export function createItemActions(setState, getState) {
     async duplicateProposalItem(itemId, uniqueKey) {
       const { startDate, poolType, allProposalItems, proposalItems } = getState()
       const weekKey = `${startDate}_${poolType}`
+      const versionPath = getCurrentVersionPath(getState, weekKey)
       const matches = item => uniqueKey ? item.uniqueKey === uniqueKey : item.itemId === itemId
       const orig = allProposalItems.find(matches) || proposalItems.find(matches)
       if (!orig) return
@@ -127,7 +133,7 @@ export function createItemActions(setState, getState) {
       const rest = { ...orig }
       delete rest._fbIdx
       const newItem = { ...rest, itemId: `dup_${Date.now()}`, uniqueKey: genKey('1') }
-      await set(ref(db, `sessions/${weekKey}/gasData/proposalItems/${fbIdx}`), newItem)
+      await set(ref(db, `${versionPath}/proposalItems/${fbIdx}`), newItem)
       getState()._writeLog('복사', '', orig, newItem, {
         scope: 'sidebar',
         detail: `원본: ${orig.pgmCodeName || '-'}`,
@@ -144,9 +150,10 @@ export function createItemActions(setState, getState) {
     async scheduleItem(itemId, uniqueKey) {
       const { startDate, poolType, allProposalItems, proposalItems } = getState()
       const weekKey = `${startDate}_${poolType}`
+      const versionPath = getCurrentVersionPath(getState, weekKey)
       const item = [...allProposalItems, ...proposalItems].find(p => uniqueKey ? p.uniqueKey === uniqueKey : p.itemId === itemId)
-      if (itemId) await set(ref(db, `sessions/${weekKey}/scheduledItemIds/${itemId}`), true)
-      if (uniqueKey) await set(ref(db, `sessions/${weekKey}/scheduledUniqueKeys/${uniqueKey}`), true)
+      if (itemId) await set(ref(db, `${versionPath}/scheduledItemIds/${itemId}`), true)
+      if (uniqueKey) await set(ref(db, `${versionPath}/scheduledUniqueKeys/${uniqueKey}`), true)
       if (item) {
         getState()._writeLog('편성', '', item, item, {
           scope: 'sidebar',
@@ -167,9 +174,10 @@ export function createItemActions(setState, getState) {
     async toggleSplitSlot(slotId) {
       const { startDate, poolType, splitSlots, pgmSlots } = getState()
       const weekKey = `${startDate}_${poolType}`
+      const versionPath = getCurrentVersionPath(getState, weekKey)
       const slot = pgmSlots.find(s => s.slotId === slotId) || { slotId }
       const nextSplit = !splitSlots[slotId]
-      await set(ref(db, `sessions/${weekKey}/splitSlots/${slotId}`), nextSplit ? true : null)
+      await set(ref(db, `${versionPath}/splitSlots/${slotId}`), nextSplit ? true : null)
       getState()._writeLog(nextSplit ? '채널나누기' : '채널합치기', slotId, slot, { ...slot, channel: nextSplit ? 'CA/IP' : 'ALL' }, {
         scope: 'schedule',
         detail: nextSplit ? '채널나누기: ALL → CA/IP' : '채널합치기: CA/IP → ALL',
@@ -179,20 +187,23 @@ export function createItemActions(setState, getState) {
     async toggleStarred(itemId) {
       const { startDate, poolType, starred } = getState()
       const weekKey = `${startDate}_${poolType}`
-      await set(ref(db, `sessions/${weekKey}/starred/${itemId}`), starred[itemId] ? null : true)
+      const versionPath = getCurrentVersionPath(getState, weekKey)
+      await set(ref(db, `${versionPath}/starred/${itemId}`), starred[itemId] ? null : true)
     },
 
     async saveEntityProps(uniqueKey, data) {
       if (!uniqueKey) return
       const { startDate, poolType } = getState()
       const weekKey = `${startDate}_${poolType}`
-      await update(ref(db, `sessions/${weekKey}/entityProps/${uniqueKey}`), data)
+      const versionPath = getCurrentVersionPath(getState, weekKey)
+      await update(ref(db, `${versionPath}/entityProps/${uniqueKey}`), data)
     },
 
     async saveManualInput(uniqueKey, data) {
       const { startDate, poolType } = getState()
       const weekKey = `${startDate}_${poolType}`
-      await update(ref(db, `sessions/${weekKey}/manualInputs/${uniqueKey}`), data)
+      const versionPath = getCurrentVersionPath(getState, weekKey)
+      await update(ref(db, `${versionPath}/manualInputs/${uniqueKey}`), data)
     },
 
     setUserName(name) {

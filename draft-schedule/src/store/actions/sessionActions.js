@@ -1,10 +1,18 @@
 import { db, ref, set, get } from '../../api/firebase'
 import { buildSlot, buildPreScheduleBlocks, buildProposalItem, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
 import { subscribeRealtimePaths, unsubscribeAll } from '../helpers/firebaseSubscribe'
-import { normalizeBlocksTeamNames } from '../../utils/teamName'
+import { normalizeBlocksTeamNames, normalizeItemsTeamNames } from '../../utils/teamName'
 import { genKey } from '../../utils/uniqueKey'
 import { extractEntityFields, applyEntityProps } from '../../utils/mergeEntity'
 import { getCompetitionItems } from '../../utils/competition'
+import { filterUnscheduledItems } from '../../utils/proposalVisibility'
+import {
+  VERSION_DRAFT,
+  VERSION_SALES,
+  VERSION_DATA_KEYS,
+  buildVersionSnapshot,
+  getVersionPath,
+} from '../../utils/sessionVersion'
 
 const createPgmTeamItems = () => Array.from({ length: 10 }, (_, i) => ({
   itemId: `pgmteam_default_${i + 1}`,
@@ -22,7 +30,7 @@ const createPgmTeamItems = () => Array.from({ length: 10 }, (_, i) => ({
 export function createSessionActions(setState, getState) {
   return {
 
-    async loadInitData(startDate, poolType) {
+    async loadInitData(startDate, poolType, versionId = getState().currentVersionId || VERSION_DRAFT) {
       setState({ isLoading: true, error: null })
       try {
         const weekKey = `${startDate}_${poolType}`
@@ -46,7 +54,6 @@ export function createSessionActions(setState, getState) {
           })
           const pgmSlots = (gasData.pgmSlots || []).map(buildSlot)
           const preBlocks = buildPreScheduleBlocks(pgmSlots, gasData.preScheduleRows || [], {})
-          await set(ref(db, `sessions/${weekKey}/scheduleBlocks`), preBlocks)
 
           // entityProps 초기화 — 모든 아이템(제안상품 + 선편성블록)의 엔티티 속성 기록
           // buildProposalItem()을 통과시켜 dealTypeConverted 등 정규화된 값으로 저장
@@ -57,20 +64,32 @@ export function createSessionActions(setState, getState) {
           Object.values(preBlocks).forEach(block => {
             if (block?.uniqueKey) entityProps[block.uniqueKey] = extractEntityFields(block)
           })
-          await set(ref(db, `sessions/${weekKey}/entityProps`), entityProps)
+          await set(ref(db, getVersionPath(weekKey, VERSION_DRAFT)), {
+            proposalItems,
+            scheduleBlocks: preBlocks,
+            entityProps,
+            splitSlots: {},
+            customSlots: {},
+            starred: {},
+            scheduledItemIds: {},
+            scheduledUniqueKeys: {},
+            manualInputs: {},
+            createdAt: now,
+          })
         }
 
-        await getState()._loadFromFirebase(startDate, poolType)
+        await getState()._loadFromFirebase(startDate, poolType, versionId)
       } catch (e) {
         setState({ error: e.message, isLoading: false })
       }
     },
 
-    async _loadFromFirebase(startDate, poolType) {
+    async _loadFromFirebase(startDate, poolType, versionId = getState().currentVersionId || VERSION_DRAFT) {
       const weekKey = `${startDate}_${poolType}`
+      const resolvedVersionId = await ensureVersionData(weekKey, versionId)
+      const versionPath = getVersionPath(weekKey, resolvedVersionId)
       const [
-        metaSnap, pgmSnap, perfMapSnap, preSnap, weightedSnap, targetSnap,
-        blocksSnap, splitSnap, customSlotsSnap, starredSnap, scheduledSnap, scheduledUniqueSnap, inputsSnap, entitySnap, updatedSnap
+        metaSnap, pgmSnap, perfMapSnap, preSnap, weightedSnap, targetSnap, versionSnap, versionMetaSnap, updatedSnap
       ] = await Promise.all([
         get(ref(db, `sessions/${weekKey}/gasData/meta`)),
         get(ref(db, `sessions/${weekKey}/gasData/pgmSlots`)),
@@ -78,29 +97,24 @@ export function createSessionActions(setState, getState) {
         get(ref(db, `sessions/${weekKey}/gasData/preScheduleRows`)),
         get(ref(db, `sessions/${weekKey}/gasData/weightedMinTargets`)),
         get(ref(db, `sessions/${weekKey}/gasData/targetMetrics`)),
-        get(ref(db, `sessions/${weekKey}/scheduleBlocks`)),
-        get(ref(db, `sessions/${weekKey}/splitSlots`)),
-        get(ref(db, `sessions/${weekKey}/customSlots`)),
-        get(ref(db, `sessions/${weekKey}/starred`)),
-        get(ref(db, `sessions/${weekKey}/scheduledItemIds`)),
-        get(ref(db, `sessions/${weekKey}/scheduledUniqueKeys`)),
-        get(ref(db, `sessions/${weekKey}/manualInputs`)),
-        get(ref(db, `sessions/${weekKey}/entityProps`)),
+        get(ref(db, versionPath)),
+        get(ref(db, `sessions/${weekKey}/versionMeta`)),
         get(ref(db, `sessions/${weekKey}/lastUpdated`)),
       ])
 
       const meta = metaSnap.exists() ? metaSnap.val() : {}
+      const versionData = versionSnap.exists() ? versionSnap.val() : {}
       const pgmSlots = (pgmSnap.exists() ? pgmSnap.val() : []).map(buildSlot)
-      const rawBlocks      = blocksSnap.exists()      ? blocksSnap.val()      : {}
-      const splitSlots     = splitSnap.exists()        ? splitSnap.val()        : {}
-      const customSlots    = customSlotsSnap.exists()  ? customSlotsSnap.val()  : {}
-      const entityProps    = entitySnap.exists()       ? entitySnap.val()       : {}
+      const rawBlocks      = versionData.scheduleBlocks || {}
+      const splitSlots     = versionData.splitSlots || {}
+      const customSlots    = versionData.customSlots || {}
+      const entityProps    = versionData.entityProps || {}
 
       const perfMap = perfMapSnap.exists() ? decodePerfMap(perfMapSnap.val()) : {}
       const weightedMinTargets = weightedSnap.exists() ? Object.values(weightedSnap.val()) : []
 
       const normalizedBlocks = normalizeBlocksTeamNames(rawBlocks, weightedMinTargets)
-      const storedScheduledUniqueKeys = scheduledUniqueSnap.exists() ? scheduledUniqueSnap.val() : {}
+      const storedScheduledUniqueKeys = versionData.scheduledUniqueKeys || {}
       const scheduledUniqueKeys = { ...storedScheduledUniqueKeys }
       Object.values(rawBlocks).forEach(block => {
         if (!block || block.isDefault) return
@@ -113,11 +127,21 @@ export function createSessionActions(setState, getState) {
         if (block.uniqueKey) scheduledUniqueKeys[block.uniqueKey] = true
       })
       if (Object.keys(scheduledUniqueKeys).length > Object.keys(storedScheduledUniqueKeys).length) {
-        await set(ref(db, `sessions/${weekKey}/scheduledUniqueKeys`), scheduledUniqueKeys)
+        await set(ref(db, `${versionPath}/scheduledUniqueKeys`), scheduledUniqueKeys)
       }
+      const rawProposalItems = versionData.proposalItems || []
+      const proposalEntries = Array.isArray(rawProposalItems)
+        ? rawProposalItems.map((v, i) => ({ ...v, _fbIdx: i }))
+        : Object.entries(rawProposalItems).map(([k, v]) => ({ ...v, _fbIdx: k }))
+      const allProposalItems = applyEntityProps(
+        normalizeItemsTeamNames(proposalEntries.map(buildProposalItem), weightedMinTargets),
+        entityProps
+      )
 
       setState({
         startDate, endDate: meta.endDate || '', poolType,
+        currentVersionId: resolvedVersionId,
+        versionMeta: versionMetaSnap.exists() ? versionMetaSnap.val() : {},
         pgmSlots,
         perfMap,
         preScheduleRows:    preSnap.exists()      ? preSnap.val()      : [],
@@ -128,12 +152,14 @@ export function createSessionActions(setState, getState) {
         entityProps,
         splitSlots,
         customSlots,
-        starred:            starredSnap.exists()  ? starredSnap.val()               : {},
-        scheduledItemIds:   scheduledSnap.exists()? scheduledSnap.val()             : {},
+        starred:            versionData.starred || {},
+        scheduledItemIds:   versionData.scheduledItemIds || {},
         scheduledUniqueKeys,
-        manualInputs:       inputsSnap.exists()   ? inputsSnap.val() : {},
+        manualInputs:       versionData.manualInputs || {},
+        allProposalItems,
+        proposalItems:      filterUnscheduledItems(allProposalItems, versionData.scheduledItemIds || {}, scheduledUniqueKeys),
         lastUpdated:        updatedSnap.exists()  ? updatedSnap.val()               : null,
-        isLoaded: true, isLoading: false, proposalLoaded: false,
+        isLoaded: true, isLoading: false, proposalLoaded: true,
       })
 
       // 기존 세션에서 perfMap이 인코딩 없이 저장돼 유실된 경우 자동 복구
@@ -141,7 +167,42 @@ export function createSessionActions(setState, getState) {
         getState().refreshPerformance()
       }
 
-      subscribeRealtimePaths(weekKey, setState, getState)
+      subscribeRealtimePaths(weekKey, resolvedVersionId, setState, getState)
+    },
+
+    async setSessionVersion(versionId) {
+      const { startDate, poolType } = getState()
+      if (!startDate || !poolType) return
+      localStorage.setItem('currentVersionId', versionId)
+      await getState()._loadFromFirebase(startDate, poolType, versionId)
+    },
+
+    async publishSalesVersion() {
+      const { startDate, poolType } = getState()
+      if (!startDate || !poolType) return
+      setState({ isPublishingSales: true })
+      try {
+        const weekKey = `${startDate}_${poolType}`
+        const snapshot = buildVersionSnapshot(getState())
+        await set(ref(db, getVersionPath(weekKey, VERSION_SALES)), snapshot)
+        await set(ref(db, `sessions/${weekKey}/versionMeta/${VERSION_SALES}`), {
+          publishedAt: snapshot.publishedAt,
+          sourceVersionId: VERSION_DRAFT,
+        })
+        setState(s => ({
+          isPublishingSales: false,
+          versionMeta: {
+            ...(s.versionMeta || {}),
+            [VERSION_SALES]: {
+              ...((s.versionMeta || {})[VERSION_SALES] || {}),
+              publishedAt: snapshot.publishedAt,
+              sourceVersionId: VERSION_DRAFT,
+            },
+          },
+        }))
+      } catch (e) {
+        setState({ error: e.message, isPublishingSales: false })
+      }
     },
 
     async resetSession(startDate, poolType) {
@@ -149,6 +210,7 @@ export function createSessionActions(setState, getState) {
       setState({
         isLoading: true, isLoaded: false, error: null,
         startDate: '', endDate: '', poolType: 'A',
+        currentVersionId: VERSION_DRAFT, versionMeta: {}, isPublishingSales: false,
         pgmSlots: [], perfMap: {}, preScheduleRows: [],
         weightedMinTargets: [], targetMetrics: null,
         scheduleBlocks: {}, _rawBlocks: {}, entityProps: {},
@@ -172,4 +234,34 @@ export function createSessionActions(setState, getState) {
       ])
     },
   }
+}
+
+async function ensureVersionData(weekKey, versionId) {
+  const targetSnap = await get(ref(db, getVersionPath(weekKey, versionId)))
+  if (targetSnap.exists()) return versionId
+
+  if (versionId === VERSION_SALES) {
+    const draftSnap = await get(ref(db, getVersionPath(weekKey, VERSION_DRAFT)))
+    if (draftSnap.exists()) return VERSION_DRAFT
+  }
+
+  const snaps = await Promise.all([
+    get(ref(db, `sessions/${weekKey}/gasData/proposalItems`)),
+    ...VERSION_DATA_KEYS
+      .filter(key => key !== 'proposalItems')
+      .map(key => get(ref(db, `sessions/${weekKey}/${key}`))),
+  ])
+  const hasLegacyData = snaps.some(snap => snap.exists())
+  if (!hasLegacyData) return versionId
+
+  const [proposalSnap, ...dataSnaps] = snaps
+  const migrated = {
+    proposalItems: proposalSnap.exists() ? proposalSnap.val() : [],
+    migratedAt: Date.now(),
+  }
+  VERSION_DATA_KEYS.filter(key => key !== 'proposalItems').forEach((key, i) => {
+    migrated[key] = dataSnaps[i].exists() ? dataSnaps[i].val() : {}
+  })
+  await set(ref(db, getVersionPath(weekKey, VERSION_DRAFT)), migrated)
+  return VERSION_DRAFT
 }

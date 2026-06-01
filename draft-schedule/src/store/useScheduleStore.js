@@ -5,6 +5,7 @@ import { createBlockActions }    from './actions/blockActions'
 import { createItemActions }     from './actions/itemActions'
 import { createRefreshActions }  from './actions/refreshActions'
 import { createTimeSlotActions } from './actions/timeSlotActions'
+import { VERSION_DRAFT } from '../utils/sessionVersion'
 
 export { makeDefaultBlock } from './helpers/blockBuilders'
 
@@ -15,6 +16,9 @@ const useScheduleStore = create((setState, getState) => ({
   error:      null,
 
   startDate: '', endDate: '', poolType: 'A',
+  currentVersionId: localStorage.getItem('currentVersionId') || VERSION_DRAFT,
+  versionMeta: {},
+  isPublishingSales: false,
   userName:  localStorage.getItem('userName') || '',
 
   pgmSlots:           [],
@@ -56,7 +60,7 @@ const useScheduleStore = create((setState, getState) => ({
 
   // ── 로그 (내부용) ─────────────────────
   async _writeLog(action, blockKey, before, after, meta = {}) {
-    const { startDate, poolType, userName } = getState()
+    const { startDate, poolType, userName, currentVersionId } = getState()
     await set(ref(db, `sessions/${startDate}_${poolType}/logs/log_${Date.now()}`), {
       timestamp: Date.now(), action, blockKey,
       pgmCodeName: after?.pgmCodeName || before?.pgmCodeName || '',
@@ -64,6 +68,7 @@ const useScheduleStore = create((setState, getState) => ({
       timeText:    after?.timeText    || before?.timeText    || '',
       channel:     after?.channel     || before?.channel     || '',
       userName:    userName || '익명',
+      versionId:   currentVersionId || VERSION_DRAFT,
       before: before || null,
       after:  after  || null,
       scope: meta.scope || 'schedule',
