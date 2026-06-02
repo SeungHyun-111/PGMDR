@@ -12,6 +12,7 @@ import usePresence from './hooks/usePresence'
 import { applyTheme, getStoredTheme } from './styles/theme'
 import SessionSwitcher from './components/session/SessionSwitcher'
 import VersionSwitcher from './components/session/VersionSwitcher'
+import { VERSION_OPS, VERSION_SALES, getVersionLabel } from './utils/sessionVersion'
 
 const TABS = [
   { id: 'draft',    label: '초안 편성' },
@@ -35,7 +36,7 @@ export default function App() {
     isLoaded, startDate, endDate, poolType,
     isLoadingProposals, isLoadingPerformance, isLoadingPreSchedule, isLoadingGasAll,
     refreshPerformance, refreshProposals, refreshPreSchedule, refreshAllGasData,
-    lastUpdated, userName, setUserName
+    lastUpdated, userName, setUserName, currentVersionId
   } = useScheduleStore()
   const { pendingUndo, requestUndo, cancelUndo, confirmUndo } = useScheduleStore()
 
@@ -119,10 +120,17 @@ export default function App() {
   const formatUpdated = (ts) => {
     if (!ts) return '-'
     const d = new Date(ts)
-    return `${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+    return `${String(d.getMonth()+1).padStart(2,'0')}/${String(d.getDate()).padStart(2,'0')} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
   }
+  const formatUpdatedHistory = (ts, by) => `${formatUpdated(ts)} · ${by || '-'}`
 
   const isRefreshing = isLoadingProposals || isLoadingPerformance || isLoadingPreSchedule || isLoadingGasAll
+  const currentVersionLabel = getVersionLabel(currentVersionId)
+  const versionTone = currentVersionId === VERSION_SALES
+    ? { bg: '#fff7ed', border: '#fdba74', color: '#c2410c' }
+    : currentVersionId === VERSION_OPS
+    ? { bg: '#ecfdf5', border: '#86efac', color: '#15803d' }
+    : { bg: '#eff6ff', border: '#93c5fd', color: '#1d4ed8' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -181,9 +189,28 @@ export default function App() {
           {/* 접속 현황 */}
           {isLoaded && <PresenceBar />}
 
-          {isLoaded && <VersionSwitcher onToast={showToast} />}
+          {isLoaded && (
+            <div
+              title={`현재버전 : ${currentVersionLabel}`}
+              style={{
+                height: 26,
+                display: 'flex',
+                alignItems: 'center',
+                padding: '0 10px',
+                borderRadius: 999,
+                border: `1px solid ${versionTone.border}`,
+                background: versionTone.bg,
+                color: versionTone.color,
+                fontSize: 11,
+                fontWeight: 900,
+                whiteSpace: 'nowrap',
+              }}
+            >
+              현재버전 : {currentVersionLabel}
+            </div>
+          )}
 
-          {isLoaded && lastUpdated && (
+          {false && isLoaded && lastUpdated && (
             <div style={{ fontSize: 10, color: 'var(--text3)', display: 'flex', gap: 8 }}>
               {lastUpdated.pgm         && <span>PGM {formatUpdated(lastUpdated.pgm)}</span>}
               {lastUpdated.proposal    && <span>제안 {formatUpdated(lastUpdated.proposal)}</span>}
@@ -222,6 +249,21 @@ export default function App() {
           </button>
         </div>
       </nav>
+
+      {isLoaded && (
+        <div style={{ height: 34, display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg2)', flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, color: 'var(--text3)', fontSize: 10, whiteSpace: 'nowrap' }}>
+            <span style={{ fontWeight: 900, color: 'var(--text2)' }}>갱신이력</span>
+            <span>PGM {formatUpdatedHistory(lastUpdated?.pgm, lastUpdated?.pgmBy)}</span>
+            <span>제안상품 {formatUpdatedHistory(lastUpdated?.proposal, lastUpdated?.proposalBy)}</span>
+            <span>실적 {formatUpdatedHistory(lastUpdated?.performance, lastUpdated?.performanceBy)}</span>
+            <span>선편 {formatUpdatedHistory(lastUpdated?.preSchedule, lastUpdated?.preScheduleBy)}</span>
+          </div>
+          <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+            <VersionSwitcher onToast={showToast} />
+          </div>
+        </div>
+      )}
 
       {/* 페이지 */}
       <div style={{ flex: 1, overflow: 'hidden' }}>

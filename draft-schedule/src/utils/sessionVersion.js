@@ -1,9 +1,11 @@
 export const VERSION_DRAFT = 'draft'
 export const VERSION_SALES = 'sales'
+export const VERSION_OPS = 'ops'
 
 export const SESSION_VERSIONS = [
   { id: VERSION_DRAFT, label: '담당 작성' },
   { id: VERSION_SALES, label: '영업팀 공유' },
+  { id: VERSION_OPS, label: '편성운영' },
 ]
 
 export const VERSION_DATA_KEYS = [

@@ -31,7 +31,7 @@ export function createRefreshActions(setState, getState) {
   return {
 
     async refreshPerformance() {
-      const { startDate, poolType } = getState()
+      const { startDate, poolType, userName } = getState()
       setState({ isLoadingPerformance: true })
       try {
         const { fetchRefreshPerformance } = await import('../../api/gas')
@@ -44,11 +44,11 @@ export function createRefreshActions(setState, getState) {
         const weekKey = `${startDate}_${poolType}`
         const now = Date.now()
         await update(ref(db, `sessions/${weekKey}/gasData`), { perfMap: encoded })
-        await update(ref(db, `sessions/${weekKey}/lastUpdated`), { performance: now })
+        await update(ref(db, `sessions/${weekKey}/lastUpdated`), { performance: now, performanceBy: userName || '' })
         setState(s => ({
           perfMap,
           isLoadingPerformance: false,
-          lastUpdated: { ...s.lastUpdated, performance: now },
+          lastUpdated: { ...s.lastUpdated, performance: now, performanceBy: userName || '' },
         }))
       } catch (e) {
         setState({ error: e.message, isLoadingPerformance: false })
@@ -56,7 +56,7 @@ export function createRefreshActions(setState, getState) {
     },
 
     async refreshProposals() {
-      const { startDate, poolType } = getState()
+      const { startDate, poolType, userName } = getState()
       setState({ isLoadingProposals: true })
       try {
         const { fetchRefreshProposals } = await import('../../api/gas')
@@ -67,7 +67,7 @@ export function createRefreshActions(setState, getState) {
         const { weightedMinTargets, allProposalItems, scheduledItemIds, scheduledUniqueKeys } = getState()
         const proposalItemsRaw = withStableUniqueKeys(data.proposalItems || [], allProposalItems)
         await update(ref(db, versionPath), { proposalItems: proposalItemsRaw })
-        await update(ref(db, `sessions/${weekKey}/lastUpdated`), { proposal: now })
+        await update(ref(db, `sessions/${weekKey}/lastUpdated`), { proposal: now, proposalBy: userName || '' })
         const allItems = normalizeItemsTeamNames(
           proposalItemsRaw.map((item, i) => buildProposalItem({ ...item, _fbIdx: i })),
           weightedMinTargets
@@ -77,7 +77,7 @@ export function createRefreshActions(setState, getState) {
           proposalItems:      filterUnscheduledItems(allItems, scheduledItemIds, scheduledUniqueKeys),
           proposalLoaded:     true,
           isLoadingProposals: false,
-          lastUpdated: { ...s.lastUpdated, proposal: now },
+          lastUpdated: { ...s.lastUpdated, proposal: now, proposalBy: userName || '' },
         }))
       } catch (e) {
         setState({ error: e.message, isLoadingProposals: false })
@@ -95,7 +95,7 @@ export function createRefreshActions(setState, getState) {
 
     // ── GAS 전체 재동기화 ─────────────────────────────────
     async refreshAllGasData() {
-      const { startDate, poolType, scheduleBlocks, allProposalItems, scheduledItemIds, scheduledUniqueKeys } = getState()
+      const { startDate, poolType, scheduleBlocks, allProposalItems, scheduledItemIds, scheduledUniqueKeys, userName } = getState()
       setState({ isLoadingGasAll: true })
       try {
         const { fetchInitData } = await import('../../api/gas')
@@ -114,6 +114,7 @@ export function createRefreshActions(setState, getState) {
         await update(ref(db, versionPath), { proposalItems: proposalItemsRaw })
         await set(ref(db, `sessions/${weekKey}/lastUpdated`), {
           pgm: now, proposal: now, performance: now, preSchedule: now,
+          pgmBy: userName || '', proposalBy: userName || '', performanceBy: userName || '', preScheduleBy: userName || '',
         })
 
         // 사용자 직접 편성 블록은 유지, default·선편성 블록은 재생성
@@ -139,7 +140,11 @@ export function createRefreshActions(setState, getState) {
           proposalItems: filterUnscheduledItems(proposalItems, scheduledItemIds, scheduledUniqueKeys),
           proposalLoaded:  true,
           isLoadingGasAll: false,
-          lastUpdated: { ...s.lastUpdated, pgm: now, proposal: now, performance: now, preSchedule: now },
+          lastUpdated: {
+            ...s.lastUpdated,
+            pgm: now, proposal: now, performance: now, preSchedule: now,
+            pgmBy: userName || '', proposalBy: userName || '', performanceBy: userName || '', preScheduleBy: userName || '',
+          },
         }))
 
         getState()._writeRefreshLog('GAS 전체 재동기화', [
@@ -155,7 +160,7 @@ export function createRefreshActions(setState, getState) {
     },
 
     async refreshPreSchedule() {
-      const { startDate, poolType, pgmSlots, scheduleBlocks } = getState()
+      const { startDate, poolType, pgmSlots, scheduleBlocks, userName } = getState()
       setState({ isLoadingPreSchedule: true })
       try {
         const { fetchRefreshPreSchedule } = await import('../../api/gas')
@@ -165,7 +170,7 @@ export function createRefreshActions(setState, getState) {
         const now = Date.now()
         const preScheduleRows = data.preScheduleRows || []
         await update(ref(db, `sessions/${weekKey}/gasData`), { preScheduleRows })
-        await update(ref(db, `sessions/${weekKey}/lastUpdated`), { preSchedule: now })
+        await update(ref(db, `sessions/${weekKey}/lastUpdated`), { preSchedule: now, preScheduleBy: userName || '' })
         // 사용자가 직접 편성한 블록(isDefault도 isPreSchedule도 아닌)만 보호
         // default·기존선편성 블록은 새 데이터로 덮어씀 (정규화 반영)
         const protectedBlocks = Object.fromEntries(
@@ -178,7 +183,7 @@ export function createRefreshActions(setState, getState) {
         setState(s => ({
           preScheduleRows,
           isLoadingPreSchedule: false,
-          lastUpdated: { ...s.lastUpdated, preSchedule: now },
+          lastUpdated: { ...s.lastUpdated, preSchedule: now, preScheduleBy: userName || '' },
         }))
       } catch (e) {
         setState({ error: e.message, isLoadingPreSchedule: false })

@@ -8,6 +8,7 @@ import { getCompetitionItems } from '../../utils/competition'
 import { filterUnscheduledItems } from '../../utils/proposalVisibility'
 import {
   VERSION_DRAFT,
+  VERSION_OPS,
   VERSION_SALES,
   VERSION_DATA_KEYS,
   buildVersionSnapshot,
@@ -193,6 +194,7 @@ export function createSessionActions(setState, getState) {
         await set(ref(db, getVersionPath(weekKey, VERSION_SALES)), snapshot)
         await set(ref(db, `sessions/${weekKey}/versionMeta/${VERSION_SALES}`), {
           publishedAt,
+          publishedBy: userName || '',
           sourceVersionId: VERSION_DRAFT,
         })
         await writePublishLogs(weekKey, {
@@ -213,6 +215,7 @@ export function createSessionActions(setState, getState) {
             [VERSION_SALES]: {
               ...((s.versionMeta || {})[VERSION_SALES] || {}),
               publishedAt,
+              publishedBy: userName || '',
               sourceVersionId: VERSION_DRAFT,
             },
           },
@@ -290,6 +293,13 @@ async function ensureVersionData(weekKey, versionId) {
   if (targetSnap.exists()) return versionId
 
   if (versionId === VERSION_SALES) {
+    const draftSnap = await get(ref(db, getVersionPath(weekKey, VERSION_DRAFT)))
+    if (draftSnap.exists()) return VERSION_DRAFT
+  }
+
+  if (versionId === VERSION_OPS) {
+    const salesSnap = await get(ref(db, getVersionPath(weekKey, VERSION_SALES)))
+    if (salesSnap.exists()) return VERSION_SALES
     const draftSnap = await get(ref(db, getVersionPath(weekKey, VERSION_DRAFT)))
     if (draftSnap.exists()) return VERSION_DRAFT
   }
