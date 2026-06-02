@@ -40,6 +40,7 @@ const actionStyle = action => {
   if (['공유본 갱신'].includes(action)) return { bg: '#eef2ff', color: 'var(--accent)' }
   if (['채널변경', '채널나누기', '채널합치기', '시간나누기'].includes(action)) return { bg: '#eff6ff', color: 'var(--accent)' }
   if (['복사'].includes(action)) return { bg: '#fef9c3', color: '#854d0e' }
+  if (['되돌리기'].includes(action)) return { bg: '#f5f3ff', color: '#6d28d9' }
   return { bg: 'var(--bg4)', color: 'var(--text2)' }
 }
 

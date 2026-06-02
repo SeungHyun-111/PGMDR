@@ -138,8 +138,26 @@ const useScheduleStore = create((setState, getState) => ({
     for (const change of [...entry.changes].reverse()) {
       await set(ref(db, change.path), compactValue(change.before))
     }
+    await getState()._writeUndoLogs(entry)
     setState(s => ({
       undoStack: s.undoStack.filter(item => item.id !== entry.id),
+    }))
+  },
+
+  async _writeUndoLogs(entry) {
+    const groups = groupUndoChangesForLogs(entry?.changes || [])
+    await Promise.all(groups.map(group => {
+      const representative = getUndoLogRepresentative(group.changes)
+      const before = representative.after || null
+      const after = representative.before || null
+      const blockKey = getUndoLogBlockKey(representative)
+      return getState()._writeLog('되돌리기', blockKey, before, after, {
+        scope: group.scope,
+        detail: group.detail,
+        undoId: entry.id || '',
+        undoLabel: entry.label || '',
+        undoChangeCount: group.changes.length,
+      })
     }))
   },
 
@@ -176,3 +194,58 @@ const useScheduleStore = create((setState, getState) => ({
 }))
 
 export default useScheduleStore
+
+function groupUndoChangesForLogs(changes) {
+  const grouped = { schedule: [], sidebar: [] }
+  changes.forEach(change => {
+    const scope = getUndoChangeScope(change)
+    if (!scope) return
+    grouped[scope].push(change)
+  })
+  return Object.entries(grouped)
+    .filter(([, list]) => list.length > 0)
+    .map(([scope, list]) => ({
+      scope,
+      changes: list,
+      detail: makeUndoLogDetail(scope, list),
+    }))
+}
+
+function getUndoChangeScope(change) {
+  const path = change?.path || ''
+  if (
+    path.includes('/scheduleBlocks/')
+    || path.includes('/splitSlots/')
+    || path.includes('/customSlots/')
+  ) return 'schedule'
+  if (
+    path.includes('/proposalItems/')
+    || path.includes('/scheduledItemIds/')
+    || path.includes('/scheduledUniqueKeys/')
+    || path.includes('/entityProps/')
+    || path.includes('/manualInputs/')
+    || path.includes('/starred/')
+  ) return 'sidebar'
+  return null
+}
+
+function makeUndoLogDetail(scope, changes) {
+  const label = scope === 'schedule' ? '편성표' : '사이드바 상품'
+  return `${label} 되돌리기 (${changes.length.toLocaleString()}건)`
+}
+
+function getUndoLogRepresentative(changes) {
+  return changes.find(change => isObjectLogValue(change?.after) || isObjectLogValue(change?.before))
+    || changes[0]
+    || {}
+}
+
+function isObjectLogValue(value) {
+  return value && typeof value === 'object' && !Array.isArray(value)
+}
+
+function getUndoLogBlockKey(change) {
+  const path = change?.path || ''
+  const match = path.match(/\/scheduleBlocks\/([^/]+)/)
+  return match?.[1] || ''
+}
