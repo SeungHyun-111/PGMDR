@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx'
 import { getGrade, getEffectiveProfit } from './grade'
 import { getEffectivePgmSlots } from './effectiveSlots'
 import { getCompetitionItems } from './competition'
+import { getResolvedEntity, getResolvedPerfKey } from './entityKey'
 
 // ── 시간 비교 헬퍼 ────────────────────────────────────────────────────────
 function timeToMin(t) {
@@ -104,6 +105,322 @@ export function exportToExcel(rows, opts = {}) {
   ws['!cols'] = colWidths
 
   XLSX.writeFile(wb, `편성표_${startDate || new Date().toISOString().slice(0, 10)}.xlsx`)
+}
+
+const reportEsc = v => String(v ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+const reportNum = v => {
+  const n = Number(String(v ?? '').replace(/,/g, ''))
+  return Number.isFinite(n) && v !== '' && v != null ? n.toLocaleString() : '-'
+}
+const reportMillion = v => {
+  const n = Number(String(v ?? '').replace(/,/g, ''))
+  return Number.isFinite(n) && v !== '' && v != null ? (n / 1000000).toFixed(2) : ''
+}
+const reportShortDate = v => {
+  if (!v) return '-'
+  const s = String(v)
+  const m = s.match(/(\d{1,4})[.\-/](\d{1,2})[.\-/](\d{1,2})/)
+  return m ? `${String(m[2]).padStart(2, '0')}/${String(m[3]).padStart(2, '0')}` : s.slice(0, 5)
+}
+const reportDow = ['일', '월', '화', '수', '목', '금', '토']
+const reportDateObj = v => {
+  if (!v) return null
+  const s = String(v)
+  const m = s.match(/(\d{1,4})[.\-/](\d{1,2})[.\-/](\d{1,2})/)
+  if (!m) return null
+  const y = Number(m[1].length === 4 ? m[1] : new Date().getFullYear())
+  const d = new Date(y, Number(m[2]) - 1, Number(m[3]))
+  return Number.isNaN(d.getTime()) ? null : d
+}
+const reportTime = v => {
+  if (!v) return ''
+  const m = String(v).match(/(\d{1,2}):(\d{2})/)
+  return m ? `${String(m[1]).padStart(2, '0')}:${m[2]}` : String(v)
+}
+const reportChannel = v => {
+  const s = String(v || '').trim()
+  if (!s || s === 'ALL') return ''
+  if (s.includes('CA')) return 'CA'
+  if (s.includes('IP')) return 'IP'
+  return s
+}
+const reportPerfSub = time => String(time || '').trim()
+const reportTeam = v => String(v || '').replace(/팀$/, '').slice(0, 2)
+const reportVideoMark = v => {
+  const s = String(v || '')
+  if (!s || s === '기존') return ''
+  if (s.includes('재')) return '(재)'
+  if (s.includes('신')) return '(신)'
+  return ''
+}
+const reportProductParts = v => {
+  const name = String(v || '').trim()
+  const m = name.match(/^\[([^\]]+)\]\s*(.*)$/)
+  return m ? { brand: `[${m[1]}]`, itemName: m[2] || '' } : { brand: name, itemName: '' }
+}
+
+function getReportBlock(scheduleBlocks, slot, channel, splitSlots) {
+  if (!slot) return null
+  if (splitSlots?.[slot.slotId]) return scheduleBlocks[`${slot.slotId}_${channel}`] || null
+  return scheduleBlocks[slot.slotId] || null
+}
+
+function getReportItem(block) {
+  if (!block) return null
+  if (!block.isCompeting) return block
+  return getCompetitionItems(block)[0] || block
+}
+
+function getReportPerf(block, entityProps, perfMap) {
+  const item = getReportItem(block)
+  if (!item) return null
+  const perfKey = getResolvedPerfKey(item, entityProps) || item.perfKey
+  return perfKey ? (perfMap?.[perfKey] || null) : null
+}
+
+function getReportName(block) {
+  if (!block) return ''
+  if (!block.isCompeting) return block.pgmCodeName || ''
+  return getCompetitionItems(block).map(item => item.pgmCodeName || '').filter(Boolean).join(' / ') || block.pgmCodeName || ''
+}
+
+function buildReportRow({ slot, block, channel, entityProps, perfMap }) {
+  const item = getReportItem(block)
+  const resolved = item ? getResolvedEntity(item, entityProps) : item
+  const perf = getReportPerf(block, entityProps, perfMap)
+  const isEmpty = !block || block.isDefault
+  const product = reportProductParts(isEmpty ? '' : getReportName(block))
+  const rowChannel = reportChannel(channel === 'ALL' ? block?.channel : channel)
+  return {
+    timeText: slot?.timeText || block?.timeText || '',
+    channel: rowChannel,
+    team: reportTeam(resolved?.mdTeam || resolved?.orgName || block?.mdTeam || block?.orgName),
+    brand: product.brand,
+    itemName: product.itemName,
+    memoCode: block?.memoCode || '',
+    hasHash: String(block?.scheduleComment || '').includes('#'),
+    durationMin: block?.durationMin ?? slot?.durationMin ?? '',
+    weightedMin: block?.weightedMin ?? slot?.weightedMin ?? '',
+    prevDate: perf?.broadcastDate || '',
+    prevTime: perf?.broadcastTime || '',
+    salesPerMin: perf?.salesPerWeightedMin,
+    profitPerMin: perf?.profitPerWeightedMin,
+    hasPerf: !!perf,
+    dealType: resolved?.dealTypeConverted || resolved?.dealType || block?.dealTypeConverted || block?.dealType || '',
+    videoType: reportVideoMark(resolved?.newProductType || resolved?.videoStatus || block?.newProductType || block?.videoStatus || ''),
+    isEmpty,
+  }
+}
+
+function buildReportRowsByDate({ scheduleBlocks, pgmSlots, customSlots, splitSlots, entityProps, perfMap }) {
+  const effectiveSlots = getEffectivePgmSlots(pgmSlots, customSlots || {})
+  effectiveSlots.sort((a, b) =>
+    a.dateKey !== b.dateKey
+      ? a.dateKey.localeCompare(b.dateKey)
+      : timeToMin(a.timeText) - timeToMin(b.timeText)
+  )
+
+  const byDate = {}
+  effectiveSlots.forEach(slot => {
+    if (!byDate[slot.dateKey]) byDate[slot.dateKey] = []
+    if (splitSlots?.[slot.slotId]) {
+      ;['CA', 'IP'].forEach(channel => {
+        byDate[slot.dateKey].push(buildReportRow({
+          slot,
+          channel,
+          block: getReportBlock(scheduleBlocks, slot, channel, splitSlots),
+          entityProps,
+          perfMap,
+        }))
+      })
+    } else {
+      byDate[slot.dateKey].push(buildReportRow({
+        slot,
+        channel: 'ALL',
+        block: getReportBlock(scheduleBlocks, slot, 'ALL', splitSlots),
+        entityProps,
+        perfMap,
+      }))
+    }
+  })
+  return byDate
+}
+
+function reportDensity(maxRows) {
+  if (maxRows <= 30) return 'normal'
+  if (maxRows <= 42) return 'compact'
+  if (maxRows <= 56) return 'dense'
+  return 'ultra'
+}
+
+function getReportMaxRows(rowsByDate) {
+  const dates = Object.keys(rowsByDate)
+  return Math.max(...dates.map(d => rowsByDate[d].length), 1)
+}
+
+function calcReportLayout(maxRows, dateCount) {
+  const PAGE_W_MM = 400 // A3 landscape 420mm - horizontal margins 10mm * 2
+  const PAGE_H_MM = 285 // A3 landscape 297mm - vertical margins 6mm * 2
+  const TOP_H_MM = 12
+  const TOP_MB_MM = 1.5
+  const DAY_HEAD_H_MM = 3
+  const DEFAULT_ROW_H_MM = 7.5
+  const MIN_ROW_H_MM = 4.6
+
+  const availableRowsH = PAGE_H_MM - TOP_H_MM - TOP_MB_MM - DAY_HEAD_H_MM
+  const rowH = Math.max(MIN_ROW_H_MM, Math.min(DEFAULT_ROW_H_MM, availableRowsH / maxRows))
+  const fontK = Math.max(0.62, rowH / DEFAULT_ROW_H_MM)
+  const dayW = Math.min(60, PAGE_W_MM / Math.max(dateCount, 1))
+
+  return { PAGE_W_MM, PAGE_H_MM, rowH, fontK, dayW }
+}
+
+export function printReportSchedule(rows, opts = {}) {
+  const {
+    startDate = '', endDate = '', scheduleBlocks = {}, pgmSlots = [],
+    customSlots = {}, splitSlots = {}, perfMap = {}, entityProps = {}, profitThreshold = null,
+  } = opts
+
+  const rowsByDate = buildReportRowsByDate({ scheduleBlocks, pgmSlots, customSlots, splitSlots, entityProps, perfMap })
+  const dates = Object.keys(rowsByDate).sort()
+  const maxRows = getReportMaxRows(rowsByDate)
+  const density = reportDensity(maxRows)
+  const scheduledCount = Object.values(scheduleBlocks).filter(b => b && !b.isDefault).length
+  const { PAGE_W_MM, PAGE_H_MM, rowH, fontK, dayW } = calcReportLayout(maxRows, dates.length)
+
+  const dateHeader = d => {
+    const date = new Date(d)
+    const dow = Number.isNaN(date.getTime()) ? '' : reportDow[date.getDay()]
+    return `${reportEsc(d.slice(5))}${dow ? ` (${dow})` : ''}`
+  }
+
+  const body = dates.map(d => `
+    <section class="day-col">
+      <div class="day-head">${dateHeader(d)}</div>
+      <div class="rows">
+        ${[...rowsByDate[d], ...Array.from({ length: Math.max(0, maxRows - rowsByDate[d].length) }, () => ({ isEmpty: true }))].map(row => {
+          const profit = Number(String(row.profitPerMin ?? '').replace(/,/g, ''))
+          const belowProfit = row.hasPerf && profitThreshold != null && Number.isFinite(profit) && profit < profitThreshold
+          return `
+          <div class="report-row ${row.isEmpty ? 'empty' : ''} ${belowProfit ? 'below-profit' : ''}">
+            <div class="time"><span>${reportEsc(reportTime(row.timeText))}</span><span class="ch">${reportEsc(row.channel || '')}</span></div>
+            <div class="team"><span>${reportEsc(row.team || '')}</span><span class="video">${reportEsc(row.videoType || '')}</span></div>
+            <div class="main">
+              <div class="name">${reportEsc([row.dealType, row.brand, row.memoCode].filter(Boolean).join(' '))}</div>
+              <div class="meta"><span>${reportEsc(row.itemName || '')}</span>${row.hasHash ? '<span class="hash">#</span>' : ''}</div>
+            </div>
+            <div class="min">${row.isEmpty || row.weightedMin === '' || row.weightedMin == null ? '' : `${reportEsc(row.weightedMin)}분`}</div>
+            <div class="perf">
+              <span class="perf-line"></span>
+              ${row.hasPerf ? `
+                <div class="perf-date">${reportShortDate(row.prevDate)}</div>
+                <div class="perf-sales">${reportMillion(row.salesPerMin)}</div>
+                <div class="perf-sub">${reportEsc(reportPerfSub(row.prevTime))}</div>
+                <div class="perf-profit">${reportMillion(row.profitPerMin)}</div>
+              ` : ''}
+            </div>
+          </div>
+        `}).join('')}
+      </div>
+    </section>
+  `).join('')
+
+  const win = window.open('', '_blank')
+  win.document.write(`<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>보고용 편성표 ${startDate} ~ ${endDate}</title>
+  <style>
+    *{box-sizing:border-box}
+    html,body{margin:0;padding:0;background:#fff;color:#000;font-family:'Malgun Gothic','Apple SD Gothic Neo',Arial,sans-serif}
+    @page{size:A3 landscape;margin:6mm 10mm}
+    @media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+    .page{width:${PAGE_W_MM}mm;height:${PAGE_H_MM}mm;padding:0;overflow:hidden}
+    .sheet{width:${(dayW * Math.max(dates.length, 1)).toFixed(2)}mm;transform-origin:top center}
+    .top{height:12mm;display:flex;align-items:center;border-bottom:0.5mm solid #000;margin-bottom:1.5mm}
+    .title{font-size:12px;font-weight:800;margin-right:4mm}
+    .range,.count{font-size:8px;color:#111}
+    .count{margin-left:auto}
+    .grid{width:100%;display:grid;grid-template-columns:repeat(${Math.max(dates.length, 1)}, ${dayW.toFixed(2)}mm);border-left:0.35mm solid #000;border-top:0.35mm solid #000}
+    .day-col{position:relative;min-width:0;border-right:0}
+    .day-col:after{content:"";position:absolute;top:0;right:0;bottom:0;width:0.35mm;background:#000;z-index:30;pointer-events:none}
+    .day-head{height:3mm;display:flex;align-items:center;justify-content:center;border-bottom:0.35mm solid #000;font-size:8px;font-weight:800;line-height:1;padding:1px 0;overflow:hidden}
+    .rows{display:grid;grid-auto-rows:var(--row-h)}
+    .report-row{position:relative;height:100%;min-height:0;display:grid;grid-template-columns:7.5mm 7mm minmax(0,1fr) var(--min-w) 10.5mm;overflow:hidden}
+    .report-row:after{content:"";position:absolute;left:0;right:0;bottom:0;border-bottom:0.12mm solid #aaa;z-index:8;pointer-events:none}
+    .report-row>div{position:relative;min-width:0;border-right:0;padding:0.35mm 0.55mm;line-height:1.1;overflow:hidden;box-shadow:none}
+    .report-row>div:not(.perf):after{content:"";position:absolute;top:0;right:0;bottom:0;width:0.1mm;background:#c6c6c6;z-index:20;pointer-events:none}
+    .time{font-weight:800;font-size:var(--time-fs);white-space:nowrap;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center}
+    .time .ch{font-size:var(--ch-fs);font-weight:700;line-height:1}
+    .team{font-size:var(--team-fs);white-space:nowrap;display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;font-weight:400}
+    .team .video{font-size:var(--ch-fs);font-weight:400;line-height:1}
+    .main{display:flex;flex-direction:column;justify-content:center;gap:0.05mm;padding:0 0.55mm}
+    .name,.meta{font-size:var(--name-fs);line-height:1.18;white-space:nowrap;overflow:hidden}
+    .name{font-weight:700}
+    .meta{font-weight:600;display:flex;align-items:center;gap:0.8mm}
+    .meta span:first-child{min-width:0;overflow:hidden}
+    .meta .hash{margin-left:auto;font-weight:900}
+    .min{font-size:var(--min-fs);font-weight:400;text-align:center;white-space:nowrap;display:flex;align-items:center;justify-content:center}
+    .perf{position:relative;font-size:var(--perf-fs);display:grid;grid-template-columns:50% 50%;grid-template-rows:1fr 1fr;align-items:stretch;padding:0;box-shadow:none}
+    .perf:before{content:"";position:absolute;top:0.1mm;bottom:0.1mm;left:50%;width:1px;background:#e5e5e5;opacity:.55;transform:translateX(-50%) scaleX(.35);transform-origin:center;z-index:7;pointer-events:none}
+    .perf:after{content:"";position:absolute;left:0.45mm;right:0.45mm;top:50%;height:1px;background:#e5e5e5;opacity:.55;transform:translateY(-50%) scaleY(.35);transform-origin:center;z-index:7;pointer-events:none}
+    .perf-line{position:absolute;top:0;left:0;bottom:0;width:0.35mm;background:#000;z-index:25;pointer-events:none}
+    .perf-date,.perf-sub,.perf-sales,.perf-profit{position:relative;z-index:1;font-size:var(--perf-fs);font-weight:400;white-space:nowrap;line-height:1;display:flex;align-items:center;padding:0.1mm 0.55mm}
+    .perf-date,.perf-sub{padding-left:0.15mm;padding-right:0.2mm}
+    .perf-sales,.perf-profit{padding-left:0.85mm}
+    .perf-date,.perf-sub{justify-content:flex-start;text-align:left}
+    .perf-sales,.perf-profit{justify-content:flex-end;text-align:right}
+    .empty .name,.empty .meta,.empty .perf{color:transparent}
+    .below-profit{color:#f00;font-style:italic;font-weight:800}
+    .below-profit>div{background:#ffff00;background-clip:padding-box}
+    .below-profit .name,.below-profit .meta,.below-profit .time,.below-profit .team,.below-profit .min,.below-profit .perf-date,.below-profit .perf-sub,.below-profit .perf-sales,.below-profit .perf-profit{font-weight:800;font-style:italic}
+    .normal,.compact,.dense,.ultra{--row-h:${rowH.toFixed(2)}mm;--min-w:5.8mm;--time-fs:${(8 * fontK).toFixed(2)}px;--ch-fs:${(6.8 * fontK).toFixed(2)}px;--team-fs:${(7.3 * fontK).toFixed(2)}px;--name-fs:${(7.8 * fontK).toFixed(2)}px;--min-fs:${(7.4 * fontK).toFixed(2)}px;--sub-fs:${(5.3 * fontK).toFixed(2)}px;--perf-fs:${(5.8 * fontK).toFixed(2)}px}
+    .ultra .meta{display:none}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div id="sheet" class="sheet ${density}">
+      <header class="top">
+        <div class="title">보고용 편성표</div>
+        <div class="range">${reportEsc(startDate)} ~ ${reportEsc(endDate)}</div>
+        <div class="count">${scheduledCount}건 · 직전실적 기준</div>
+      </header>
+      <main class="grid">${body || '<div style="padding:8mm;font-size:10px">편성 데이터가 없습니다.</div>'}</main>
+    </div>
+  </div>
+  <script>
+    window.onload=function(){
+      var page=document.querySelector('.page');
+      var sheet=document.getElementById('sheet');
+      sheet.style.margin='0 auto';
+      function fitText(el,min){
+        if(!el) return;
+        var base=parseFloat(getComputedStyle(el).fontSize)||7;
+        var size=base;
+        while((el.scrollWidth>el.clientWidth || el.scrollHeight>el.clientHeight) && size>min){
+          size-=0.2;
+          el.style.fontSize=size+'px';
+        }
+      }
+      document.querySelectorAll('.name,.meta span:first-child,.time span,.team span,.min,.perf-date,.perf-sub,.perf-sales,.perf-profit').forEach(function(el){
+        fitText(el,3);
+      });
+      document.querySelectorAll('.main').forEach(function(main){
+        var lines=main.querySelectorAll('.name,.meta');
+        var size=Math.min.apply(null, Array.from(lines).map(function(el){return parseFloat(getComputedStyle(el).fontSize)||7;}));
+        while(main.scrollHeight>main.clientHeight && size>3){
+          size-=0.2;
+          lines.forEach(function(el){el.style.fontSize=size+'px';});
+        }
+      });
+      setTimeout(function(){window.print();window.close()},450);
+    };
+  <\/script>
+</body>
+</html>`)
+  win.document.close()
 }
 
 // ── 인쇄 ─────────────────────────────────────────────────────────────────
