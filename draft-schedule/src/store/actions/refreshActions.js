@@ -3,6 +3,7 @@ import { db, ref, set, update } from '../../api/firebase'
 import { buildPreScheduleBlocks, buildDefaultBlocks, buildSlot, buildProposalItem, encodePerfMap, buildPerfMapFromGas } from '../helpers/blockBuilders'
 import { genKey } from '../../utils/uniqueKey'
 import { normalizeItemsTeamNames } from '../../utils/teamName'
+import { extractEntityFields } from '../../utils/mergeEntity'
 import { filterUnscheduledItems } from '../../utils/proposalVisibility'
 import { getCurrentVersionPath } from '../../utils/sessionVersion'
 
@@ -25,6 +26,15 @@ function withStableUniqueKeys(items, previousItems = []) {
       || singlePreviousByItemId.get(item.itemId)?.uniqueKey
       || genKey('1'),
   }))
+}
+
+function buildMissingEntityPropUpdates(items, existingEntityProps = {}) {
+  const updates = {}
+  ;(items || []).forEach(item => {
+    if (!item?.uniqueKey || existingEntityProps[item.uniqueKey]) return
+    updates[`entityProps/${item.uniqueKey}`] = extractEntityFields(buildProposalItem(item))
+  })
+  return updates
 }
 
 export function createRefreshActions(setState, getState) {
@@ -64,9 +74,12 @@ export function createRefreshActions(setState, getState) {
         const weekKey = `${startDate}_${poolType}`
         const versionPath = getCurrentVersionPath(getState, weekKey)
         const now = Date.now()
-        const { weightedMinTargets, allProposalItems, scheduledItemIds, scheduledUniqueKeys } = getState()
+        const { weightedMinTargets, allProposalItems, scheduledItemIds, scheduledUniqueKeys, entityProps } = getState()
         const proposalItemsRaw = withStableUniqueKeys(data.proposalItems || [], allProposalItems)
-        await update(ref(db, versionPath), { proposalItems: proposalItemsRaw })
+        await update(ref(db, versionPath), {
+          proposalItems: proposalItemsRaw,
+          ...buildMissingEntityPropUpdates(proposalItemsRaw, entityProps),
+        })
         await update(ref(db, `sessions/${weekKey}/lastUpdated`), { proposal: now, proposalBy: userName || '' })
         const allItems = normalizeItemsTeamNames(
           proposalItemsRaw.map((item, i) => buildProposalItem({ ...item, _fbIdx: i })),
@@ -95,7 +108,7 @@ export function createRefreshActions(setState, getState) {
 
     // ── GAS 전체 재동기화 ─────────────────────────────────
     async refreshAllGasData() {
-      const { startDate, poolType, scheduleBlocks, allProposalItems, scheduledItemIds, scheduledUniqueKeys, userName } = getState()
+      const { startDate, poolType, scheduleBlocks, allProposalItems, scheduledItemIds, scheduledUniqueKeys, userName, entityProps } = getState()
       setState({ isLoadingGasAll: true })
       try {
         const { fetchInitData } = await import('../../api/gas')
@@ -111,7 +124,10 @@ export function createRefreshActions(setState, getState) {
           proposalItems: proposalItemsRaw,
           perfMap: encodePerfMap(gasData.perfMap || {}),
         })
-        await update(ref(db, versionPath), { proposalItems: proposalItemsRaw })
+        await update(ref(db, versionPath), {
+          proposalItems: proposalItemsRaw,
+          ...buildMissingEntityPropUpdates(proposalItemsRaw, entityProps),
+        })
         await set(ref(db, `sessions/${weekKey}/lastUpdated`), {
           pgm: now, proposal: now, performance: now, preSchedule: now,
           pgmBy: userName || '', proposalBy: userName || '', performanceBy: userName || '', preScheduleBy: userName || '',
@@ -124,7 +140,13 @@ export function createRefreshActions(setState, getState) {
         )
         const preBlocks = buildPreScheduleBlocks(pgmSlotsNew, gasData.preScheduleRows || [], protectedBlocks)
         const defBlocks = buildDefaultBlocks(pgmSlotsNew, { ...protectedBlocks, ...preBlocks })
-        await update(ref(db, `${versionPath}/scheduleBlocks`), { ...defBlocks, ...preBlocks })
+        const blockUpdates = Object.fromEntries(
+          Object.entries({ ...defBlocks, ...preBlocks }).map(([key, block]) => [`scheduleBlocks/${key}`, block])
+        )
+        await update(ref(db, versionPath), {
+          ...blockUpdates,
+          ...buildMissingEntityPropUpdates(Object.values(preBlocks), entityProps),
+        })
 
         const proposalItems = normalizeItemsTeamNames(
           proposalItemsRaw.map((item, i) => buildProposalItem({ ...item, _fbIdx: i })),
@@ -160,7 +182,7 @@ export function createRefreshActions(setState, getState) {
     },
 
     async refreshPreSchedule() {
-      const { startDate, poolType, pgmSlots, scheduleBlocks, userName } = getState()
+      const { startDate, poolType, pgmSlots, scheduleBlocks, userName, entityProps } = getState()
       setState({ isLoadingPreSchedule: true })
       try {
         const { fetchRefreshPreSchedule } = await import('../../api/gas')
@@ -178,7 +200,13 @@ export function createRefreshActions(setState, getState) {
         )
         const newBlocks = buildPreScheduleBlocks(pgmSlots, preScheduleRows, protectedBlocks)
         if (Object.keys(newBlocks).length > 0) {
-          await update(ref(db, `${versionPath}/scheduleBlocks`), newBlocks)
+          const updates = Object.fromEntries(
+            Object.entries(newBlocks).map(([key, block]) => [`scheduleBlocks/${key}`, block])
+          )
+          await update(ref(db, versionPath), {
+            ...updates,
+            ...buildMissingEntityPropUpdates(Object.values(newBlocks), entityProps),
+          })
         }
         setState(s => ({
           preScheduleRows,

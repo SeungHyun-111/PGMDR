@@ -72,6 +72,8 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
   const persistEntityAndManual = async (entityPatch) => {
     if (block.uniqueKey) {
       await saveEntityProps(block.uniqueKey, entityPatch)
+    } else {
+      await saveBlock(blockKey, entityPatch)
     }
     if (manualKey) {
       await saveManualInput(manualKey, {
@@ -97,7 +99,7 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
         const result = await changeBlockChannel(
           block,
           form.channel,
-          { ...entityPatch, channel: form.channel, isDefault: false },
+          { channel: form.channel, isDefault: false },
           channelMode ? { mode: channelMode } : {}
         )
         if (result?.conflict) {
@@ -107,7 +109,7 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
           return
         }
       } else {
-        await saveBlock(blockKey, { ...entityPatch, channel: form.channel, isDefault: false })
+        await saveBlock(blockKey, { channel: form.channel, isDefault: false })
       }
 
       await persistEntityAndManual(entityPatch)
@@ -131,7 +133,7 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
       const result = await changeBlockChannel(
         block,
         form.channel,
-        { ...channelConflict.entityPatch, channel: form.channel, isDefault: false },
+        { channel: form.channel, isDefault: false },
         { mode }
       )
       if (result?.conflict) {

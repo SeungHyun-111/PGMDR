@@ -9,6 +9,7 @@ import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
 import { getEffectivePgmSlots } from '../utils/effectiveSlots'
 import { timeToMin } from '../utils/weightedMin'
 import { getManualInputKey } from '../utils/grade'
+import { extractEntityFields } from '../utils/mergeEntity'
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -321,7 +322,7 @@ function ReferenceLineLabel({ viewBox, text, color, lane = 'top' }) {
 // ── main ──────────────────────────────────────────────────────────────────
 
 export default function PerformanceForecast() {
-  const { scheduleBlocks, pgmSlots, splitSlots, customSlots, proposalItems, perfMap, manualInputs, saveManualInput, saveBlock, weightedMinTargets, targetMetrics } = useScheduleStore()
+  const { scheduleBlocks, pgmSlots, splitSlots, customSlots, proposalItems, perfMap, manualInputs, saveManualInput, saveBlock, saveEntityProps, weightedMinTargets, targetMetrics } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const [groupBy, setGroupBy]           = useState('team')
   const [simSpm, setSimSpm]             = useState('')
@@ -510,7 +511,7 @@ export default function PerformanceForecast() {
   }, [])
   const handleSave = async (uniqueKey, field, val) => { await saveManualInput(uniqueKey, { [field]: val }) }
 
-  // 블록 필드(편성코드명·거래형태·영상구분) 수정 → Firebase scheduleBlocks 반영
+  // 블록 필드(편성코드명·거래형태·영상구분) 수정 → uniqueKey 엔티티 속성 반영
   // pgmCodeName·dealType 변경 시 perfKey 재산출
   const handleBlockFieldSave = useCallback(async (block, field, newVal) => {
     const patch = { [field]: newVal }
@@ -521,8 +522,13 @@ export default function PerformanceForecast() {
       patch.dealTypeConverted = newConverted
       patch.perfKey = newName ? makePerfKey(newConverted, newName) : null
     }
-    await saveBlock(block.blockKey || block.slotId, patch)
-  }, [saveBlock])
+    const entityPatch = extractEntityFields(patch)
+    if (block.uniqueKey) {
+      await saveEntityProps(block.uniqueKey, entityPatch)
+    } else {
+      await saveBlock(block.blockKey || block.slotId, entityPatch)
+    }
+  }, [saveBlock, saveEntityProps])
 
   const startResize = useCallback((e, setWidths, key) => {
     e.preventDefault(); e.stopPropagation()

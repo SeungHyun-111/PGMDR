@@ -6,6 +6,7 @@ import { getLastPerf } from '../../utils/entityKey'
 import { DEAL_TYPES } from '../../constants/dealTypes'
 import { CATEGORIES } from '../../constants/categories'
 import { genKey } from '../../utils/uniqueKey'
+import { makePerfKey, normalizeDealType } from '../../hooks/usePerformanceMap'
 
 const NEW_PRODUCT_TYPES = ['기존', '신상품', '재녹화', '재편집']
 
@@ -255,12 +256,20 @@ export default function SidebarExpanded({ items, onClose }) {
     const oldVal = String(item[colKey] ?? '')
     if (newVal !== oldVal) {
       await runUndoBatch(`사이드바 상품 수정 되돌리기: ${item.pgmCodeName || item.itemId}`, async () => {
-      await updateProposalItem(item.itemId, fbIdx, { [colKey]: newVal }, uniqueKey)
       if (item.uniqueKey && ENTITY_EDIT_FIELDS.has(colKey)) {
         const patch = { [colKey]: newVal }
-        if (colKey === 'dealTypeConverted') patch.dealType = newVal
+        const nextName = colKey === 'pgmCodeName' ? newVal : item.pgmCodeName
+        const nextDeal = colKey === 'dealTypeConverted' ? newVal : (item.dealTypeConverted || item.dealType || '')
+        const nextConverted = normalizeDealType(nextDeal)
+        if (colKey === 'pgmCodeName' || colKey === 'dealTypeConverted') {
+          patch.dealTypeConverted = nextConverted
+          patch.perfKey = nextName ? makePerfKey(nextConverted, nextName) : null
+        }
+        if (colKey === 'dealTypeConverted') patch.dealType = nextConverted
         if (colKey === 'mdTeam') patch.orgName = newVal
         await saveEntityProps(item.uniqueKey, patch)
+      } else {
+        await updateProposalItem(item.itemId, fbIdx, { [colKey]: newVal }, uniqueKey)
       }
       })
     }

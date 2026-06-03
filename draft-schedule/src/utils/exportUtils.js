@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { getGrade, getEffectiveProfit } from './grade'
+import { getGrade, getEffectiveProfit, getManualInputKey } from './grade'
 import { getEffectivePgmSlots } from './effectiveSlots'
 import { getCompetitionItems } from './competition'
 import { getResolvedEntity, getResolvedPerfKey } from './entityKey'
@@ -1274,7 +1274,8 @@ function buildRatioSection({ scheduleBlocks, pgmSlots, weightedMinTargets, categ
   function getExpectedForBlock(b) {
     const key = b.perfKey
     if (!key) return { sp: 0, pp: 0, hasPerf: false }
-    const m  = (manualInputs || {})[key] || {}
+    const manualKey = getManualInputKey(b)
+    const m  = manualKey ? ((manualInputs || {})[manualKey] || {}) : {}
     const p  = (perfMap || {})[key]      || {}
     const sp = Number(m.expectedSalesPerWeightedMin  ?? p.salesPerWeightedMin  ?? 0)
     const pp = Number(m.expectedProfitPerWeightedMin ?? p.profitPerWeightedMin ?? 0)

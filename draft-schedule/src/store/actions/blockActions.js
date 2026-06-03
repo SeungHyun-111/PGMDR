@@ -1,6 +1,6 @@
 import { db, ref, set, get, update } from '../../api/firebase'
 import { buildProposalItem, makeDefaultBlock } from '../helpers/blockBuilders'
-import { resolveEntity } from '../../utils/mergeEntity'
+import { extractEntityFields, resolveEntity } from '../../utils/mergeEntity'
 import { splitWeightedMin } from '../../utils/weightedMin'
 import { normalizeTeamName } from '../../utils/teamName'
 import { genKey } from '../../utils/uniqueKey'
@@ -369,7 +369,17 @@ export function createBlockActions(setState, getState) {
           after: itemData,
           description: `제안상품 생성 취소: ${itemData.pgmCodeName || newItemId}`,
         })
-        await set(ref(db, `${versionPath}/proposalItems/${newItemId}`), itemData)
+        const entityFields = extractEntityFields(buildProposalItem(itemData))
+        await update(ref(db, versionPath), {
+          [`proposalItems/${newItemId}`]: itemData,
+          [`entityProps/${itemData.uniqueKey}`]: entityFields,
+        })
+        getState().recordUndoChange('사이드바 반환 되돌리기', {
+          path: `${versionPath}/entityProps/${itemData.uniqueKey}`,
+          before: null,
+          after: entityFields,
+          description: `제안상품 속성 삭제: ${itemData.pgmCodeName || itemData.uniqueKey}`,
+        })
         setState(s => {
           const allProposalItems = upsertByItemId(s.allProposalItems, buildProposalItem({ ...itemData, _fbIdx: newItemId }))
           return {

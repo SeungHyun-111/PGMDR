@@ -171,7 +171,7 @@ export default function StatusScheduled({ rows, competing = [], perfMap, manualI
           {allRows.map((block, i) => {
             const isStarred = !!starred[block.itemId]
             const isCompeting = block.isCompeting
-            const grade = block._grade || getGrade(getEffectiveProfit(block.perfKey, perfMap, manualInputs))
+            const grade = block._grade || getGrade(getEffectiveProfit(block, perfMap, manualInputs))
             const metrics = getEffectiveMetrics(block, perfMap, manualInputs)
             return (
               <tr key={block.blockKey || i}

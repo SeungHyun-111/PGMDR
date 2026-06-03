@@ -93,12 +93,22 @@ export function createItemActions(setState, getState) {
       const fbIdx = allProposalItems.length
       // _fbIdx는 내부 메타 — Firebase에는 저장하지 않음
       const newItem = { ...itemData, itemId: `manual_${Date.now()}`, uniqueKey: genKey('1') }
-      await set(ref(db, `${versionPath}/proposalItems/${fbIdx}`), newItem)
+      const entityFields = extractEntityFields(buildProposalItem(newItem))
+      await update(ref(db, versionPath), {
+        [`proposalItems/${fbIdx}`]: newItem,
+        [`entityProps/${newItem.uniqueKey}`]: entityFields,
+      })
       getState().recordUndoChange('사이드바 상품 추가 되돌리기', {
         path: `${versionPath}/proposalItems/${fbIdx}`,
         before: null,
         after: newItem,
         description: `상품 추가 취소: ${newItem.pgmCodeName || newItem.itemId}`,
+      })
+      getState().recordUndoChange('사이드바 상품 추가 되돌리기', {
+        path: `${versionPath}/entityProps/${newItem.uniqueKey}`,
+        before: null,
+        after: entityFields,
+        description: `상품 속성 삭제: ${newItem.pgmCodeName || newItem.uniqueKey}`,
       })
       getState()._writeLog('추가', '', null, newItem, {
         scope: 'sidebar',
@@ -153,12 +163,22 @@ export function createItemActions(setState, getState) {
       const rest = { ...orig }
       delete rest._fbIdx
       const newItem = { ...rest, itemId: `dup_${Date.now()}`, uniqueKey: genKey('1') }
-      await set(ref(db, `${versionPath}/proposalItems/${fbIdx}`), newItem)
+      const entityFields = extractEntityFields(buildProposalItem(newItem))
+      await update(ref(db, versionPath), {
+        [`proposalItems/${fbIdx}`]: newItem,
+        [`entityProps/${newItem.uniqueKey}`]: entityFields,
+      })
       getState().recordUndoChange('사이드바 상품 복사 되돌리기', {
         path: `${versionPath}/proposalItems/${fbIdx}`,
         before: null,
         after: newItem,
         description: `복사 상품 삭제: ${newItem.pgmCodeName || newItem.itemId}`,
+      })
+      getState().recordUndoChange('사이드바 상품 복사 되돌리기', {
+        path: `${versionPath}/entityProps/${newItem.uniqueKey}`,
+        before: null,
+        after: entityFields,
+        description: `복사 상품 속성 삭제: ${newItem.pgmCodeName || newItem.uniqueKey}`,
       })
       getState()._writeLog('복사', '', orig, newItem, {
         scope: 'sidebar',

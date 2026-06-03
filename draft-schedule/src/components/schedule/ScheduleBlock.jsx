@@ -18,7 +18,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
   const [competitionSelect, setCompetitionSelect] = useState(null)
   const [annotationPopup, setAnnotationPopup] = useState(false)
   const [annotationText, setAnnotationText]   = useState('')
-  const { returnBlockToSidebar: returnBlockToSidebarRaw, releaseCompetition, perfMap, manualInputs, runUndoBatch } = useScheduleStore()
+  const { returnBlockToSidebar: returnBlockToSidebarRaw, releaseCompetition, perfMap, manualInputs, runUndoBatch, saveEntityProps } = useScheduleStore()
   const returnBlockToSidebar = async (targetBlock) => {
     await runUndoBatch(`사이드바 반환 되돌리기: ${targetBlock.pgmCodeName || targetBlock.blockKey || targetBlock.slotId}`, async () => {
     await returnBlockToSidebarRaw(targetBlock)
@@ -116,7 +116,8 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
 
   const handleSaveAnnotation = () => {
     if (readOnly) return
-    saveBlock(block.blockKey || block.slotId, { annotation: annotationText })
+    if (block.uniqueKey) saveEntityProps(block.uniqueKey, { annotation: annotationText })
+    else saveBlock(block.blockKey || block.slotId, { annotation: annotationText })
     setAnnotationPopup(false)
   }
 
@@ -225,7 +226,11 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
               style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '8px 10px', borderRadius: 5, fontSize: 12, resize: 'vertical' }} />
             <div style={{ display: 'flex', gap: 8 }}>
               {block.annotation && (
-                <button onClick={() => { saveBlock(block.blockKey || block.slotId, { annotation: '' }); setAnnotationPopup(false) }}
+                <button onClick={() => {
+                  if (block.uniqueKey) saveEntityProps(block.uniqueKey, { annotation: '' })
+                  else saveBlock(block.blockKey || block.slotId, { annotation: '' })
+                  setAnnotationPopup(false)
+                }}
                   style={{ padding: '8px 12px', background: 'transparent', border: '1px solid var(--red)', color: 'var(--red)', borderRadius: 5, fontSize: 11, cursor: 'pointer' }}>삭제</button>
               )}
               <button onClick={() => setAnnotationPopup(false)}
