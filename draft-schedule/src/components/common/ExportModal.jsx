@@ -9,6 +9,7 @@ export default function ExportModal({ onClose }) {
   const categoryMap = useCategoryMap(proposalItems)
   const [showHtmlModal, setShowHtmlModal] = useState(false)
   const [showPrintSelect, setShowPrintSelect] = useState(false)
+  const [showExcelSelect, setShowExcelSelect] = useState(false)
   const [showReportOptions, setShowReportOptions] = useState(false)
   const [profitThreshold, setProfitThreshold] = useState('')
   const thresholdInputRef = useRef(null)
@@ -74,7 +75,7 @@ export default function ExportModal({ onClose }) {
         onClick={e => e.stopPropagation()}
         style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '24px 28px', minWidth: showReportOptions ? 430 : 360, display: 'flex', flexDirection: 'column', gap: 14, boxShadow: '0 18px 60px rgba(0,0,0,.24)' }}
       >
-        <div style={{ fontSize: 14, fontWeight: 700 }}>{showReportOptions ? '보고용 인쇄 설정' : showPrintSelect ? '인쇄 형식 선택' : '내보내기'}</div>
+        <div style={{ fontSize: 14, fontWeight: 700 }}>{showReportOptions ? '보고용 인쇄 설정' : showPrintSelect ? '인쇄 형식 선택' : showExcelSelect ? 'Excel 형식 선택' : '내보내기'}</div>
         <div style={{ fontSize: 12, color: 'var(--text2)' }}>{rows.filter(b => !b.isDefault).length}건 · {startDate} ~ {endDate}</div>
 
         {showReportOptions ? (
@@ -123,12 +124,18 @@ export default function ExportModal({ onClose }) {
               <button onClick={onClose} style={{ flex: 1, padding: '8px 0', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>취소</button>
             </div>
           </div>
+        ) : showExcelSelect ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
+            <button onClick={() => { exportToExcel(rows, { ...opts, excelTarget: 'google' }); onClose() }} style={{ padding: '10px 12px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>구글용</button>
+            <button onClick={() => { exportToExcel(rows, { ...opts, excelTarget: 'bo' }); onClose() }} style={{ padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>BO용</button>
+            <button onClick={onClose} style={{ padding: '8px 0', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>취소</button>
+          </div>
         ) : (
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <button onClick={onClose} style={{ flex: 1, padding: '8px 0', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>취소</button>
             <button onClick={() => setShowPrintSelect(true)} style={{ flex: 1, padding: '8px 0', background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>인쇄</button>
             <button onClick={() => setShowHtmlModal(true)} style={{ flex: 1, padding: '8px 0', background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>HTML</button>
-            <button onClick={() => { exportToExcel(rows, opts); onClose() }} style={{ flex: 2, padding: '8px 0', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Excel</button>
+            <button onClick={() => setShowExcelSelect(true)} style={{ flex: 2, padding: '8px 0', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Excel</button>
           </div>
         )}
       </div>

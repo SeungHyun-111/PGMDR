@@ -3,6 +3,7 @@ import DraftSchedule from './pages/DraftSchedule'
 const PerformanceForecast = lazy(() => import('./pages/PerformanceForecast'))
 const ScheduleRatio       = lazy(() => import('./pages/ScheduleRatio'))
 const ScheduleStatus      = lazy(() => import('./pages/ScheduleStatus'))
+const SettingsPage        = lazy(() => import('./pages/SettingsPage'))
 const HelpPage            = lazy(() => import('./pages/HelpPage'))
 import ExportModal from './components/common/ExportModal'
 import ChatPanel from './components/common/ChatPanel'
@@ -19,6 +20,7 @@ const TABS = [
   { id: 'forecast', label: '시뮬레이션' },
   { id: 'ratio',    label: '편성비중' },
   { id: 'status',   label: '편성현황' },
+  { id: 'settings', label: '설정' },
   { id: 'help',     label: '설명서' },
 ]
 
@@ -272,6 +274,7 @@ export default function App() {
           {activeTab === 'forecast' && <PerformanceForecast />}
           {activeTab === 'ratio'    && <ScheduleRatio />}
           {activeTab === 'status'   && <ScheduleStatus />}
+          {activeTab === 'settings' && <SettingsPage />}
           {activeTab === 'help'     && <HelpPage />}
         </Suspense>
       </div>

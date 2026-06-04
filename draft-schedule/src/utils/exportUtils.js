@@ -11,6 +11,22 @@ function timeToMin(t) {
   return (h || 0) * 60 + (m || 0)
 }
 
+function minToTime(totalMin) {
+  const min = ((Number(totalMin) || 0) % 1440 + 1440) % 1440
+  const h = Math.floor(min / 60)
+  const m = min % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+}
+
+function formatBoDate(dateKey) {
+  return String(dateKey || '').replace(/-/g, '/')
+}
+
+function formatBoTime(timeText) {
+  const m = String(timeText || '').match(/(\d{1,2}):(\d{2})/)
+  return m ? `${String(m[1]).padStart(2, '0')}:${m[2]}` : ''
+}
+
 // ── 엑셀 내보내기 ─────────────────────────────────────────────────────────
 function normalizeChannel(ch) {
   if (ch === 'CA') return 'CH1(CA)'
@@ -37,12 +53,99 @@ function normalizeNewProductTypeForExcel(npt) {
   return ''
 }
 
-function buildExcelRow(slot, block, ch, slotDuration) {
+function getBoDealType(block) {
+  return String(block?.dealTypeConverted || block?.dealType || '').trim()
+}
+
+function isBoDirectPurchase(block) {
+  const dealType = getBoDealType(block)
+  return dealType.includes('[직]') || dealType.includes('직매입')
+}
+
+function isBoContract(block) {
+  const dealType = getBoDealType(block)
+  return dealType.includes('[액]') || dealType.includes('정액')
+    || dealType.includes('[혼]') || dealType.includes('혼합')
+}
+
+function isBoMobileAd(block) {
+  const dealType = getBoDealType(block)
+  return dealType.includes('[모]') || dealType.includes('모바일광고')
+}
+
+function buildBoExcelRow(slot, block, slotDuration) {
+  const duration = Number(block?.durationMin ?? slotDuration ?? slot?.durationMin ?? 0)
+  const startMin = timeToMin(slot?.timeText || block?.timeText || '')
+  return {
+    '방송일자': formatBoDate(slot?.dateKey || block?.dateKey || ''),
+    '시작시간': formatBoTime(slot?.timeText || block?.timeText || ''),
+    '종료시간': minToTime(startMin + duration),
+    '편성코드': String(block?.pgmCodeName || ''),
+    '직매입여부': isBoDirectPurchase(block) ? '1' : '0',
+    '약정여부': isBoContract(block) ? '1' : '0',
+    '메모코드1': '',
+    '메모코드2': '',
+    '모바일광고비여부': isBoMobileAd(block) ? '1' : '0',
+  }
+}
+
+function forceWorksheetText(ws) {
+  if (!ws?.['!ref']) return
+  const range = XLSX.utils.decode_range(ws['!ref'])
+  for (let r = range.s.r; r <= range.e.r; r += 1) {
+    for (let c = range.s.c; c <= range.e.c; c += 1) {
+      const addr = XLSX.utils.encode_cell({ r, c })
+      if (!ws[addr]) ws[addr] = { t: 's', v: '', z: '@' }
+      ws[addr].t = 's'
+      ws[addr].v = String(ws[addr].v ?? '')
+      ws[addr].w = ws[addr].v
+      ws[addr].z = '@'
+    }
+  }
+}
+
+function exportToBoExcel(opts = {}) {
+  const { startDate = '', scheduleBlocks = {}, pgmSlots = [], customSlots = {}, splitSlots = {} } = opts
+  const effectiveSlots = getEffectivePgmSlots(pgmSlots, customSlots)
+  effectiveSlots.sort((a, b) =>
+    a.dateKey !== b.dateKey
+      ? a.dateKey.localeCompare(b.dateKey)
+      : timeToMin(a.timeText) - timeToMin(b.timeText)
+  )
+
+  const data = []
+  effectiveSlots.forEach(slot => {
+    if (splitSlots[slot.slotId]) {
+      const halfDur = slot.durationMin != null ? Math.round(slot.durationMin / 2) : ''
+      ;['CA', 'IP'].forEach(channel => {
+        const block = scheduleBlocks[`${slot.slotId}_${channel}`]
+        if (block && !block.isDefault && !block.isCompeting) data.push(buildBoExcelRow(slot, block, halfDur))
+      })
+      return
+    }
+    const block = scheduleBlocks[slot.slotId]
+    if (block && !block.isDefault && !block.isCompeting) data.push(buildBoExcelRow(slot, block, slot.durationMin))
+  })
+
+  const headers = ['방송일자', '시작시간', '종료시간', '편성코드', '직매입여부', '약정여부', '메모코드1', '메모코드2', '모바일광고비여부']
+  const ws = XLSX.utils.json_to_sheet(data, { header: headers })
+  forceWorksheetText(ws)
+  ws['!cols'] = headers.map(header => ({ wch: Math.max(header.length + 2, 12) }))
+
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
+  XLSX.writeFile(wb, `TimeBlockUpload_${startDate || new Date().toISOString().slice(0, 10)}.xls`, { bookType: 'xls' })
+}
+
+function buildExcelRow(slot, block, ch, slotDuration, options = {}) {
+  const { includeEmptySlotMinutes = false, weightedMin } = options
   const empty = !block || block.isDefault
   if (empty) {
     return {
       'DATE': slot.dateKey || '', 'TIME': slot.timeText || '',
-      '단순분': '', '가중분': '', '팀명': '', '다원방송': normalizeChannel(ch),
+      '단순분': includeEmptySlotMinutes ? (slotDuration ?? slot.durationMin ?? '') : '',
+      '가중분': includeEmptySlotMinutes ? (weightedMin ?? slot.weightedMin ?? '') : '',
+      '팀명': '', '다원방송': normalizeChannel(ch),
       'MD분류': '', '상품명': '', '재/신상품': '', '혼합/직매입': '',
       '대기업/수입여부': '', '메모코드': '', '편성C': '',
     }
@@ -55,7 +158,7 @@ function buildExcelRow(slot, block, ch, slotDuration) {
     'DATE':            slot.dateKey || '',
     'TIME':            slot.timeText || '',
     '단순분':          block.durationMin ?? slotDuration ?? '',
-    '가중분':          block.weightedMin ?? '',
+    '가중분':          weightedMin ?? block.weightedMin ?? '',
     '팀명':            '',
     '다원방송':        normalizeChannel(block.channel || ch),
     'MD분류':          '',
@@ -69,7 +172,13 @@ function buildExcelRow(slot, block, ch, slotDuration) {
 }
 
 export function exportToExcel(rows, opts = {}) {
+  if (opts.excelTarget === 'bo') {
+    exportToBoExcel(opts)
+    return
+  }
+
   const { startDate = '', scheduleBlocks = {}, pgmSlots = [], customSlots = {}, splitSlots = {} } = opts
+  const isGoogleExcel = opts.excelTarget !== 'bo'
 
   const effectiveSlots = getEffectivePgmSlots(pgmSlots, customSlots)
   effectiveSlots.sort((a, b) =>
@@ -85,11 +194,19 @@ export function exportToExcel(rows, opts = {}) {
       const halfDur = slot.durationMin != null ? Math.round(slot.durationMin / 2) : ''
       const caBlk   = scheduleBlocks[`${slot.slotId}_CA`]
       const ipBlk   = scheduleBlocks[`${slot.slotId}_IP`]
-      data.push(buildExcelRow(slot, caBlk, 'CA', halfDur))
-      data.push(buildExcelRow(slot, ipBlk, 'IP', halfDur))
+      data.push(buildExcelRow(slot, caBlk, 'CA', halfDur, {
+        includeEmptySlotMinutes: isGoogleExcel,
+        weightedMin: isGoogleExcel ? slot.weightedMin : undefined,
+      }))
+      data.push(buildExcelRow(slot, ipBlk, 'IP', halfDur, {
+        includeEmptySlotMinutes: isGoogleExcel,
+        weightedMin: isGoogleExcel ? slot.weightedMin : undefined,
+      }))
     } else {
       const blk = scheduleBlocks[slot.slotId]
-      data.push(buildExcelRow(slot, blk, 'ALL', slot.durationMin))
+      data.push(buildExcelRow(slot, blk, 'ALL', slot.durationMin, {
+        includeEmptySlotMinutes: isGoogleExcel,
+      }))
     }
   })
 
