@@ -182,7 +182,7 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
       await removeBlock(`${slotId}_${removeCh}`)
       if (keepBlock && !keepBlock.isDefault) {
         await removeBlock(`${slotId}_${choice}`, { keepScheduled: true })
-        await saveBlock(slotId, { ...keepBlock, slotId, blockKey: slotId, channel: choice, weightedMin: slot.weightedMin })
+        await saveBlock(slotId, { ...keepBlock, slotId, blockKey: slotId, channel: 'ALL', weightedMin: slot.weightedMin })
       } else {
         await removeBlock(`${slotId}_${choice}`)
       }
