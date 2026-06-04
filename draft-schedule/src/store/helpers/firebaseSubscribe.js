@@ -55,8 +55,8 @@ export function subscribeRealtimePaths(weekKey, versionId, setState, getState) {
     [`${versionPath}/proposalItems`]: snap => {
       const raw = snap.exists() ? snap.val() : []
       const entries = Array.isArray(raw)
-        ? raw.map((v, i) => ({ ...v, _fbIdx: i }))
-        : Object.entries(raw).map(([k, v]) => ({ ...v, _fbIdx: k }))
+        ? raw.flatMap((v, i) => v ? [{ ...v, _fbIdx: i }] : [])
+        : Object.entries(raw).flatMap(([k, v]) => v ? [{ ...v, _fbIdx: k }] : [])
       const { entityProps, scheduledItemIds, scheduledUniqueKeys } = getState()
       const allProposalItems = applyEntityProps(entries.map(buildProposalItem), entityProps)
       setState({

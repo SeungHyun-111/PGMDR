@@ -198,7 +198,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   }
 
   const bottomPanel = bottomOpen && (
-    <SidebarExpanded items={filteredItems} onClose={() => setBottomOpen(false)} />
+    <SidebarExpanded items={proposalItems} onClose={() => setBottomOpen(false)} />
   )
 
   if (!isOpen) return (

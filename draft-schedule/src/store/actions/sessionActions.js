@@ -134,8 +134,8 @@ export function createSessionActions(setState, getState) {
       }
       const rawProposalItems = versionData.proposalItems || []
       const proposalEntries = Array.isArray(rawProposalItems)
-        ? rawProposalItems.map((v, i) => ({ ...v, _fbIdx: i }))
-        : Object.entries(rawProposalItems).map(([k, v]) => ({ ...v, _fbIdx: k }))
+        ? rawProposalItems.flatMap((v, i) => v ? [{ ...v, _fbIdx: i }] : [])
+        : Object.entries(rawProposalItems).flatMap(([k, v]) => v ? [{ ...v, _fbIdx: k }] : [])
       const allProposalItems = applyEntityProps(
         normalizeItemsTeamNames(proposalEntries.map(buildProposalItem), weightedMinTargets),
         entityProps

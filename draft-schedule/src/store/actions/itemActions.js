@@ -3,8 +3,22 @@ import { buildProposalItem } from '../helpers/blockBuilders'
 import { genKey } from '../../utils/uniqueKey'
 import { normalizeItemsTeamNames } from '../../utils/teamName'
 import { applyEntityProps, extractEntityFields } from '../../utils/mergeEntity'
-import { filterUnscheduledItems } from '../../utils/proposalVisibility'
+import { filterUnscheduledItems, upsertByItemId } from '../../utils/proposalVisibility'
 import { getCurrentVersionPath } from '../../utils/sessionVersion'
+
+function toProposalEntries(raw = []) {
+  if (Array.isArray(raw)) {
+    return raw.flatMap((v, i) => v ? [{ ...v, _fbIdx: i }] : [])
+  }
+  return Object.entries(raw).flatMap(([k, v]) => v ? [{ ...v, _fbIdx: k }] : [])
+}
+
+function getNextProposalIndex(items = []) {
+  const numericIndexes = items
+    .map(item => Number(item?._fbIdx))
+    .filter(Number.isInteger)
+  return numericIndexes.length ? Math.max(...numericIndexes) + 1 : items.length
+}
 
 export function createItemActions(setState, getState) {
   return {
@@ -18,9 +32,7 @@ export function createItemActions(setState, getState) {
         const versionPath = getCurrentVersionPath(getState, weekKey)
         const snap = await get(ref(db, `${versionPath}/proposalItems`))
         const raw  = snap.exists() ? snap.val() : []
-        const entries = Array.isArray(raw)
-          ? raw.map((v, i) => ({ ...v, _fbIdx: i }))
-          : Object.entries(raw).map(([k, v]) => ({ ...v, _fbIdx: k }))
+        const entries = toProposalEntries(raw)
         const uniqueKeyUpdates = {}
         const normalizedEntries = entries.map(item => {
           if (item.uniqueKey) return item
@@ -52,7 +64,7 @@ export function createItemActions(setState, getState) {
     async updateProposalItem(itemId, fbIdx, patch, uniqueKey) {
       const { startDate, poolType, allProposalItems, proposalItems } = getState()
       // fbIdx가 없으면 현재 state 순서로 보정
-      const matches = item => uniqueKey ? item.uniqueKey === uniqueKey : item.itemId === itemId
+      const matches = item => item && (uniqueKey ? item.uniqueKey === uniqueKey : item.itemId === itemId)
       const stateItem = allProposalItems.find(matches) || proposalItems.find(matches)
       const stateIdx = allProposalItems.findIndex(matches)
       const visibleIdx = proposalItems.findIndex(matches)
@@ -90,7 +102,7 @@ export function createItemActions(setState, getState) {
       const { startDate, poolType, allProposalItems } = getState()
       const weekKey = `${startDate}_${poolType}`
       const versionPath = getCurrentVersionPath(getState, weekKey)
-      const fbIdx = allProposalItems.length
+      const fbIdx = getNextProposalIndex(allProposalItems)
       // _fbIdx는 내부 메타 — Firebase에는 저장하지 않음
       const newItem = { ...itemData, itemId: `manual_${Date.now()}`, uniqueKey: genKey('1') }
       const entityFields = extractEntityFields(buildProposalItem(newItem))
@@ -115,7 +127,7 @@ export function createItemActions(setState, getState) {
         detail: '사이드바 상품 추가',
       })
       setState(s => {
-        const allProposalItems = [...s.allProposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx })]
+        const allProposalItems = upsertByItemId(s.allProposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx }))
         return {
           allProposalItems,
           proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
@@ -127,7 +139,7 @@ export function createItemActions(setState, getState) {
       const { startDate, poolType, allProposalItems, proposalItems } = getState()
       const weekKey = `${startDate}_${poolType}`
       const versionPath = getCurrentVersionPath(getState, weekKey)
-      const matches = item => uniqueKey ? item.uniqueKey === uniqueKey : item.itemId === itemId
+      const matches = item => item && (uniqueKey ? item.uniqueKey === uniqueKey : item.itemId === itemId)
       const item = allProposalItems.find(matches) || proposalItems.find(matches)
       if (!item) return
       if (item._fbIdx !== undefined && item._fbIdx !== null) {
@@ -156,10 +168,10 @@ export function createItemActions(setState, getState) {
       const { startDate, poolType, allProposalItems, proposalItems } = getState()
       const weekKey = `${startDate}_${poolType}`
       const versionPath = getCurrentVersionPath(getState, weekKey)
-      const matches = item => uniqueKey ? item.uniqueKey === uniqueKey : item.itemId === itemId
+      const matches = item => item && (uniqueKey ? item.uniqueKey === uniqueKey : item.itemId === itemId)
       const orig = allProposalItems.find(matches) || proposalItems.find(matches)
       if (!orig) return
-      const fbIdx = allProposalItems.length
+      const fbIdx = getNextProposalIndex(allProposalItems)
       const rest = { ...orig }
       delete rest._fbIdx
       const newItem = { ...rest, itemId: `dup_${Date.now()}`, uniqueKey: genKey('1') }
@@ -185,7 +197,7 @@ export function createItemActions(setState, getState) {
         detail: `원본: ${orig.pgmCodeName || '-'}`,
       })
       setState(s => {
-        const allProposalItems = [...s.allProposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx })]
+        const allProposalItems = upsertByItemId(s.allProposalItems, buildProposalItem({ ...newItem, _fbIdx: fbIdx }))
         return {
           allProposalItems,
           proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
@@ -197,7 +209,7 @@ export function createItemActions(setState, getState) {
       const { startDate, poolType, allProposalItems, proposalItems } = getState()
       const weekKey = `${startDate}_${poolType}`
       const versionPath = getCurrentVersionPath(getState, weekKey)
-      const item = [...allProposalItems, ...proposalItems].find(p => uniqueKey ? p.uniqueKey === uniqueKey : p.itemId === itemId)
+      const item = [...allProposalItems, ...proposalItems].find(p => p && (uniqueKey ? p.uniqueKey === uniqueKey : p.itemId === itemId))
       if (itemId) {
         await set(ref(db, `${versionPath}/scheduledItemIds/${itemId}`), true)
         getState().recordUndoChange('상품 편성 체크 되돌리기', {
