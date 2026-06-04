@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { db, ref, get } from '../../api/firebase'
+import { sessionEntriesToSortedList } from '../../utils/sessionSort'
 
 const fmtDate = ts => {
   if (!ts) return '-'
@@ -13,8 +14,7 @@ export default function SessionPickerScreen({ onJoin, onNew }) {
   useEffect(() => {
     get(ref(db, 'activeSessions')).then(snap => {
       if (!snap.exists()) { setSessions([]); return }
-      const list = Object.values(snap.val()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-      setSessions(list)
+      setSessions(sessionEntriesToSortedList(snap.val()))
     }).catch(() => setSessions([]))
   }, [])
 

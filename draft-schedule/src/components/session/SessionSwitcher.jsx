@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { db, ref, get } from '../../api/firebase'
 import SessionDeleteModal from './SessionDeleteModal'
 import useScheduleStore from '../../store/useScheduleStore'
+import { sessionEntriesToSortedList } from '../../utils/sessionSort'
 
 const fmtDate = ts => {
   if (!ts) return ''
@@ -20,8 +21,7 @@ export default function SessionSwitcher({ currentWeekKey }) {
   const loadSessions = () => {
     get(ref(db, 'activeSessions')).then(snap => {
       if (!snap.exists()) { setSessions([]); return }
-      const list = Object.values(snap.val()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-      setSessions(list)
+      setSessions(sessionEntriesToSortedList(snap.val()))
     }).catch(() => setSessions([]))
   }
 
