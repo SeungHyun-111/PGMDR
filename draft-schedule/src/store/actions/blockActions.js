@@ -40,12 +40,13 @@ export function createBlockActions(setState, getState) {
       const weekKey = `${startDate}_${poolType}`
       const versionPath = getCurrentVersionPath(getState, weekKey)
       const block = scheduleBlocks[blockKey]
+      const keepScheduled = !!options.keepScheduled
       const undoChanges = []
       const ownsUndoBatch = !getState()._undoBatch
       if (ownsUndoBatch) getState().beginUndoBatch('블록 삭제/반환 되돌리기')
 
       try {
-      if (block?.isCompeting) {
+      if (!keepScheduled && block?.isCompeting) {
         // 경쟁 해제: item1/item2 양쪽 scheduledItemIds 제거 + 사이드바 복원
         const compItems = getCompetitionItems(block)
         for (const it of compItems) {
@@ -97,7 +98,7 @@ export function createBlockActions(setState, getState) {
             proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
           }
         })
-      } else if (block?.itemId && !block.isDefault) {
+      } else if (!keepScheduled && block?.itemId && !block.isDefault) {
         undoChanges.push({
           path: `${versionPath}/scheduledItemIds/${block.itemId}`,
           before: true,

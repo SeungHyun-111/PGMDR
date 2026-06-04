@@ -92,7 +92,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
         ...getCompetitionItems(draggedBlock),
       ]
       const competitionBlock = makeCompetitionBlock({ slot, blockKey: newKey, channel: ch, weightedMin: targetWeightedMin, items })
-      await removeBlock(blockKey, { skipLog: true })
+      await removeBlock(blockKey, { skipLog: true, keepScheduled: true })
       await saveBlock(newKey, {
         ...competitionBlock,
         __skipLog: true,
@@ -154,7 +154,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
       channel: ch,
     }
 
-    await removeBlock(blockKey, { skipLog: true })
+    await removeBlock(blockKey, { skipLog: true, keepScheduled: true })
     await saveBlock(newKey, {
       ...movedBlock,
       __skipLog: true,
