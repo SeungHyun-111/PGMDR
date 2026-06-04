@@ -105,7 +105,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
   const handleMouseEnter = (e) => {
     if (contextMenu || editModal || annotationPopup) return
     const rect = e.currentTarget.getBoundingClientRect()
-    setTooltipPos({ x: rect.right + 6, y: rect.top })
+    setTooltipPos({ left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom })
     setHover(true)
   }
 
@@ -468,11 +468,26 @@ function ReturnSlotChoice({ value, onChange }) {
 function BlockTooltip({ block, lastPerf, manual, pos }) {
   // 화면 오른쪽/아래 잘림 방지
   const tooltipW = 230
+  const gap = 8
+  const margin = 8
   const hasManual = manual && (manual.expectedSalesPerWeightedMin != null || manual.expectedProfitPerWeightedMin != null)
   const compItems = getCompetitionItems(block)
   const approxH  = block.isCompeting ? Math.min(360, 60 + compItems.length * 62) : (block.annotation ? 290 : 220) + (hasManual ? 60 : 0)
-  const left = pos.x + tooltipW > window.innerWidth ? pos.x - tooltipW - 12 : pos.x
-  const top  = Math.min(pos.y, window.innerHeight - approxH - 8)
+  const viewportW = window.innerWidth || 0
+  const viewportH = window.innerHeight || 0
+  const preferRight = (pos.right || 0) + gap + tooltipW <= viewportW - margin
+  const rawLeft = preferRight
+    ? (pos.right || 0) + gap
+    : (pos.left || 0) - tooltipW - gap
+  const left = Math.max(margin, Math.min(rawLeft, viewportW - tooltipW - margin))
+  const belowTop = pos.top || 0
+  const aboveTop = (pos.top || 0) - approxH - gap
+  const rawTop = belowTop + approxH <= viewportH - margin
+    ? belowTop
+    : aboveTop >= margin
+      ? aboveTop
+      : viewportH - approxH - margin
+  const top = Math.max(margin, Math.min(rawTop, viewportH - approxH - margin))
 
   const rows = [
     ['팀',       block.mdTeam || block.orgName || '-'],

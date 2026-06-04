@@ -13,6 +13,11 @@ const DEFAULT_TEAM_NAME = '편성팀'
 const COMPETING_NAME = '경쟁'
 const UNCATEGORIZED_NAME = '미분류'
 
+function getTeamAlias(name) {
+  if (!name) return ''
+  return name.endsWith('팀') ? name.slice(0, -1) : `${name}팀`
+}
+
 export default function ScheduleRatio() {
   const {
     scheduleBlocks,
@@ -82,18 +87,61 @@ export default function ScheduleRatio() {
     }
   }, [stats, ratioData, unscheduledWeighted])
 
+  const targetTeams = useMemo(() =>
+    (weightedMinTargets || [])
+      .map(t => ({
+        name: (t.teamName || '').trim(),
+        target: Number(t.weeklyTarget || 0),
+      }))
+      .filter(t => t.name)
+  , [weightedMinTargets])
+
   const targetMap = useMemo(() => {
     const map = {}
-    weightedMinTargets.forEach(t => {
-      const name = (t.teamName || '').trim()
-      map[name] = t.weeklyTarget
-      const alt = name.endsWith('팀') ? name.slice(0, -1) : name + '팀'
-      map[alt] = t.weeklyTarget
+    targetTeams.forEach(t => {
+      map[t.name] = t.target
+      map[getTeamAlias(t.name)] = t.target
     })
     return map
-  }, [weightedMinTargets])
+  }, [targetTeams])
 
-  const totalTarget = totalSlotWeighted
+  const displayRatioData = useMemo(() => {
+    if (viewType !== 'team') return ratioData
+    const next = { ...ratioData }
+    targetTeams.forEach(({ name }) => {
+      const alias = getTeamAlias(name)
+      if (next[name] == null && next[alias] != null) {
+        next[name] = next[alias]
+        delete next[alias]
+      } else if (next[name] == null) {
+        next[name] = 0
+      }
+    })
+    return next
+  }, [ratioData, targetTeams, viewType])
+
+  const displayRatioStats = useMemo(() => {
+    if (viewType !== 'team') return ratioStats
+    return {
+      ...ratioStats,
+      group: displayRatioData,
+      groupDm: targetTeams.reduce((acc, { name }) => {
+        const alias = getTeamAlias(name)
+        if (acc[name] == null && acc[alias] != null) {
+          acc[name] = acc[alias]
+          delete acc[alias]
+        } else if (acc[name] == null) {
+          acc[name] = 0
+        }
+        return acc
+      }, { ...ratioStats.groupDm }),
+    }
+  }, [displayRatioData, ratioStats, targetTeams, viewType])
+
+  const totalTarget = useMemo(
+    () => targetTeams.reduce((acc, t) => acc + t.target, 0),
+    [targetTeams]
+  )
 
   const scheduledCount = useMemo(
     () => Object.values(validScheduleBlocks).filter(b => !b.isDefault).length,
@@ -101,7 +149,7 @@ export default function ScheduleRatio() {
   )
 
   const chartData = useMemo(() =>
-    Object.entries(ratioData)
+    Object.entries(displayRatioData)
       .sort((a, b) => {
         if (a[0] === DEFAULT_TEAM_NAME) return 1
         if (b[0] === DEFAULT_TEAM_NAME) return -1
@@ -121,7 +169,7 @@ export default function ScheduleRatio() {
               ? '#dc2626'
               : TEAM_COLORS[i % TEAM_COLORS.length],
       }))
-  , [ratioData, targetMap])
+  , [displayRatioData, targetMap])
 
   return (
     <div style={{ padding: 16, height: '100%', overflowY: 'auto' }}>
@@ -148,9 +196,9 @@ export default function ScheduleRatio() {
       <RatioDonutChart chartData={chartData} />
 
       <RatioTable
-        data={ratioData}
-        groupDm={ratioStats.groupDm}
-        stats={ratioStats}
+        data={displayRatioData}
+        groupDm={displayRatioStats.groupDm}
+        stats={displayRatioStats}
         targetMap={targetMap}
         totalSlotWeighted={totalSlotWeighted}
         totalTarget={totalTarget}
