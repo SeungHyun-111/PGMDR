@@ -169,7 +169,7 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
     if (mode === 'split') {
       await toggleSplitSlot(slotId)
       if (singleBlock && !singleBlock.isDefault) {
-        await removeBlock(slotId)
+        await removeBlock(slotId, { keepScheduled: true })
         const keepKey = `${slotId}_${choice}`
         await saveBlock(keepKey, { ...singleBlock, slotId, blockKey: keepKey, channel: choice, weightedMin: choice === 'CA' ? caWeighted : ipWeighted })
       } else {
@@ -181,7 +181,7 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
       const removeCh  = choice === 'CA' ? 'IP' : 'CA'
       await removeBlock(`${slotId}_${removeCh}`)
       if (keepBlock && !keepBlock.isDefault) {
-        await removeBlock(`${slotId}_${choice}`)
+        await removeBlock(`${slotId}_${choice}`, { keepScheduled: true })
         await saveBlock(slotId, { ...keepBlock, slotId, blockKey: slotId, channel: choice, weightedMin: slot.weightedMin })
       } else {
         await removeBlock(`${slotId}_${choice}`)
