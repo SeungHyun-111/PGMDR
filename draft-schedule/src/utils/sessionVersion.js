@@ -9,6 +9,7 @@ export const SESSION_VERSIONS = [
 ]
 
 export const VERSION_DATA_KEYS = [
+  'pgmSlots',
   'proposalItems',
   'scheduleBlocks',
   'entityProps',
@@ -39,6 +40,7 @@ export function getCurrentVersionPath(getState, weekKey, child = '') {
 
 export function buildVersionSnapshot(state) {
   return {
+    pgmSlots: state.pgmSlots || [],
     proposalItems: (state.allProposalItems || []).map(({ _fbIdx, ...item }) => item),
     scheduleBlocks: state._rawBlocks || state.scheduleBlocks || {},
     entityProps: state.entityProps || {},

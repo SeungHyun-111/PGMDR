@@ -301,6 +301,8 @@ export function createBlockActions(setState, getState) {
     // 반환된 아이템의 effectiveItemId를 리턴 (pinnedReturn 위치 지정에 사용)
     async returnBlockToSidebar(block, options = {}) {
       if (block.isCompeting) return null
+      const { entityProps } = getState()
+      const resolvedBlock = resolveEntity(block, entityProps)
       await getState().removeBlock(block.blockKey || block.slotId, options)
 
       const { startDate, poolType } = getState()
@@ -315,33 +317,40 @@ export function createBlockActions(setState, getState) {
         const all  = Array.isArray(raw) ? raw : Object.values(raw)
         const orig = all.filter(Boolean).find(p => p.itemId === block.itemId)
 
-        const { entityProps } = getState()
         setState(s => {
+          const scheduledItemIds = withoutKey(s.scheduledItemIds, block.itemId)
+          const scheduledUniqueKeys = withoutKey(s.scheduledUniqueKeys, block.uniqueKey)
           if (s.allProposalItems.some(p => block.uniqueKey ? p.uniqueKey === block.uniqueKey : p.itemId === block.itemId)) {
             return {
-              proposalItems: filterUnscheduledItems(s.allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+              scheduledItemIds,
+              scheduledUniqueKeys,
+              proposalItems: filterUnscheduledItems(s.allProposalItems, scheduledItemIds, scheduledUniqueKeys),
             }
           }
           // orig에 entityProps 머지 (편집된 속성 반영), 없으면 블록 데이터로 fallback
           const item = orig ? resolveEntity(orig, entityProps) : {
             itemId:            block.itemId,
-            uniqueKey:         block.uniqueKey          || genKey('1'),
-            pgmCodeName:       block.pgmCodeName        || '',
-            mdTeam:            block.mdTeam             || block.orgName || '',
-            orgName:           block.orgName            || block.mdTeam  || '',
-            mdCategory:        block.mdCategory         || '',
-            dealType:          block.dealTypeConverted  || block.dealType || '',
-            dealTypeConverted: block.dealTypeConverted  || block.dealType || '',
-            dealTypeChar:      block.dealTypeChar       || '',
-            memoCode:          block.memoCode           || '',
-            requestNote:       block.requestNote        || '',
-            newProductType:    block.newProductType     || '',
-            perfKey:           block.perfKey            || null,
+            uniqueKey:         resolvedBlock.uniqueKey  || genKey('1'),
+            pgmCodeName:       resolvedBlock.pgmCodeName || '',
+            mdTeam:            resolvedBlock.mdTeam     || resolvedBlock.orgName || '',
+            orgName:           resolvedBlock.orgName    || resolvedBlock.mdTeam  || '',
+            mdCategory:        resolvedBlock.mdCategory || '',
+            dealType:          resolvedBlock.dealTypeConverted || resolvedBlock.dealType || '',
+            dealTypeConverted: resolvedBlock.dealTypeConverted || resolvedBlock.dealType || '',
+            dealTypeChar:      resolvedBlock.dealTypeChar || '',
+            memoCode:          resolvedBlock.memoCode   || '',
+            requestNote:       resolvedBlock.requestNote || '',
+            scheduleComment:   resolvedBlock.scheduleComment || '',
+            annotation:        resolvedBlock.annotation || '',
+            newProductType:    resolvedBlock.newProductType || '',
+            perfKey:           resolvedBlock.perfKey    || null,
           }
           const allProposalItems = upsertByItemId(s.allProposalItems, buildProposalItem(item))
           return {
+            scheduledItemIds,
+            scheduledUniqueKeys,
             allProposalItems,
-            proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+            proposalItems: filterUnscheduledItems(allProposalItems, scheduledItemIds, scheduledUniqueKeys),
           }
         })
         return block.itemId
@@ -350,18 +359,20 @@ export function createBlockActions(setState, getState) {
         const newItemId = `pre_${block.slotId}_${Date.now()}`
         const itemData = {
           itemId:            newItemId,
-          uniqueKey:         genKey('1'),
-          pgmCodeName:       block.pgmCodeName        || '',
-          mdTeam:            block.mdTeam             || block.orgName || '',
-          orgName:           block.orgName            || block.mdTeam  || '',
-          mdCategory:        block.mdCategory         || '',
-          dealType:          block.dealTypeConverted  || block.dealType || '',
-          dealTypeConverted: block.dealTypeConverted  || block.dealType || '',
-          dealTypeChar:      block.dealTypeChar       || '',
-          memoCode:          block.memoCode           || '',
-          requestNote:       block.requestNote        || '',
-          newProductType:    block.newProductType     || '',
-          perfKey:           block.perfKey            || null,
+          uniqueKey:         resolvedBlock.uniqueKey   || genKey('1'),
+          pgmCodeName:       resolvedBlock.pgmCodeName || '',
+          mdTeam:            resolvedBlock.mdTeam      || resolvedBlock.orgName || '',
+          orgName:           resolvedBlock.orgName     || resolvedBlock.mdTeam  || '',
+          mdCategory:        resolvedBlock.mdCategory  || '',
+          dealType:          resolvedBlock.dealTypeConverted || resolvedBlock.dealType || '',
+          dealTypeConverted: resolvedBlock.dealTypeConverted || resolvedBlock.dealType || '',
+          dealTypeChar:      resolvedBlock.dealTypeChar || '',
+          memoCode:          resolvedBlock.memoCode    || '',
+          requestNote:       resolvedBlock.requestNote || '',
+          scheduleComment:   resolvedBlock.scheduleComment || '',
+          annotation:        resolvedBlock.annotation  || '',
+          newProductType:    resolvedBlock.newProductType || '',
+          perfKey:           resolvedBlock.perfKey     || null,
         }
         getState().recordUndoChange('사이드바 반환 되돌리기', {
           path: `${versionPath}/proposalItems/${newItemId}`,
@@ -381,16 +392,25 @@ export function createBlockActions(setState, getState) {
           description: `제안상품 속성 삭제: ${itemData.pgmCodeName || itemData.uniqueKey}`,
         })
         setState(s => {
+          const scheduledUniqueKeys = withoutKey(s.scheduledUniqueKeys, itemData.uniqueKey)
           const allProposalItems = upsertByItemId(s.allProposalItems, buildProposalItem({ ...itemData, _fbIdx: newItemId }))
           return {
+            scheduledUniqueKeys,
             allProposalItems,
-            proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
+            proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, scheduledUniqueKeys),
           }
         })
         return newItemId
       }
     },
   }
+}
+
+function withoutKey(map, key) {
+  if (!key || !map?.[key]) return map || {}
+  const next = { ...map }
+  delete next[key]
+  return next
 }
 
 async function restoreCompetitionItems({ setState, getState, versionPath, items }) {

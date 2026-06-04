@@ -119,12 +119,14 @@ export function createRefreshActions(setState, getState) {
 
         // gasData 전체를 정규화하여 Firebase에 덮어씀
         const proposalItemsRaw = withStableUniqueKeys(gasData.proposalItems || [], allProposalItems)
+        const pgmSlotsNew = (gasData.pgmSlots || []).map(buildSlot)
         await set(ref(db, `sessions/${weekKey}/gasData`), {
           ...gasData,
           proposalItems: proposalItemsRaw,
           perfMap: encodePerfMap(gasData.perfMap || {}),
         })
         await update(ref(db, versionPath), {
+          pgmSlots: pgmSlotsNew,
           proposalItems: proposalItemsRaw,
           ...buildMissingEntityPropUpdates(proposalItemsRaw, entityProps),
         })
@@ -134,7 +136,6 @@ export function createRefreshActions(setState, getState) {
         })
 
         // 사용자 직접 편성 블록은 유지, default·선편성 블록은 재생성
-        const pgmSlotsNew = (gasData.pgmSlots || []).map(buildSlot)
         const protectedBlocks = Object.fromEntries(
           Object.entries(scheduleBlocks).filter(([, b]) => b && !b.isDefault && !b.isPreSchedule)
         )

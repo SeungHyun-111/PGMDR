@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
 import { SESSION_VERSIONS, VERSION_DRAFT, VERSION_OPS, VERSION_SALES, getVersionLabel } from '../../utils/sessionVersion'
 
@@ -30,16 +31,20 @@ const formatMetaTime = ts => {
 }
 
 export default function VersionSwitcher({ onToast }) {
+  const [isSyncingOps, setIsSyncingOps] = useState(false)
   const {
+    startDate,
+    poolType,
     currentVersionId,
     versionMeta,
     setSessionVersion,
+    syncOpsVersionFromGas,
     publishSalesVersion,
     isPublishingSales,
   } = useScheduleStore()
 
   const salesPublishedAt = versionMeta?.[VERSION_SALES]?.publishedAt
-  const opsPublishedAt = versionMeta?.[VERSION_OPS]?.publishedAt
+  const opsPublishedAt = versionMeta?.[VERSION_OPS]?.publishedAt || versionMeta?.[VERSION_OPS]?.updatedAt
   const actionMeta = currentVersionId === VERSION_DRAFT
     ? versionMeta?.[VERSION_SALES]
     : versionMeta?.[VERSION_OPS]
@@ -48,10 +53,6 @@ export default function VersionSwitcher({ onToast }) {
     if (versionId === currentVersionId) return
     if (versionId === VERSION_SALES && !salesPublishedAt) {
       alert('영업팀 공유본이 아직 없습니다. 담당 작성에서 먼저 공유본을 생성하세요.')
-      return
-    }
-    if (versionId === VERSION_OPS) {
-      alert('편성운영 화면은 Google 웹앱 연동 후 사용할 예정입니다.')
       return
     }
     await setSessionVersion(versionId)
@@ -74,14 +75,27 @@ export default function VersionSwitcher({ onToast }) {
     alert('편성 확정 기능은 Google 웹앱 연동 후 연결합니다.')
   }
 
-  const handleLoadCurrentSchedule = () => {
-    alert('버전 갱신 기능은 Google 웹앱 편성운영 화면에서 연결할 예정입니다.')
+  const handleLoadCurrentSchedule = async () => {
+    if (!startDate || !poolType) {
+      alert('먼저 세션을 선택하세요.')
+      return
+    }
+    if (!window.confirm('Google 편성운영 시트에서 현재 편성운영 버전을 갱신할까요?')) return
+    setIsSyncingOps(true)
+    try {
+      await syncOpsVersionFromGas()
+      onToast?.('편성운영 갱신 완료')
+    } catch (e) {
+      alert(e?.message || '편성운영 갱신에 실패했습니다.')
+    } finally {
+      setIsSyncingOps(false)
+    }
   }
 
   const getActionLabel = () => {
     if (currentVersionId === VERSION_DRAFT) return isPublishingSales ? '확정 중...' : '초안 확정'
     if (currentVersionId === VERSION_SALES) return '편성 확정'
-    if (currentVersionId === VERSION_OPS) return '버전 갱신'
+    if (currentVersionId === VERSION_OPS) return isSyncingOps ? '갱신 중...' : '버전 갱신'
     return '버전 갱신'
   }
 
@@ -93,13 +107,12 @@ export default function VersionSwitcher({ onToast }) {
 
   const isVersionDisabled = (versionId) => {
     if (versionId === VERSION_SALES) return !salesPublishedAt
-    if (versionId === VERSION_OPS) return !opsPublishedAt
     return false
   }
 
   const getVersionTitle = (versionId) => {
     if (versionId === VERSION_SALES && !salesPublishedAt) return '공유본 없음'
-    if (versionId === VERSION_OPS) return opsPublishedAt ? getVersionLabel(versionId) : 'Google 웹앱 연동 후 사용'
+    if (versionId === VERSION_OPS) return opsPublishedAt ? getVersionLabel(versionId) : '편성운영본 없음'
     return getVersionLabel(versionId)
   }
 
@@ -112,6 +125,7 @@ export default function VersionSwitcher({ onToast }) {
         {SESSION_VERSIONS.map((v, i) => {
           const active = currentVersionId === v.id
           const disabled = isVersionDisabled(v.id)
+          const inactive = !active && !disabled
           const tone = VERSION_TONES[v.id] || VERSION_TONES[VERSION_DRAFT]
           return (
             <button
@@ -126,7 +140,9 @@ export default function VersionSwitcher({ onToast }) {
                 background: active ? tone.activeBg : tone.bg,
                 color: active ? tone.activeColor : disabled ? 'var(--text3)' : tone.color,
                 fontWeight: active ? 800 : 700,
-                opacity: disabled ? 0.55 : 1,
+                opacity: disabled ? 0.32 : inactive ? 0.52 : 1,
+                filter: inactive ? 'saturate(.65)' : 'none',
+                boxShadow: active ? `inset 0 0 0 1px ${tone.activeBg}, 0 0 0 1px ${tone.activeBg}40` : 'none',
               }}
             >
               {v.label}
@@ -137,13 +153,13 @@ export default function VersionSwitcher({ onToast }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
           onClick={handleVersionAction}
-          disabled={isPublishingSales}
+          disabled={isPublishingSales || isSyncingOps}
           style={{
             background: ACTION_TONE.bg,
             border: `1px solid ${ACTION_TONE.border}`,
             borderRadius: 6,
             color: ACTION_TONE.color,
-            cursor: isPublishingSales ? 'default' : 'pointer',
+            cursor: isPublishingSales || isSyncingOps ? 'default' : 'pointer',
             fontSize: 11,
             fontWeight: 900,
             height: 26,

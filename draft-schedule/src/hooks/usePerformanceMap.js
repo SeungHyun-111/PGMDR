@@ -7,6 +7,11 @@ export function normalizeDealType(dealType, unknownFallback = '[위]') {
   if (!dt) return '[위]'
   // 이미 정규화된 값 그대로 통과
   if (/^\[[위모직혼액률]\]$/.test(dt)) return dt
+  const parenMatch = dt.match(/\((.)\)/)
+  if (parenMatch) {
+    const map = { 위: '[위]', 모: '[모]', 직: '[직]', 혼: '[혼]', 액: '[액]', 률: '[률]' }
+    if (map[parenMatch[1]]) return map[parenMatch[1]]
+  }
   // 위수탁 계열
   if (dt.includes('위수탁') || dt === '위' || dt === '기타') return '[위]'
   // 직매입

@@ -2,7 +2,7 @@ import { db, ref, onValue } from '../../api/firebase'
 import { normalizeBlocksTeamNames } from '../../utils/teamName'
 import { applyEntityProps } from '../../utils/mergeEntity'
 import { filterUnscheduledItems } from '../../utils/proposalVisibility'
-import { buildProposalItem } from '../helpers/blockBuilders'
+import { buildProposalItem, buildSlot } from '../helpers/blockBuilders'
 import { getVersionPath } from '../../utils/sessionVersion'
 
 const _subs = {}
@@ -27,6 +27,11 @@ export function subscribeRealtimePaths(weekKey, versionId, setState, getState) {
   unsubscribeAll()
   const versionPath = getVersionPath(weekKey, versionId)
   const paths = {
+    [`${versionPath}/pgmSlots`]: snap => {
+      const raw = snap.exists() ? snap.val() : []
+      if (!Array.isArray(raw) || raw.length === 0) return
+      setState({ pgmSlots: raw.map(buildSlot) })
+    },
     [`${versionPath}/scheduleBlocks`]: snap => {
       const raw = snap.exists() ? snap.val() : {}
       const { weightedMinTargets, entityProps } = getState()

@@ -1,4 +1,4 @@
-import { db, ref, set, get } from '../../api/firebase'
+import { db, ref, set, get, update } from '../../api/firebase'
 import { buildSlot, buildPreScheduleBlocks, buildProposalItem, decodePerfMap, encodePerfMap } from '../helpers/blockBuilders'
 import { subscribeRealtimePaths, unsubscribeAll } from '../helpers/firebaseSubscribe'
 import { normalizeBlocksTeamNames, normalizeItemsTeamNames } from '../../utils/teamName'
@@ -6,6 +6,7 @@ import { genKey } from '../../utils/uniqueKey'
 import { extractEntityFields, applyEntityProps } from '../../utils/mergeEntity'
 import { getCompetitionItems } from '../../utils/competition'
 import { filterUnscheduledItems } from '../../utils/proposalVisibility'
+import { makePerfKey, normalizeDealType } from '../../hooks/usePerformanceMap'
 import {
   VERSION_DRAFT,
   VERSION_OPS,
@@ -66,6 +67,7 @@ export function createSessionActions(setState, getState) {
             if (block?.uniqueKey) entityProps[block.uniqueKey] = extractEntityFields(block)
           })
           await set(ref(db, getVersionPath(weekKey, VERSION_DRAFT)), {
+            pgmSlots,
             proposalItems,
             scheduleBlocks: preBlocks,
             entityProps,
@@ -105,11 +107,11 @@ export function createSessionActions(setState, getState) {
 
       const meta = metaSnap.exists() ? metaSnap.val() : {}
       const versionData = versionSnap.exists() ? versionSnap.val() : {}
-      const pgmSlots = (pgmSnap.exists() ? pgmSnap.val() : []).map(buildSlot)
       const rawBlocks      = versionData.scheduleBlocks || {}
       const splitSlots     = versionData.splitSlots || {}
       const customSlots    = versionData.customSlots || {}
       const entityProps    = versionData.entityProps || {}
+      const pgmSlots = resolveVersionSlots(versionData, pgmSnap.exists() ? pgmSnap.val() : [], rawBlocks, splitSlots)
 
       const perfMap = perfMapSnap.exists() ? decodePerfMap(perfMapSnap.val()) : {}
       const weightedMinTargets = weightedSnap.exists() ? Object.values(weightedSnap.val()) : []
@@ -181,6 +183,79 @@ export function createSessionActions(setState, getState) {
       if (!startDate || !poolType) return
       localStorage.setItem('currentVersionId', versionId)
       await getState()._loadFromFirebase(startDate, poolType, versionId)
+    },
+
+    async syncOpsVersionFromGas() {
+      const { startDate, endDate, poolType, userName, weightedMinTargets } = getState()
+      if (!startDate || !poolType) throw new Error('먼저 세션을 선택하세요.')
+
+      const { syncOpsVersion } = await import('../../api/gas')
+      const payload = await syncOpsVersion({
+        startDate,
+        endDate: endDate || getFallbackEndDate(startDate),
+        poolType,
+        userName,
+        sheetName: 'PGM',
+      })
+      const weekKey = `${startDate}_${poolType}`
+      const updatedAt = Date.now()
+      const updatedBy = userName || ''
+      const rawBlocks = payload.scheduleBlocks || {}
+      const scheduleBlocks = {}
+      const entityProps = {}
+      const scheduledUniqueKeys = {}
+
+      Object.entries(rawBlocks).forEach(([blockKey, block]) => {
+        if (!block) return
+        const uniqueKey = block.uniqueKey || genKey('2')
+        const withKey = normalizeOpsBlockBeforeSave({ ...block, uniqueKey })
+        const normalizedTeamBlock = normalizeBlocksTeamNames({ [blockKey]: withKey }, weightedMinTargets)?.[blockKey] || withKey
+        const dealType = normalizeDealType(normalizedTeamBlock.dealTypeConverted || normalizedTeamBlock.dealType)
+        const nextBlock = {
+          ...normalizedTeamBlock,
+          dealType,
+          dealTypeConverted: dealType,
+          dealTypeChar: getDealTypeChar(dealType),
+          perfKey: makePerfKey(dealType, normalizedTeamBlock.pgmCodeName),
+        }
+        scheduleBlocks[blockKey] = nextBlock
+        entityProps[uniqueKey] = extractEntityFields(nextBlock)
+        scheduledUniqueKeys[uniqueKey] = true
+      })
+
+      await set(ref(db, getVersionPath(weekKey, VERSION_OPS)), {
+        pgmSlots: (payload.pgmSlots || []).map(buildSlot),
+        proposalItems: [],
+        scheduleBlocks,
+        entityProps,
+        splitSlots: payload.splitSlots || {},
+        customSlots: {},
+        starred: {},
+        scheduledItemIds: {},
+        scheduledUniqueKeys,
+        manualInputs: {},
+        updatedAt,
+        updatedBy,
+        sourceVersionId: 'ops_sheet',
+      })
+      await set(ref(db, `sessions/${weekKey}/versionMeta/${VERSION_OPS}`), {
+        updatedAt,
+        updatedBy,
+        sourceVersionId: 'ops_sheet',
+        sheetName: payload.sheetName || 'PGM',
+      })
+      await update(ref(db, `sessions/${weekKey}/gasData/meta`), {
+        startDate: payload.startDate || startDate,
+        endDate: payload.endDate || endDate || getFallbackEndDate(startDate),
+        poolType,
+        opsSyncedAt: updatedAt,
+        opsSyncedBy: updatedBy,
+        opsSlotCount: (payload.pgmSlots || []).length,
+      })
+
+      localStorage.setItem('currentVersionId', VERSION_OPS)
+      await getState()._loadFromFirebase(startDate, poolType, VERSION_OPS)
+      return payload
     },
 
     async publishSalesVersion() {
@@ -261,6 +336,81 @@ function shouldDefaultToViewerMode(versionId, versionMeta) {
   return versionId === VERSION_DRAFT && !!versionMeta?.[VERSION_SALES]?.publishedAt
 }
 
+function getFallbackEndDate(startDate) {
+  if (!startDate) return ''
+  const d = new Date(`${startDate}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  d.setDate(d.getDate() + 6)
+  return d.toISOString().slice(0, 10)
+}
+
+function getDealTypeChar(dealType) {
+  return String(dealType || '').match(/\[(.)\]/)?.[1] || '위'
+}
+
+function normalizeOpsBlockBeforeSave(block) {
+  const mdTeam = normalizeOpsTeamName(block.mdTeam || block.orgName || '')
+  return {
+    ...block,
+    mdTeam,
+    orgName: mdTeam,
+    newProductType: normalizeOpsNewProductType(block.newProductType),
+  }
+}
+
+function normalizeOpsTeamName(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  return raw.endsWith('팀') ? raw : `${raw}팀`
+}
+
+function normalizeOpsNewProductType(value) {
+  const raw = String(value || '').trim()
+  if (raw === '(재)' || raw === '재녹화') return '재녹화'
+  if (raw === '(신)' || raw === '신상품') return '신상품'
+  return '기존'
+}
+
+function resolveVersionSlots(versionData, fallbackSlots, rawBlocks, splitSlots) {
+  if (Array.isArray(versionData.pgmSlots) && versionData.pgmSlots.length) {
+    return versionData.pgmSlots.map(buildSlot)
+  }
+
+  const fallback = Array.isArray(fallbackSlots) ? fallbackSlots.map(buildSlot) : []
+  const fallbackIds = new Set(fallback.map(slot => slot.slotId))
+  const blockSlotIds = new Set(
+    Object.values(rawBlocks || {})
+      .filter(block => block?.slotId)
+      .map(block => block.slotId)
+  )
+  const allBlocksMatchFallback = blockSlotIds.size === 0 || [...blockSlotIds].every(slotId => fallbackIds.has(slotId))
+  if (fallback.length && allBlocksMatchFallback) return fallback
+
+  const bySlot = {}
+  Object.values(rawBlocks || {}).forEach(block => {
+    if (!block?.slotId || !block.dateKey || !block.timeText) return
+    const existing = bySlot[block.slotId]
+    const weightedMin = Number(block.weightedMin || 0)
+    if (!existing) {
+      bySlot[block.slotId] = {
+        slotId: block.slotId,
+        dateKey: block.dateKey,
+        timeText: block.timeText,
+        durationMin: Number(block.durationMin || 0),
+        weightedMin,
+        channel: 'ALL',
+      }
+      return
+    }
+    if (splitSlots?.[block.slotId]) existing.weightedMin += weightedMin
+    else existing.weightedMin = Math.max(existing.weightedMin || 0, weightedMin)
+    existing.durationMin = Math.max(existing.durationMin || 0, Number(block.durationMin || 0))
+  })
+
+  const rebuilt = Object.values(bySlot)
+  return rebuilt.length ? rebuilt.map(buildSlot) : fallback
+}
+
 async function writePublishLogs(weekKey, { timestamp, userName, before, after }) {
   const baseLog = {
     timestamp,
@@ -298,10 +448,7 @@ async function ensureVersionData(weekKey, versionId) {
   }
 
   if (versionId === VERSION_OPS) {
-    const salesSnap = await get(ref(db, getVersionPath(weekKey, VERSION_SALES)))
-    if (salesSnap.exists()) return VERSION_SALES
-    const draftSnap = await get(ref(db, getVersionPath(weekKey, VERSION_DRAFT)))
-    if (draftSnap.exists()) return VERSION_DRAFT
+    return VERSION_OPS
   }
 
   const snaps = await Promise.all([
@@ -315,6 +462,7 @@ async function ensureVersionData(weekKey, versionId) {
 
   const [proposalSnap, ...dataSnaps] = snaps
   const migrated = {
+    pgmSlots: dataSnaps[0]?.exists() ? dataSnaps[0].val() : [],
     proposalItems: proposalSnap.exists() ? proposalSnap.val() : [],
     migratedAt: Date.now(),
   }
