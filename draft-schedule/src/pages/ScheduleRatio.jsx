@@ -12,6 +12,7 @@ const UNSCHEDULED_NAME = '미편성'
 const DEFAULT_TEAM_NAME = '편성팀'
 const COMPETING_NAME = '경쟁'
 const UNCATEGORIZED_NAME = '미분류'
+const EXCLUDED_TARGET_TEAMS = new Set(['편성팀', '편성', '전략상품팀', '전략상품'])
 
 function getTeamAlias(name) {
   if (!name) return ''
@@ -93,7 +94,7 @@ export default function ScheduleRatio() {
         name: (t.teamName || '').trim(),
         target: Number(t.weeklyTarget || 0),
       }))
-      .filter(t => t.name)
+      .filter(t => t.name && !EXCLUDED_TARGET_TEAMS.has(t.name))
   , [weightedMinTargets])
 
   const targetMap = useMemo(() => {

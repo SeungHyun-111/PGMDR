@@ -11,17 +11,6 @@ export { TEAM_COLORS }
 const RADIAN = Math.PI / 180
 const SHORT = name => (name || '').replace(/팀$/, '')
 
-const sortRatioRows = (a, b) => {
-  if (a.name === '편성팀') return 1
-  if (b.name === '편성팀') return -1
-  if (a.name === '미편성') return 1
-  if (b.name === '미편성') return -1
-  const hasA = (a.target || 0) > 0
-  const hasB = (b.target || 0) > 0
-  if (hasA !== hasB) return hasB ? 1 : -1
-  return hasA ? (b.target - a.target) : (b.actual - a.actual)
-}
-
 const renderInnerLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct, name }) => {
   if (!pct || pct < 0.5) return null
   const cos = Math.cos(-midAngle * RADIAN)
@@ -112,7 +101,7 @@ export default function RatioDonutChart({ chartData }) {
 
   const totalTarget = chartData.reduce((acc, d) => acc + (d.target || 0), 0)
   const totalActual = chartData.reduce((acc, d) => acc + (d.actual || 0), 0)
-  const sortedData = [...chartData].sort(sortRatioRows)
+  const sortedData = chartData
 
   const outerData = sortedData
     .filter(d => (d.target || 0) > 0)
