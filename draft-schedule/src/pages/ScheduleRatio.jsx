@@ -13,10 +13,18 @@ const DEFAULT_TEAM_NAME = '편성팀'
 const COMPETING_NAME = '경쟁'
 const UNCATEGORIZED_NAME = '미분류'
 const EXCLUDED_TARGET_TEAMS = new Set(['편성팀', '편성', '전략상품팀', '전략상품'])
+const TEAM_RATIO_ORDER = ['헬스푸드팀', '패션트렌드팀', '리빙팀', '가전팀', '뷰티팀', '문화서비스팀', '식품팀']
 
 function getTeamAlias(name) {
   if (!name) return ''
   return name.endsWith('팀') ? name.slice(0, -1) : `${name}팀`
+}
+
+function getTeamRatioOrder(name) {
+  const idx = TEAM_RATIO_ORDER.indexOf(name)
+  if (idx >= 0) return idx
+  const aliasIdx = TEAM_RATIO_ORDER.indexOf(getTeamAlias(name))
+  return aliasIdx >= 0 ? aliasIdx : 999
 }
 
 export default function ScheduleRatio() {
@@ -152,6 +160,10 @@ export default function ScheduleRatio() {
   const chartData = useMemo(() =>
     Object.entries(displayRatioData)
       .sort((a, b) => {
+        if (viewType === 'team') {
+          const order = getTeamRatioOrder(a[0]) - getTeamRatioOrder(b[0])
+          if (order) return order
+        }
         if (a[0] === DEFAULT_TEAM_NAME) return 1
         if (b[0] === DEFAULT_TEAM_NAME) return -1
         if (a[0] === UNSCHEDULED_NAME) return 1
