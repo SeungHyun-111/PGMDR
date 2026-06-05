@@ -12,11 +12,16 @@ function formatTime(ts) {
 }
 
 export default function ChatMessage({ msg, isMe }) {
+  const shortName = (msg.userName || '?').slice(0, 3)
+
   return (
     <div style={{ display: 'flex', flexDirection: isMe ? 'row-reverse' : 'row', gap: 6, marginBottom: 8, alignItems: 'flex-end' }}>
       {!isMe && (
-        <div style={{ width: 24, height: 24, borderRadius: '50%', background: getColor(msg.userName), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-          {(msg.userName || '?').slice(0, 1)}
+        <div
+          title={msg.userName || ''}
+          style={{ minWidth: 32, height: 24, padding: '0 6px', borderRadius: 999, background: getColor(msg.userName), display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, color: '#fff', flexShrink: 0, boxSizing: 'border-box' }}
+        >
+          {shortName}
         </div>
       )}
       <div style={{ maxWidth: '70%' }}>

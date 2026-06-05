@@ -8,7 +8,7 @@ export default function MemoCodeSelect({
   style,
   inputStyle,
   placeholder = '메모코드 검색',
-  activeOnly = false,
+  activeOnly = true,
   autoFocus = false,
 }) {
   const { memoCodes, loading } = useMemoCodes({ activeOnly })
