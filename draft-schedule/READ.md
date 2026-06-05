@@ -363,3 +363,7 @@ unscheduledProposalItems; // scheduledUniqueKeys 기준으로 계산된 화면 �
 - 구버전 `gasData/proposalItems` 중 `uniqueKey`가 없는 항목은 제안상품 로드 시 `genKey('1')`로 보강하고 Firebase 원본 및 `entityProps`에 반영한다.
 - 운영 중인 기존 `scheduleBlocks`, `manualInputs`의 키는 강제 재발급하지 않는다. 이미 저장된 키를 바꾸면 수기 입력/엔티티 속성 연결이 끊길 수 있기 때문이다.
 - 마이그레이션 없이도 병행 구조는 앞으로 새로 편성되는 카드부터 문제를 줄인다.
+
+
+
+보안 문제 해결이 필요하고(프론트에서 확인이 안되게) 

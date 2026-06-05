@@ -35,9 +35,10 @@ export default function MemoCodeSelect({
     setHighlight(0)
   }, [query])
 
-  const commit = nextValue => {
-    onChange(nextValue)
-    onCommit?.(nextValue)
+  const commit = (nextValue, row = null) => {
+    const meta = row ? { code: row.code || '', name: row.name || '' } : null
+    onChange(nextValue, meta)
+    onCommit?.(nextValue, meta)
     setQuery(nextValue)
     setOpen(false)
   }
@@ -78,8 +79,8 @@ export default function MemoCodeSelect({
           }
           if (e.key === 'Enter') {
             e.preventDefault()
-            if (open && options[highlight]) commit(options[highlight].name)
-            else commit(query.trim())
+            if (open && options[highlight]) commit(options[highlight].name, options[highlight])
+            else if (!query.trim()) commit('')
           }
           if (e.key === 'Escape') {
             setOpen(false)
@@ -139,7 +140,7 @@ export default function MemoCodeSelect({
               key={`${row.code}-${row.name}`}
               type="button"
               onMouseEnter={() => setHighlight(idx)}
-              onClick={() => commit(row.name)}
+              onClick={() => commit(row.name, row)}
               style={{
                 display: 'flex',
                 alignItems: 'center',

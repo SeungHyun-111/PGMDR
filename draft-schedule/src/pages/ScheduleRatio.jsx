@@ -117,6 +117,15 @@ export default function ScheduleRatio() {
     return map
   }, [targetTeams])
 
+  const targetTeamNameMap = useMemo(() => {
+    const map = {}
+    targetTeams.forEach(({ name }) => {
+      map[name] = name
+      map[getTeamAlias(name)] = name
+    })
+    return map
+  }, [targetTeams])
+
   const displayRatioData = useMemo(() => {
     if (viewType !== 'team') return ratioData
     const next = { ...ratioData }
@@ -156,11 +165,10 @@ export default function ScheduleRatio() {
     Object.values(enrichedBlocks).forEach(block => {
       if (!block?.isCompeting) return
       const items = getCompetitionItems(block)
-      items.forEach((item, idx) => {
+      items.forEach(item => {
         const resolved = resolveEntity(item, entityProps)
         const team = resolved?.mdTeam || resolved?.orgName || item?.mdTeam || item?.orgName || COMPETING_NAME
-        const alias = targetMap[team] == null ? getTeamAlias(team) : team
-        const key = targetMap[team] != null ? team : targetMap[alias] != null ? alias : team
+        const key = targetTeamNameMap[team] || targetTeamNameMap[getTeamAlias(team)] || team
         next[key] = (next[key] || 0) + (Number(block.weightedMin || item.weightedMin || 0))
       })
     })
@@ -168,7 +176,7 @@ export default function ScheduleRatio() {
       if (next[name] == null) next[name] = 0
     })
     return next
-  }, [displayRatioData, enrichedBlocks, entityProps, targetMap, targetTeams, viewType])
+  }, [displayRatioData, enrichedBlocks, entityProps, targetTeamNameMap, targetTeams, viewType])
 
   const totalTarget = useMemo(
     () => targetTeams.reduce((acc, t) => acc + t.target, 0),

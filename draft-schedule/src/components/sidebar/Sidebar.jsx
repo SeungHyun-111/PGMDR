@@ -29,6 +29,10 @@ const ADD_FIELDS = [
 ]
 
 const PAGE_SIZE = 50
+const memoCodePatch = (key, value, meta) => ({
+  [key]: value,
+  [`${key}Code`]: meta?.code || '',
+})
 
 export default function Sidebar({ isOpen, onToggle }) {
   const { proposalItems, perfMap, starred, loadProposals, proposalLoaded, returnBlockToSidebar, addProposalItem, weightedMinTargets, saveBlock, runUndoBatch } = useScheduleStore()
@@ -289,7 +293,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                   {['memoCode', 'memoCode2'].includes(f.key) ? (
                     <MemoCodeSelect
                       value={addForm[f.key] || ''}
-                      onChange={value => setAddForm(p => ({ ...p, [f.key]: value }))}
+                      onChange={(value, meta) => setAddForm(p => ({ ...p, ...memoCodePatch(f.key, value, meta) }))}
                       inputStyle={inp}
                     />
                   ) : ['requestNote', 'scheduleComment'].includes(f.key) ? (

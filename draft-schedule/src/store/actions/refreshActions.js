@@ -5,36 +5,48 @@ import { genKey } from '../../utils/uniqueKey'
 import { normalizeItemsTeamNames } from '../../utils/teamName'
 import { extractEntityFields } from '../../utils/mergeEntity'
 import { filterUnscheduledItems } from '../../utils/proposalVisibility'
+import { getCompetitionItems } from '../../utils/competition'
 import { getCurrentVersionPath } from '../../utils/sessionVersion'
 
-function withStableUniqueKeys(items, previousItems = []) {
-  const itemIdCounts = previousItems.reduce((counts, item) => {
-    if (!item?.itemId) return counts
-    counts[item.itemId] = (counts[item.itemId] || 0) + 1
-    return counts
-  }, {})
-  const singlePreviousByItemId = new Map(
-    previousItems
-      .filter(item => item?.itemId && itemIdCounts[item.itemId] === 1)
-      .map(item => [item.itemId, item])
-  )
-
-  return items.map((item, i) => ({
+function withFreshUniqueKeys(items = []) {
+  return items.map(item => ({
     ...item,
-    uniqueKey: item.uniqueKey
-      || previousItems[i]?.uniqueKey
-      || singlePreviousByItemId.get(item.itemId)?.uniqueKey
-      || genKey('1'),
+    uniqueKey: genKey('1'),
   }))
 }
 
-function buildMissingEntityPropUpdates(items, existingEntityProps = {}) {
+function buildEntityPropUpdates(items) {
   const updates = {}
   ;(items || []).forEach(item => {
-    if (!item?.uniqueKey || existingEntityProps[item.uniqueKey]) return
+    if (!item?.uniqueKey) return
     updates[`entityProps/${item.uniqueKey}`] = extractEntityFields(buildProposalItem(item))
   })
   return updates
+}
+
+function buildNextEntityProps(existingEntityProps = {}, scheduleBlocks = {}, freshItems = []) {
+  const next = {}
+  collectBlockEntityKeys(scheduleBlocks).forEach(key => {
+    if (existingEntityProps[key]) next[key] = existingEntityProps[key]
+  })
+  ;(freshItems || []).forEach(item => {
+    if (item?.uniqueKey) next[item.uniqueKey] = extractEntityFields(buildProposalItem(item))
+  })
+  return next
+}
+
+function collectBlockEntityKeys(scheduleBlocks = {}) {
+  const keys = new Set()
+  Object.values(scheduleBlocks || {}).forEach(block => {
+    if (!block) return
+    if (block.uniqueKey) keys.add(block.uniqueKey)
+    if (block.isCompeting) {
+      getCompetitionItems(block).forEach(item => {
+        if (item?.uniqueKey) keys.add(item.uniqueKey)
+      })
+    }
+  })
+  return keys
 }
 
 export function createRefreshActions(setState, getState) {
@@ -74,11 +86,11 @@ export function createRefreshActions(setState, getState) {
         const weekKey = `${startDate}_${poolType}`
         const versionPath = getCurrentVersionPath(getState, weekKey)
         const now = Date.now()
-        const { weightedMinTargets, allProposalItems, scheduledItemIds, scheduledUniqueKeys, entityProps } = getState()
-        const proposalItemsRaw = withStableUniqueKeys(data.proposalItems || [], allProposalItems)
+        const { weightedMinTargets, scheduleBlocks, scheduledItemIds, scheduledUniqueKeys, entityProps } = getState()
+        const proposalItemsRaw = withFreshUniqueKeys(data.proposalItems || [])
         await update(ref(db, versionPath), {
           proposalItems: proposalItemsRaw,
-          ...buildMissingEntityPropUpdates(proposalItemsRaw, entityProps),
+          entityProps: buildNextEntityProps(entityProps, scheduleBlocks, proposalItemsRaw),
         })
         await update(ref(db, `sessions/${weekKey}/lastUpdated`), { proposal: now, proposalBy: userName || '' })
         const allItems = normalizeItemsTeamNames(
@@ -108,7 +120,7 @@ export function createRefreshActions(setState, getState) {
 
     // ── GAS 전체 재동기화 ─────────────────────────────────
     async refreshAllGasData() {
-      const { startDate, poolType, scheduleBlocks, allProposalItems, scheduledItemIds, scheduledUniqueKeys, userName, entityProps } = getState()
+      const { startDate, poolType, scheduleBlocks, scheduledItemIds, scheduledUniqueKeys, userName, entityProps } = getState()
       setState({ isLoadingGasAll: true })
       try {
         const { fetchInitData } = await import('../../api/gas')
@@ -118,7 +130,7 @@ export function createRefreshActions(setState, getState) {
         const now = Date.now()
 
         // gasData 전체를 정규화하여 Firebase에 덮어씀
-        const proposalItemsRaw = withStableUniqueKeys(gasData.proposalItems || [], allProposalItems)
+        const proposalItemsRaw = withFreshUniqueKeys(gasData.proposalItems || [])
         const pgmSlotsNew = (gasData.pgmSlots || []).map(buildSlot)
         await set(ref(db, `sessions/${weekKey}/gasData`), {
           ...gasData,
@@ -128,7 +140,7 @@ export function createRefreshActions(setState, getState) {
         await update(ref(db, versionPath), {
           pgmSlots: pgmSlotsNew,
           proposalItems: proposalItemsRaw,
-          ...buildMissingEntityPropUpdates(proposalItemsRaw, entityProps),
+          entityProps: buildNextEntityProps(entityProps, scheduleBlocks, proposalItemsRaw),
         })
         await set(ref(db, `sessions/${weekKey}/lastUpdated`), {
           pgm: now, proposal: now, performance: now, preSchedule: now,
@@ -146,7 +158,7 @@ export function createRefreshActions(setState, getState) {
         )
         await update(ref(db, versionPath), {
           ...blockUpdates,
-          ...buildMissingEntityPropUpdates(Object.values(preBlocks), entityProps),
+          ...buildEntityPropUpdates(Object.values(preBlocks)),
         })
 
         const proposalItems = normalizeItemsTeamNames(
@@ -206,7 +218,7 @@ export function createRefreshActions(setState, getState) {
           )
           await update(ref(db, versionPath), {
             ...updates,
-            ...buildMissingEntityPropUpdates(Object.values(newBlocks), entityProps),
+            ...buildEntityPropUpdates(Object.values(newBlocks)),
           })
         }
         setState(s => ({

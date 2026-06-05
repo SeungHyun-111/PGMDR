@@ -61,6 +61,10 @@ const ADD_FIELDS = [
 
 const inp = { background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 4, fontSize: 11, width: '100%', boxSizing: 'border-box' }
 const MIN_COL_WIDTH = 44
+const memoCodePatch = (key, value, meta) => ({
+  [key]: value,
+  [`${key}Code`]: meta?.code || '',
+})
 
 export default function SidebarExpanded({ items, onClose }) {
   const { perfMap, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar, weightedMinTargets, entityProps, saveBlock, saveEntityProps, runUndoBatch } = useScheduleStore()
@@ -252,7 +256,7 @@ export default function SidebarExpanded({ items, onClose }) {
     setEditValue(String(item[col.key] ?? ''))
   }
 
-  const commitEdit = async (item, overrideValue) => {
+  const commitEdit = async (item, overrideValue, memoMeta = null) => {
     if (!editing) return
     const { colKey, fbIdx, uniqueKey } = editing
     const newVal = String(overrideValue ?? editValue).trim()
@@ -260,7 +264,9 @@ export default function SidebarExpanded({ items, onClose }) {
     if (newVal !== oldVal) {
       await runUndoBatch(`사이드바 상품 수정 되돌리기: ${item.pgmCodeName || item.itemId}`, async () => {
       if (item.uniqueKey && ENTITY_EDIT_FIELDS.has(colKey)) {
-        const patch = { [colKey]: newVal }
+        const patch = ['memoCode', 'memoCode2'].includes(colKey)
+          ? memoCodePatch(colKey, newVal, memoMeta)
+          : { [colKey]: newVal }
         const nextName = colKey === 'pgmCodeName' ? newVal : item.pgmCodeName
         const nextDeal = colKey === 'dealTypeConverted' ? newVal : (item.dealTypeConverted || item.dealType || '')
         const nextConverted = normalizeDealType(nextDeal)
@@ -272,7 +278,10 @@ export default function SidebarExpanded({ items, onClose }) {
         if (colKey === 'mdTeam') patch.orgName = newVal
         await saveEntityProps(item.uniqueKey, patch)
       } else {
-        await updateProposalItem(item.itemId, fbIdx, { [colKey]: newVal }, uniqueKey)
+        const patch = ['memoCode', 'memoCode2'].includes(colKey)
+          ? memoCodePatch(colKey, newVal, memoMeta)
+          : { [colKey]: newVal }
+        await updateProposalItem(item.itemId, fbIdx, patch, uniqueKey)
       }
       })
     }
@@ -577,7 +586,7 @@ export default function SidebarExpanded({ items, onClose }) {
                               autoFocus
                               value={editValue}
                               onChange={setEditValue}
-                              onCommit={value => commitEdit(item, value)}
+                              onCommit={(value, meta) => commitEdit(item, value, meta)}
                               inputStyle={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 11, outline: 'none', padding: 0 }}
                             />
                           ) : (
@@ -654,7 +663,7 @@ export default function SidebarExpanded({ items, onClose }) {
                   {['memoCode', 'memoCode2'].includes(f.key) ? (
                     <MemoCodeSelect
                       value={addForm[f.key] || ''}
-                      onChange={value => setAddForm(p => ({ ...p, [f.key]: value }))}
+                      onChange={(value, meta) => setAddForm(p => ({ ...p, ...memoCodePatch(f.key, value, meta) }))}
                       inputStyle={inp}
                     />
                   ) : ['requestNote', 'scheduleComment'].includes(f.key) ? (
