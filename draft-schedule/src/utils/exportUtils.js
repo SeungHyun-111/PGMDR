@@ -375,9 +375,9 @@ function getReportMaxRows(rowsByDate) {
   return Math.max(...dates.map(d => rowsByDate[d].length), 1)
 }
 
-function calcReportLayout(maxRows, dateCount) {
-  const PAGE_W_MM = 400 // A3 landscape 420mm - horizontal margins 10mm * 2
-  const PAGE_H_MM = 285 // A3 landscape 297mm - vertical margins 6mm * 2
+function calcReportLayout(maxRows, dateCount, pageWmm = 400, pageHmm = 285) {
+  const PAGE_W_MM = pageWmm // A3 landscape 420mm - horizontal margins 10mm * 2
+  const PAGE_H_MM = pageHmm // A3 landscape 297mm - vertical margins 6mm * 2
   const TOP_H_MM = 12
   const TOP_MB_MM = 1.5
   const DAY_HEAD_H_MM = 3
@@ -750,6 +750,9 @@ tr:nth-child(even) td{background:#fafafa}
 .bar-wrap{display:flex;align-items:center;gap:8px;min-width:120px}
 .bar-bg{flex:1;height:6px;background:#e8eaf2;border-radius:3px;overflow:hidden;min-width:60px}
 .bar-fill{height:100%;border-radius:3px;background:#4a6cf7}
+.grid-a3-page{width:400mm;height:285mm;background:#fff;border:1px solid #e2e4ef;border-radius:10px;overflow:hidden;margin-bottom:16px}
+@page{size:A3 landscape;margin:6mm 10mm}
+@media print{html,body{-webkit-print-color-adjust:exact;print-color-adjust:exact}.grid-a3-page{page-break-after:always;border:none;border-radius:0}}
 </style>
 </head>
 <body>
@@ -763,7 +766,10 @@ ${body}
 // ── 편성표 그리드 ─────────────────────────────────────────────────────────
 
 function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, perfMap, unitH = 44, forPrint = false }) {
-  const UNIT_H = unitH, TIME_W = 36, COL_W = 160
+  let UNIT_H = unitH, TIME_W = 36, COL_W = 160
+  let FONT_K = 1
+  let GRID_TOOLBAR_H = 36
+  let GRID_HEADER_H = 36
   const effectiveSlots = getEffectivePgmSlots(pgmSlots, customSlots || {})
 
   const slotsByDate = {}
@@ -780,6 +786,29 @@ function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, p
   const maxSlotUnits = Math.max(...dates.map(d =>
     slotsByDate[d].reduce((s, sl) => s + (splitSlots?.[sl.slotId] ? 2 : 1), 0)
   ))
+  let htmlGridPageW = null
+  let htmlGridPageH = null
+  const isHtmlA3 = !forPrint
+  if (isHtmlA3) {
+    const PX_PER_MM = 3.7795275591
+    const bodyPadPx = 24
+    const reportChromePx = 26 + 38 + 62
+    htmlGridPageW = 400 * PX_PER_MM - bodyPadPx * 2
+    htmlGridPageH = 285 * PX_PER_MM - bodyPadPx * 2 - reportChromePx
+    const layout = calcReportLayout(
+      maxSlotUnits,
+      dates.length,
+      htmlGridPageW / PX_PER_MM,
+      htmlGridPageH / PX_PER_MM
+    )
+    const dayW = layout.dayW * PX_PER_MM
+    TIME_W = 7.5 * PX_PER_MM
+    COL_W = Math.max(40, dayW - TIME_W)
+    UNIT_H = layout.rowH * PX_PER_MM
+    FONT_K = layout.fontK
+    GRID_TOOLBAR_H = 12 * PX_PER_MM
+    GRID_HEADER_H = 3 * PX_PER_MM
+  }
   const totalH    = maxSlotUnits * UNIT_H
   const colW      = TIME_W + COL_W
   const totalSlots = dates.reduce((s, d) => s + slotsByDate[d].length, 0)
@@ -807,7 +836,7 @@ function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, p
     const borderColor = isComp ? '#ff4444' : isPgmTeam ? '#c8cade' : isGreenBg ? 'rgba(34,197,94,.5)' : isDirect ? 'rgba(59,130,246,.5)' : isPurple ? 'rgba(139,92,246,.5)' : '#e2e4ef'
     const isColored   = isComp || isDirect || isPurple || isGreenBg
     const textColor   = isColored ? '#fff' : '#1a1d2e'
-    const fontSize    = rowH > 30 ? 10 : 9
+    const fontSize    = Math.max(7, (rowH > 30 ? 10 : 9) * FONT_K)
     const badgeSz     = Math.max(7, fontSize - 1)
     const badgeBg     = isColored ? 'rgba(0,0,0,.25)' : 'rgba(0,0,0,.07)'
 
@@ -825,7 +854,8 @@ function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, p
       else if (dt) dealChar = dt.charAt(0)
     }
 
-    const bs = `font-size:${badgeSz}px;font-weight:700;color:${textColor};background:${badgeBg};padding:0 3px;height:14px;border-radius:2px;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center`
+    const badgeH = Math.max(10, 14 * FONT_K)
+    const bs = `font-size:${badgeSz}px;font-weight:700;color:${textColor};background:${badgeBg};padding:0 ${Math.max(2, 3 * FONT_K)}px;height:${badgeH}px;border-radius:2px;white-space:nowrap;flex-shrink:0;display:inline-flex;align-items:center`
     const badges = [
       teamShort ? `<span style="${bs}">${esc(teamShort)}</span>` : '',
       dealChar && !isComp ? `<span style="${bs}">${esc(dealChar)}</span>` : '',
@@ -867,7 +897,7 @@ function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, p
   // ── 헤더 (ScheduleGrid 헤더와 동일) ─────────────────────────────────────
   const headerCols = dates.map((d, di) => {
     const dow = DN[new Date(d).getDay()]
-    return `<div style="flex:1;min-width:${colW}px;display:flex${di>0?';border-left:2px solid #c8cade':''}"><div style="width:${TIME_W}px;flex-shrink:0"></div><div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-size:12px;font-weight:700;color:#1a1d2e">${esc(dow)} <span style="font-size:10px;font-weight:400;color:#8b90ab">${esc(d.slice(5))}</span></div></div></div>`
+    return `<div style="flex:1;min-width:${colW}px;display:flex${di>0?';border-left:2px solid #c8cade':''}"><div style="width:${TIME_W}px;flex-shrink:0"></div><div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-size:${Math.max(8, 12 * FONT_K)}px;font-weight:700;color:#1a1d2e">${esc(dow)} <span style="font-size:${Math.max(7, 10 * FONT_K)}px;font-weight:400;color:#8b90ab">${esc(d.slice(5))}</span></div></div></div>`
   }).join('')
 
   // ── 바디 ────────────────────────────────────────────────────────────────
@@ -953,7 +983,13 @@ if(sel){
     var val=sel.value;
     document.querySelectorAll('.blk').forEach(function(el){
       var tm=el.dataset.team||'';
-      el.style.opacity=(val===''||tm===val)?'1':'0.1';
+      var selected=(val!==''&&tm===val);
+      el.style.opacity=(val===''||selected)?'1':'0.001';
+      el.style.zIndex=selected?'5':'';
+      el.style.filter=selected?'saturate(1.15) contrast(1.08)':'';
+      el.style.outline=selected?'2px solid #f59e0b':'';
+      el.style.outlineOffset=selected?'1px':'';
+      el.style.boxShadow=selected?'0 0 0 2px rgba(245,158,11,.28), 0 4px 10px rgba(15,23,42,.22)':'';
     });
   });
 }
@@ -968,7 +1004,7 @@ if(sel){
       .filter(Boolean)
   )].sort()
   const teamOptions = allTeams.map(t => `<option value="${t}">${t}</option>`).join('')
-  const toolbar = forPrint ? '' : `<div style="height:36px;display:flex;align-items:center;padding:0 12px;gap:12px;border-bottom:1px solid #e2e4ef;background:#fff">
+  const toolbar = forPrint ? '' : `<div style="height:${GRID_TOOLBAR_H}px;display:flex;align-items:center;padding:0 12px;gap:12px;border-bottom:1px solid #e2e4ef;background:#fff">
 <span style="font-size:11px;color:#8b90ab">총 ${totalSlots}슬롯 · ${dates.length}일</span>
 <div style="display:flex;align-items:center;gap:6px;margin-left:auto">
 <label style="font-size:11px;color:#4a4f6e">조직 필터</label>
@@ -978,16 +1014,23 @@ if(sel){
 </div>
 </div>`
 
-  return `<div style="border:1px solid #e2e4ef;border-radius:10px;overflow:hidden;background:#f5f6fa;margin-bottom:16px">
+  const gridContent = `<div style="border:1px solid #e2e4ef;border-radius:10px;overflow:hidden;background:#f5f6fa;margin-bottom:16px">
 ${toolbar}
 <div style="overflow-x:auto">
 <div style="min-width:${totalMinW}px;width:100%">
-<div style="display:flex;height:36px;border-bottom:1px solid #e2e4ef;background:#fff">${headerCols}</div>
+<div style="display:flex;height:${GRID_HEADER_H}px;border-bottom:1px solid #e2e4ef;background:#fff">${headerCols}</div>
 <div style="display:flex">${bodyCols}</div>
 </div>
 </div>
 </div>
 ${forPrint ? '' : tipScript}`
+
+  if (isHtmlA3) {
+    return `<div class="grid-a3-page" style="width:${htmlGridPageW}px;height:${htmlGridPageH}px">
+${gridContent}
+</div>`
+  }
+  return gridContent
 }
 
 // ── 시뮬레이션 ────────────────────────────────────────────────────────────
@@ -1679,11 +1722,28 @@ function buildStatusSection({ scheduleBlocks, proposalItems, perfMap, manualInpu
 }
 
 // ── 메인 내보내기 함수 ────────────────────────────────────────────────────
+function filterGridBlocksByTeams(scheduleBlocks = {}, teamFilter = null) {
+  if (!Array.isArray(teamFilter)) return scheduleBlocks
+  const allow = new Set(teamFilter)
+  return Object.fromEntries(
+    Object.entries(scheduleBlocks || {}).filter(([, block]) => {
+      if (!block || block.isDefault) return true
+      return allow.has(block.mdTeam || block.orgName || '')
+    })
+  )
+}
+
 export function exportToHtmlSections(sections, data) {
   const { startDate = '', endDate = '' } = data
   const parts = []
 
-  if (sections.grid)       parts.push(`<h2>편성표</h2>` + buildGridSection(data))
+  if (sections.grid) {
+    const gridData = {
+      ...data,
+      scheduleBlocks: filterGridBlocksByTeams(data.scheduleBlocks, data.gridTeamFilter),
+    }
+    parts.push(`<h2>편성표</h2>` + buildGridSection(gridData))
+  }
   if (sections.simulation) parts.push(`<h2>시뮬레이션 (실적 예상값)</h2>` + buildSimSection(data))
   if (sections.ratio)      parts.push(`<h2>편성비중</h2>` + buildRatioSection(data))
   if (sections.status)     parts.push(`<h2>편성현황</h2>` + buildStatusSection(data))

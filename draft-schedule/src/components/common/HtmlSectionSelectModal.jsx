@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
 import useCategoryMap from '../../hooks/useCategoryMap'
 import { exportToHtmlSections } from '../../utils/exportUtils'
@@ -21,14 +21,35 @@ export default function HtmlSectionSelectModal({ onBack, onClose }) {
   const categoryMap = useCategoryMap(proposalItems)
 
   const [selected, setSelected] = useState({ grid: true, simulation: true, ratio: true, status: true })
+  const gridTeams = useMemo(() => {
+    const teams = Object.values(scheduleBlocks || {})
+      .filter(b => b && !b.isDefault)
+      .map(b => b.mdTeam || b.orgName || '')
+      .filter(Boolean)
+    return [...new Set(teams)].sort((a, b) => a.localeCompare(b, 'ko'))
+  }, [scheduleBlocks])
+  const [gridTeamSelection, setGridTeamSelection] = useState(null)
+  const selectedGridTeams = gridTeamSelection || gridTeams
   const toggle = id => setSelected(p => ({ ...p, [id]: !p[id] }))
   const hasAny = Object.values(selected).some(Boolean)
+  const toggleGridTeam = team => {
+    setGridTeamSelection(prev => {
+      const current = prev || gridTeams
+      return current.includes(team)
+        ? current.filter(t => t !== team)
+        : [...current, team].sort((a, b) => a.localeCompare(b, 'ko'))
+    })
+  }
 
   const handleExport = () => {
+    const gridTeamFilter = selected.grid && selectedGridTeams.length !== gridTeams.length
+      ? selectedGridTeams
+      : null
     exportToHtmlSections(selected, {
       scheduleBlocks, pgmSlots, customSlots, proposalItems,
       perfMap, manualInputs, startDate, endDate,
       weightedMinTargets, categoryMap, splitSlots, targetMetrics,
+      gridTeamFilter,
     })
     onClose()
   }
@@ -79,6 +100,45 @@ export default function HtmlSectionSelectModal({ onBack, onClose }) {
             </div>
           ))}
         </div>
+
+        {selected.grid && gridTeams.length > 0 && (
+          <div style={{ border: '1px solid var(--border)', borderRadius: 7, padding: '10px 12px', background: 'var(--bg1)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>편성표 포함 팀</div>
+              <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => setGridTeamSelection(null)}
+                  style={{ padding: '3px 7px', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--bg3)', color: 'var(--text2)', fontSize: 10, cursor: 'pointer' }}
+                >전체</button>
+                <button
+                  type="button"
+                  onClick={() => setGridTeamSelection([])}
+                  style={{ padding: '3px 7px', borderRadius: 5, border: '1px solid var(--border)', background: 'var(--bg3)', color: 'var(--text2)', fontSize: 10, cursor: 'pointer' }}
+                >해제</button>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, maxHeight: 150, overflowY: 'auto', paddingRight: 2 }}>
+              {gridTeams.map(team => {
+                const checked = selectedGridTeams.includes(team)
+                return (
+                  <label
+                    key={team}
+                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '5px 7px', borderRadius: 5, background: checked ? 'rgba(74,108,247,.08)' : 'transparent', color: checked ? 'var(--accent)' : 'var(--text2)', fontSize: 11, cursor: 'pointer', minWidth: 0 }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => toggleGridTeam(team)}
+                      style={{ cursor: 'pointer', flexShrink: 0 }}
+                    />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{team}</span>
+                  </label>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         <div style={{ fontSize: 11, color: 'var(--text3)', padding: '8px 10px', background: 'var(--bg3)', borderRadius: 6, lineHeight: 1.6 }}>
           ⚠ 차트·정렬·인라인 편집은 로컬 HTML에서 동작하지 않으며 표로 대체됩니다.

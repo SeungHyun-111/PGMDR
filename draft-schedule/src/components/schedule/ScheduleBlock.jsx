@@ -7,7 +7,7 @@ import { getDealTypeChar } from '../../constants/dealTypes'
 import { competitionItemKey, getCompetitionItems } from '../../utils/competition'
 import { genKey } from '../../utils/uniqueKey'
 
-function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, dimmed = false, readOnly = false }) {
+function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, dimmed = false, highlighted = false, readOnly = false }) {
   const [hover, setHover]               = useState(false)
   const [tooltipPos, setTooltipPos]     = useState(null)
   const [contextMenu, setContextMenu]   = useState(null)
@@ -142,8 +142,13 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
     <div style={{
       position: 'absolute',
       inset: '1px',
-      opacity: dimmed ? 0.12 : 1,
-      transition: 'opacity .15s',
+      opacity: dimmed ? 0.1 : 1,
+      zIndex: highlighted ? 5 : undefined,
+      filter: highlighted ? 'saturate(1.15) contrast(1.08)' : undefined,
+      outline: highlighted ? '2px solid #f59e0b' : undefined,
+      outlineOffset: highlighted ? 1 : undefined,
+      boxShadow: highlighted ? '0 0 0 2px rgba(245,158,11,.28), 0 4px 10px rgba(15,23,42,.22)' : undefined,
+      transition: 'opacity .15s, filter .15s, box-shadow .15s',
     }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}

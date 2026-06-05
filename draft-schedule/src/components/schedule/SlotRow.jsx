@@ -20,6 +20,11 @@ function isDimmed(block, teamFilter, gridSearch) {
   return false
 }
 
+function isTeamHighlighted(block, teamFilter) {
+  if (!block || teamFilter === '전체') return false
+  return (block.mdTeam || block.orgName || '') === teamFilter
+}
+
 function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_IP, onDrop, saveBlock, removeBlock, teamFilter = '전체', gridSearch = '', readOnly = false }) {
   const [caHover, setCaHover] = useState(false)
   const [ipHover, setIpHover] = useState(false)
@@ -316,7 +321,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
             {dropTarget === 'CA' && <DropHint style={dropHintStyle} />}
             {dropTarget === 'CA' && splitBlock_CA && !splitBlock_CA.isDefault && <DropPreviewBlock block={splitBlock_CA} style={previewBlockStyle} />}
             {splitBlock_CA && !splitBlock_CA.isDefault
-              ? <ScheduleBlock block={splitBlock_CA} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(splitBlock_CA, teamFilter, gridSearch)} readOnly={readOnly} />
+              ? <ScheduleBlock block={splitBlock_CA} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(splitBlock_CA, teamFilter, gridSearch)} highlighted={isTeamHighlighted(splitBlock_CA, teamFilter)} readOnly={readOnly} />
               : caWeighted != null && <span style={wmStyle}>{caWeighted}</span>}
           </div>
           <div style={{ position: 'absolute', top: halfHeight, left: 0, right: 0, height: halfHeight, background: ipHover ? 'rgba(106,61,138,.2)' : 'transparent', transition: 'background .1s' }}
@@ -325,7 +330,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
             {dropTarget === 'IP' && <DropHint style={dropHintStyle} />}
             {dropTarget === 'IP' && splitBlock_IP && !splitBlock_IP.isDefault && <DropPreviewBlock block={splitBlock_IP} style={previewBlockStyle} />}
             {splitBlock_IP && !splitBlock_IP.isDefault
-              ? <ScheduleBlock block={splitBlock_IP} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(splitBlock_IP, teamFilter, gridSearch)} readOnly={readOnly} />
+              ? <ScheduleBlock block={splitBlock_IP} height={halfHeight} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(splitBlock_IP, teamFilter, gridSearch)} highlighted={isTeamHighlighted(splitBlock_IP, teamFilter)} readOnly={readOnly} />
               : ipWeighted != null && <span style={wmStyle}>{ipWeighted}</span>}
           </div>
         </>
@@ -336,7 +341,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
           {dropTarget === 'ALL' && <DropHint style={dropHintStyle} />}
           {dropTarget === 'ALL' && block && !block.isDefault && <DropPreviewBlock block={block} style={previewBlockStyle} />}
           {block && !block.isDefault
-            ? <ScheduleBlock block={block} height={height} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(block, teamFilter, gridSearch)} readOnly={readOnly} />
+            ? <ScheduleBlock block={block} height={height} fontSize={fontSize} removeBlock={removeBlock} saveBlock={saveBlock} dimmed={isDimmed(block, teamFilter, gridSearch)} highlighted={isTeamHighlighted(block, teamFilter)} readOnly={readOnly} />
             : slot.weightedMin != null && <span style={wmStyle}>{slot.weightedMin}</span>}
         </div>
       )}
