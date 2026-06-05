@@ -110,6 +110,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
       dealTypeConverted,
       newProductType: item.newProductType || '',
       memoCode: item.memoCode || '',
+      memoCode2: item.memoCode2 || '',
       scheduleComment: item.scheduleComment || '',
       requestNote: item.requestNote || '',
       ...(perfKey ? { perfKey } : {}),

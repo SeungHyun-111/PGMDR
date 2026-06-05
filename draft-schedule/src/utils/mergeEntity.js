@@ -5,6 +5,7 @@ export const ENTITY_FIELDS = [
   'mdCategory',
   'dealType', 'dealTypeConverted', 'dealTypeChar',
   'memoCode',
+  'memoCode2',
   'requestNote',
   'scheduleComment',
   'annotation',

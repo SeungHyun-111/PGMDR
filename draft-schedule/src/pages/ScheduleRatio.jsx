@@ -7,6 +7,8 @@ import RatioSummaryCards from '../components/ratio/RatioSummaryCards'
 import RatioDonutChart, { TEAM_COLORS } from '../components/ratio/RatioDonutChart'
 import RatioTable from '../components/ratio/RatioTable'
 import RatioPgmCount from '../components/ratio/RatioPgmCount'
+import { getCompetitionItems } from '../utils/competition'
+import { resolveEntity } from '../utils/mergeEntity'
 
 const UNSCHEDULED_NAME = '미편성'
 const DEFAULT_TEAM_NAME = '편성팀'
@@ -37,6 +39,7 @@ export default function ScheduleRatio() {
     proposalItems,
     perfMap,
     manualInputs,
+    entityProps,
   } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const [viewType, setViewType] = useState('team')
@@ -147,6 +150,26 @@ export default function ScheduleRatio() {
     }
   }, [displayRatioData, ratioStats, targetTeams, viewType])
 
+  const competingIncludedData = useMemo(() => {
+    if (viewType !== 'team') return null
+    const next = { ...displayRatioData }
+    Object.values(enrichedBlocks).forEach(block => {
+      if (!block?.isCompeting) return
+      const items = getCompetitionItems(block)
+      items.forEach((item, idx) => {
+        const resolved = resolveEntity(item, entityProps)
+        const team = resolved?.mdTeam || resolved?.orgName || item?.mdTeam || item?.orgName || COMPETING_NAME
+        const alias = targetMap[team] == null ? getTeamAlias(team) : team
+        const key = targetMap[team] != null ? team : targetMap[alias] != null ? alias : team
+        next[key] = (next[key] || 0) + (Number(block.weightedMin || item.weightedMin || 0))
+      })
+    })
+    targetTeams.forEach(({ name }) => {
+      if (next[name] == null) next[name] = 0
+    })
+    return next
+  }, [displayRatioData, enrichedBlocks, entityProps, targetMap, targetTeams, viewType])
+
   const totalTarget = useMemo(
     () => targetTeams.reduce((acc, t) => acc + t.target, 0),
     [targetTeams]
@@ -218,6 +241,7 @@ export default function ScheduleRatio() {
         showTarget={viewType === 'team'}
         chartData={chartData}
         scheduledWeighted={stats.totalWeighted}
+        competingIncludedData={competingIncludedData}
       />
 
       <RatioPgmCount enrichedBlocks={enrichedBlocks} perfMap={perfMap} manualInputs={manualInputs} />

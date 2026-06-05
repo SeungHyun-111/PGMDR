@@ -154,6 +154,11 @@ export default function ProductCard({ item, perfMap }) {
             {item.memoCode}
           </span>
         )}
+        {item.memoCode2 && (
+          <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'rgba(74,108,247,.10)', color: 'var(--accent)', fontWeight: 700 }}>
+            {item.memoCode2}
+          </span>
+        )}
         {item.scheduleComment && (
           <span style={{ fontSize: 9, padding: '1px 5px', borderRadius: 3, background: 'rgba(22,163,74,.14)', color: 'var(--green)', fontWeight: 700, maxWidth: 92, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {item.scheduleComment}

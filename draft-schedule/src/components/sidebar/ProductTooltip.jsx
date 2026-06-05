@@ -13,6 +13,7 @@ export default function ProductTooltip({ item, perfMap, entityProps, pos }) {
     ['가용가중분2', item.availableWeightedMin2 ? item.availableWeightedMin2 + '분' : '-'],
     ['잔여편성',    item.remainingSchedule || '-'],
     ['메모코드',    item.memoCode || '-'],
+    ['메모코드2',   item.memoCode2 || '-'],
     ['편성C',       item.scheduleComment || '-'],
     ['기타요청',    item.requestNote || '-'],
   ]

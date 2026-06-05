@@ -3,6 +3,7 @@ import { getGrade, getEffectiveProfit, getManualInputKey } from './grade'
 import { getEffectivePgmSlots } from './effectiveSlots'
 import { getCompetitionItems } from './competition'
 import { getResolvedEntity, getResolvedPerfKey } from './entityKey'
+import { MEMO_CODES } from '../data/memoCodes'
 
 // ── 시간 비교 헬퍼 ────────────────────────────────────────────────────────
 function timeToMin(t) {
@@ -73,10 +74,19 @@ function isBoMobileAd(block) {
   return dealType.includes('[모]') || dealType.includes('모바일광고')
 }
 
-function buildBoExcelRow(slot, block, slotDuration) {
+function getBoMemoCode(block, field = 'memoCode', memoCodes = MEMO_CODES) {
+  const raw = String(block?.[field] || '').trim()
+  if (!raw) return ''
+  if (/^\d+$/.test(raw)) return raw.padStart(3, '0')
+  const source = Array.isArray(memoCodes) && memoCodes.length ? memoCodes : MEMO_CODES
+  const row = source.find(item => item.name === raw || item.code === raw)
+  return row?.code ? String(row.code).padStart(3, '0') : ''
+}
+
+function buildBoExcelRow(slot, block, slotDuration, memoCodes = MEMO_CODES) {
   const duration = Number(block?.durationMin ?? slotDuration ?? slot?.durationMin ?? 0)
   const startMin = timeToMin(slot?.timeText || block?.timeText || '')
-  return {
+  const row = {
     '방송일자': formatBoDate(slot?.dateKey || block?.dateKey || ''),
     '시작시간': formatBoTime(slot?.timeText || block?.timeText || ''),
     '종료시간': minToTime(startMin + duration),
@@ -87,6 +97,9 @@ function buildBoExcelRow(slot, block, slotDuration) {
     '메모코드2': '',
     '모바일광고비여부': isBoMobileAd(block) ? '1' : '0',
   }
+  row['메모코드1'] = getBoMemoCode(block, 'memoCode', memoCodes)
+  row['메모코드2'] = getBoMemoCode(block, 'memoCode2', memoCodes)
+  return row
 }
 
 function forceWorksheetText(ws) {
@@ -105,7 +118,7 @@ function forceWorksheetText(ws) {
 }
 
 function exportToBoExcel(opts = {}) {
-  const { startDate = '', scheduleBlocks = {}, pgmSlots = [], customSlots = {}, splitSlots = {} } = opts
+  const { startDate = '', scheduleBlocks = {}, pgmSlots = [], customSlots = {}, splitSlots = {}, memoCodes = MEMO_CODES } = opts
   const effectiveSlots = getEffectivePgmSlots(pgmSlots, customSlots)
   effectiveSlots.sort((a, b) =>
     a.dateKey !== b.dateKey
@@ -119,12 +132,12 @@ function exportToBoExcel(opts = {}) {
       const halfDur = slot.durationMin != null ? Math.round(slot.durationMin / 2) : ''
       ;['CA', 'IP'].forEach(channel => {
         const block = scheduleBlocks[`${slot.slotId}_${channel}`]
-        if (block && !block.isDefault && !block.isCompeting) data.push(buildBoExcelRow(slot, block, halfDur))
+        if (block && !block.isDefault && !block.isCompeting) data.push(buildBoExcelRow(slot, block, halfDur, memoCodes))
       })
       return
     }
     const block = scheduleBlocks[slot.slotId]
-    if (block && !block.isDefault && !block.isCompeting) data.push(buildBoExcelRow(slot, block, slot.durationMin))
+    if (block && !block.isDefault && !block.isCompeting) data.push(buildBoExcelRow(slot, block, slot.durationMin, memoCodes))
   })
 
   const headers = ['방송일자', '시작시간', '종료시간', '편성코드', '직매입여부', '약정여부', '메모코드1', '메모코드2', '모바일광고비여부']
@@ -315,6 +328,7 @@ function buildReportRow({ slot, block, channel, entityProps, perfMap }) {
     brand: product.brand,
     itemName: product.itemName,
     memoCode: block?.memoCode || '',
+    memoCode2: block?.memoCode2 || '',
     hasHash: String(block?.scheduleComment || '').includes('#'),
     durationMin: block?.durationMin ?? slot?.durationMin ?? '',
     weightedMin: block?.weightedMin ?? slot?.weightedMin ?? '',
@@ -423,7 +437,7 @@ export function printReportSchedule(rows, opts = {}) {
             <div class="time"><span>${reportEsc(reportTime(row.timeText))}</span><span class="ch">${reportEsc(row.channel || '')}</span></div>
             <div class="team"><span>${reportEsc(row.team || '')}</span><span class="video">${reportEsc(row.videoType || '')}</span></div>
             <div class="main">
-              <div class="name">${reportEsc([row.dealType, row.brand, row.memoCode].filter(Boolean).join(' '))}</div>
+              <div class="name">${reportEsc([row.dealType, row.brand, row.memoCode, row.memoCode2].filter(Boolean).join(' '))}</div>
               <div class="meta"><span>${reportEsc(row.itemName || '')}</span>${row.hasHash ? '<span class="hash">#</span>' : ''}</div>
             </div>
             <div class="min">${row.isEmpty || row.weightedMin === '' || row.weightedMin == null ? '' : `${reportEsc(row.weightedMin)}분`}</div>
@@ -885,7 +899,7 @@ function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, p
       dealType: block.dealType || null, newProductType: block.newProductType || null,
       mdCategory: block.mdCategory || null, dateKey: block.dateKey || null,
       timeText: block.timeText || null, durationMin: block.durationMin || null,
-      weightedMin: block.weightedMin || null, memoCode: block.memoCode || null,
+      weightedMin: block.weightedMin || null, memoCode: block.memoCode || null, memoCode2: block.memoCode2 || null,
       scheduleComment: block.scheduleComment || null, requestNote: block.requestNote || null, annotation: block.annotation || null,
       lastPerf: lastPerf ? { broadcastDate: lastPerf.broadcastDate, spw: lastPerf.salesPerWeightedMin, ppw: lastPerf.profitPerWeightedMin } : null,
     })
@@ -957,7 +971,7 @@ function attachTip(el){
         h+='</div>';
       });
     } else {
-      [['팀',d.mdTeam],['채널',d.channel],['거래형태',d.dealType],['신상품구분',d.newProductType],['카테고리',d.mdCategory],['방송일시',(d.dateKey||'')+' '+(d.timeText||'')],['방송시간',(d.durationMin||'-')+'분'],['가중분',d.weightedMin],['메모코드',d.memoCode],['편성C',d.scheduleComment],['기타요청',d.requestNote]].forEach(function(lr){h+=row(lr[0],lr[1])});
+      [['팀',d.mdTeam],['채널',d.channel],['거래형태',d.dealType],['신상품구분',d.newProductType],['카테고리',d.mdCategory],['방송일시',(d.dateKey||'')+' '+(d.timeText||'')],['방송시간',(d.durationMin||'-')+'분'],['가중분',d.weightedMin],['메모코드',d.memoCode],['메모코드2',d.memoCode2],['편성C',d.scheduleComment],['기타요청',d.requestNote]].forEach(function(lr){h+=row(lr[0],lr[1])});
       if(d.annotation)h+=row('첨삭',d.annotation,'#d97706');
       if(d.lastPerf){
         h+='<div style="border-top:1px solid #e2e4ef;margin:6px 0"></div><div style="font-size:10px;font-weight:700;color:#8b90ab;margin-bottom:4px">직전 실적 ('+r(d.lastPerf.broadcastDate)+')</div>';
@@ -1671,6 +1685,7 @@ function buildStatusSection({ scheduleBlocks, proposalItems, perfMap, manualInpu
       <td style="${isCompeting?'color:#dc2626;font-weight:700':''}max-width:200px;overflow:hidden;text-overflow:ellipsis">${isCompeting?'⚔ ':''}${block.pgmCodeName||'-'}</td>
       <td class="r" style="font-weight:700;color:#4a6cf7">${hf(block.weightedMin)}</td>
       <td style="color:#8b90ab;font-size:11px">${block.memoCode||'-'}</td>
+      <td style="color:#8b90ab;font-size:11px">${block.memoCode2||'-'}</td>
       <td style="color:#8b90ab;font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis">${block.scheduleComment||'-'}</td>
       <td class="c">${statusBadge}</td>
     </tr>`
@@ -1704,9 +1719,9 @@ function buildStatusSection({ scheduleBlocks, proposalItems, perfMap, manualInpu
     <thead><tr>
       <th class="c">등급</th><th>날짜</th><th>시간</th><th class="c">채널</th>
       <th>팀</th><th>카테고리</th><th>편성코드명</th><th class="r">가중분</th>
-      <th>메모코드</th><th>편성C</th><th class="c">상태</th>
+      <th>메모코드</th><th>메모코드2</th><th>편성C</th><th class="c">상태</th>
     </tr></thead>
-    <tbody>${scheduledRows || noRow(11, '편성된 항목이 없습니다.')}</tbody>
+    <tbody>${scheduledRows || noRow(12, '편성된 항목이 없습니다.')}</tbody>
   </table>
 </div>
 <div style="font-size:11px;font-weight:700;color:#4a4f6e;margin:14px 0 6px">미편성 ${enrichedItems.length}건</div>

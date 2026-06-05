@@ -28,6 +28,7 @@ const TEAM_DETAIL_COLS = [
   { key: '_salesPerMin', label: '취급/분', w: 96, align: 'right', sort: (a, b) => Number(a._salesPerMin || 0) - Number(b._salesPerMin || 0) },
   { key: '_profitPerMin', label: '한익/분', w: 96, align: 'right', sort: (a, b) => Number(a._profitPerMin || 0) - Number(b._profitPerMin || 0) },
   { key: 'memoCode', label: '메모코드', w: 120, sort: (a, b) => String(a.memoCode || '').localeCompare(String(b.memoCode || ''), 'ko') },
+  { key: 'memoCode2', label: '메모코드2', w: 120, sort: (a, b) => String(a.memoCode2 || '').localeCompare(String(b.memoCode2 || ''), 'ko') },
   { key: 'scheduleComment', label: '편성C', w: 130, sort: null },
   { key: 'requestNote', label: '기타요청', w: 220, sort: null },
 ]
@@ -90,6 +91,7 @@ function exportTeamDetailRows(rows, selectedTeam) {
     '취급/분': Number(row._salesPerMin || 0),
     '한익/분': Number(row._profitPerMin || 0),
     '메모코드': row.memoCode || '',
+    '메모코드2': row.memoCode2 || '',
     '편성C': row.scheduleComment || '',
     '기타요청': row.requestNote || '',
   }))
@@ -433,6 +435,7 @@ function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs }
                   <td style={{ ...teamCell, ...teamNum, color: 'var(--accent)', fontWeight: 700 }}>{fmtNum(row._salesPerMin)}</td>
                   <td style={{ ...teamCell, ...teamNum, color: 'var(--green)', fontWeight: 700 }}>{fmtNum(row._profitPerMin)}</td>
                   <td style={{ ...teamCell, color: 'var(--text3)' }}>{row.memoCode || '-'}</td>
+                  <td style={{ ...teamCell, color: 'var(--text3)' }}>{row.memoCode2 || '-'}</td>
                   <td style={{ ...teamCell, color: 'var(--text3)' }}>{row.scheduleComment || '-'}</td>
                   <td style={{ ...teamCell, color: 'var(--text3)' }}>{row.requestNote || '-'}</td>
                 </tr>

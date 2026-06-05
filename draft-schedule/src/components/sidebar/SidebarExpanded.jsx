@@ -26,6 +26,7 @@ const COLS = [
   { key: 'availableWeightedMin1', label: '가용가중분',   w: 68 },
   { key: 'remainingSchedule',     label: '잔여편성',     w: 56 },
   { key: 'memoCode',              label: '메모코드',     w: 90 },
+  { key: 'memoCode2',             label: '메모코드2',    w: 90 },
   { key: 'scheduleComment',       label: '편성C',        w: 120 },
   { key: 'requestNote',           label: '기타요청',     w: 220 },
 ]
@@ -33,12 +34,12 @@ const COLS = [
 const EDITABLE = new Set([
   'pgmCodeName', 'mdTeam', 'mdCategory', 'dealTypeConverted', 'newProductType',
   'mainPrice', 'fixedFee', 'preferredTime', 'availableWeightedMin1',
-  'remainingSchedule', 'memoCode', 'scheduleComment', 'requestNote',
+  'remainingSchedule', 'memoCode', 'memoCode2', 'scheduleComment', 'requestNote',
 ])
 
 const ENTITY_EDIT_FIELDS = new Set([
   'pgmCodeName', 'mdTeam', 'mdCategory', 'dealTypeConverted', 'newProductType',
-  'memoCode', 'scheduleComment', 'requestNote',
+  'memoCode', 'memoCode2', 'scheduleComment', 'requestNote',
 ])
 
 const ADD_FIELDS = [
@@ -53,6 +54,7 @@ const ADD_FIELDS = [
   { key: 'availableWeightedMin1', label: '가용가중분' },
   { key: 'remainingSchedule',     label: '잔여편성' },
   { key: 'memoCode',              label: '메모코드' },
+  { key: 'memoCode2',             label: '메모코드2' },
   { key: 'scheduleComment',       label: '편성C' },
   { key: 'requestNote',           label: '기타요청' },
 ]
@@ -542,9 +544,9 @@ export default function SidebarExpanded({ items, onClose }) {
                           color,
                           fontWeight,
                           whiteSpace: 'nowrap',
-                          overflow: isEditing && col.key === 'memoCode' ? 'visible' : 'hidden',
+                          overflow: isEditing && ['memoCode', 'memoCode2'].includes(col.key) ? 'visible' : 'hidden',
                           textOverflow: isEditing ? 'unset' : 'ellipsis',
-                          position: isEditing && col.key === 'memoCode' ? 'relative' : undefined,
+                          position: isEditing && ['memoCode', 'memoCode2'].includes(col.key) ? 'relative' : undefined,
                           width,
                           minWidth: width,
                           maxWidth: width,
@@ -570,7 +572,7 @@ export default function SidebarExpanded({ items, onClose }) {
                               rows={2}
                               style={{ width: '100%', minWidth: 150, background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 11, outline: 'none', padding: 0, resize: 'vertical' }}
                             />
-                          ) : col.key === 'memoCode' ? (
+                          ) : ['memoCode', 'memoCode2'].includes(col.key) ? (
                             <MemoCodeSelect
                               autoFocus
                               value={editValue}
@@ -649,7 +651,7 @@ export default function SidebarExpanded({ items, onClose }) {
                   <label style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>
                     {f.label}{f.required && <span style={{ color: 'var(--red)' }}> *</span>}
                   </label>
-                  {f.key === 'memoCode' ? (
+                  {['memoCode', 'memoCode2'].includes(f.key) ? (
                     <MemoCodeSelect
                       value={addForm[f.key] || ''}
                       onChange={value => setAddForm(p => ({ ...p, [f.key]: value }))}

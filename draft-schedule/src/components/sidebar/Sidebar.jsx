@@ -23,6 +23,7 @@ const ADD_FIELDS = [
   { key: 'availableWeightedMin1', label: '가용가중분' },
   { key: 'remainingSchedule',     label: '잔여편성' },
   { key: 'memoCode',              label: '메모코드' },
+  { key: 'memoCode2',             label: '메모코드2' },
   { key: 'scheduleComment',       label: '편성C' },
   { key: 'requestNote',           label: '기타요청' },
 ]
@@ -285,7 +286,7 @@ export default function Sidebar({ isOpen, onToggle }) {
                   <label style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>
                     {f.label}{f.required && <span style={{ color: 'var(--red)' }}> *</span>}
                   </label>
-                  {f.key === 'memoCode' ? (
+                  {['memoCode', 'memoCode2'].includes(f.key) ? (
                     <MemoCodeSelect
                       value={addForm[f.key] || ''}
                       onChange={value => setAddForm(p => ({ ...p, [f.key]: value }))}

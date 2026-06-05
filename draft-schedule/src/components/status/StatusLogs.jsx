@@ -64,6 +64,7 @@ const SIDEBAR_COLS = [
   { key: 'mdTeam', label: '팀', w: 78, value: log => getItem(log).mdTeam || getItem(log).orgName || '-' },
   { key: 'mdCategory', label: '카테고리', w: 92, value: log => getItem(log).mdCategory || '-' },
   { key: 'memoCode', label: '메모코드', w: 96, value: log => getItem(log).memoCode || '-' },
+  { key: 'memoCode2', label: '메모코드2', w: 96, value: log => getItem(log).memoCode2 || '-' },
   { key: 'scheduleComment', label: '편성C', w: 130, value: log => getItem(log).scheduleComment || '-' },
   { key: 'requestNote', label: '기타요청', w: 220, value: log => getItem(log).requestNote || '-' },
   { key: 'detail', label: '변경상세', w: 280, value: log => log.detail || '-' },

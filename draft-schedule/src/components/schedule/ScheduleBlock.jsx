@@ -204,8 +204,10 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
       </div>
 
       {/* 툴팁: contextMenu/editModal/annotationPopup 없을 때만 표시 */}
-      {hover && tooltipPos && !contextMenu && !editModal && !annotationPopup && (
+      {hover && tooltipPos && !contextMenu && !editModal && !annotationPopup && createPortal(
         <BlockTooltip block={block} lastPerf={lastPerf} manual={manual} pos={tooltipPos} />
+        ,
+        document.body
       )}
 
       {contextMenu && (
@@ -394,7 +396,7 @@ function CompetitionProductSelectModal({ items, onCancel, onSelect }) {
             >
               <div style={{ fontSize: 12, fontWeight: 800, marginBottom: 3 }}>{item.pgmCodeName || '-'}</div>
               <div style={{ fontSize: 11, color: 'var(--text3)' }}>
-                {[item.mdTeam || item.orgName, item.dealTypeConverted || item.dealType, item.memoCode].filter(Boolean).join(' · ') || '-'}
+                {[item.mdTeam || item.orgName, item.dealTypeConverted || item.dealType, item.memoCode, item.memoCode2].filter(Boolean).join(' · ') || '-'}
               </div>
             </button>
           ))}
@@ -505,6 +507,7 @@ function BlockTooltip({ block, lastPerf, manual, pos }) {
     ['방송시간', `${block.durationMin}분`],
     ['가중분',   block.weightedMin || '-'],
     ['메모코드', block.memoCode || '-'],
+    ['메모코드2', block.memoCode2 || '-'],
     ['편성C',    block.scheduleComment || '-'],
     ['기타요청', block.requestNote || '-'],
     ...(block.annotation ? [['첨삭', block.annotation]] : []),

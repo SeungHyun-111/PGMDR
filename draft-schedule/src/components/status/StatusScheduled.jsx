@@ -31,6 +31,7 @@ const COLS = [
   { key: '_salesPerMin', label: '취급/분', w: 96, sort: 'sales', align: 'right' },
   { key: '_profitPerMin', label: '한익/분', w: 96, sort: 'profit', align: 'right' },
   { key: 'memoCode', label: '메모코드', w: 96, sort: null },
+  { key: 'memoCode2', label: '메모코드2', w: 96, sort: null },
   { key: 'scheduleComment', label: '편성C', w: 130, sort: null },
   { key: 'requestNote', label: '기타요청사항', w: 220, sort: null },
   { key: 'status', label: '상태', w: 76, sort: null },
@@ -203,9 +204,10 @@ export default function StatusScheduled({ rows, competing = [], perfMap, manualI
                 <td style={tdStyle(COLS[9], { color: 'var(--accent)', fontWeight: 700 })}>{metrics.salesPerMin.toLocaleString()}</td>
                 <td style={tdStyle(COLS[10], { color: 'var(--green)', fontWeight: 700 })}>{metrics.profitPerMin.toLocaleString()}</td>
                 <td style={tdStyle(COLS[11], { color: 'var(--text3)', fontSize: 11 })}>{block.memoCode || '-'}</td>
-                <td style={tdStyle(COLS[12], { color: 'var(--text3)', fontSize: 11 })}>{block.scheduleComment || '-'}</td>
-                <td style={tdStyle(COLS[13], { color: 'var(--text3)', fontSize: 11 })}>{block.requestNote || '-'}</td>
-                <td style={tdStyle(COLS[14])}>
+                <td style={tdStyle(COLS[12], { color: 'var(--text3)', fontSize: 11 })}>{block.memoCode2 || '-'}</td>
+                <td style={tdStyle(COLS[13], { color: 'var(--text3)', fontSize: 11 })}>{block.scheduleComment || '-'}</td>
+                <td style={tdStyle(COLS[14], { color: 'var(--text3)', fontSize: 11 })}>{block.requestNote || '-'}</td>
+                <td style={tdStyle(COLS[15])}>
                   {isCompeting ? (
                     <span style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: '#fef2f2', color: 'var(--red)', fontWeight: 700 }}>경쟁</span>
                   ) : block.isPreSchedule ? (

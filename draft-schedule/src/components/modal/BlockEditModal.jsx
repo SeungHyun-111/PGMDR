@@ -36,6 +36,7 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
     newProductType:    block.newProductType    || '',
     timeText:          block.timeText          || '',
     memoCode:          block.memoCode          || '',
+    memoCode2:         block.memoCode2         || '',
     requestNote:       block.requestNote       || '',
     scheduleComment:   block.scheduleComment   || '',
     annotation:        block.annotation        || '',
@@ -219,6 +220,13 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
             <MemoCodeSelect
               value={form.memoCode}
               onChange={value => setField('memoCode', value)}
+              inputStyle={inp}
+            />
+          </Field>
+          <Field label="메모코드2">
+            <MemoCodeSelect
+              value={form.memoCode2}
+              onChange={value => setField('memoCode2', value)}
               inputStyle={inp}
             />
           </Field>

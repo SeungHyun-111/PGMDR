@@ -3,10 +3,12 @@ import useScheduleStore from '../../store/useScheduleStore'
 import useCategoryMap from '../../hooks/useCategoryMap'
 import { exportToExcel, printReportSchedule, printSchedule } from '../../utils/exportUtils'
 import HtmlSectionSelectModal from './HtmlSectionSelectModal'
+import useMemoCodes from '../../hooks/useMemoCodes'
 
 export default function ExportModal({ onClose }) {
   const { scheduleBlocks, proposalItems, startDate, endDate, pgmSlots, customSlots, splitSlots, perfMap, entityProps } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
+  const { allMemoCodes } = useMemoCodes()
   const [showHtmlModal, setShowHtmlModal] = useState(false)
   const [showPrintSelect, setShowPrintSelect] = useState(false)
   const [showExcelSelect, setShowExcelSelect] = useState(false)
@@ -22,7 +24,7 @@ export default function ExportModal({ onClose }) {
     .filter(b => b && !b.isDefault)
     .map(block => ({ ...block, mdCategory: block.mdCategory || categoryMap[block.pgmCodeName] || '' }))
 
-  const opts = { startDate, endDate, scheduleBlocks, pgmSlots: pgmSlots || [], customSlots: customSlots || {}, splitSlots: splitSlots || {}, categoryMap, perfMap: perfMap || {}, entityProps: entityProps || {} }
+  const opts = { startDate, endDate, scheduleBlocks, pgmSlots: pgmSlots || [], customSlots: customSlots || {}, splitSlots: splitSlots || {}, categoryMap, perfMap: perfMap || {}, entityProps: entityProps || {}, memoCodes: allMemoCodes || [] }
   const parseThreshold = value => {
     const n = Number(String(value || '').replace(/,/g, ''))
     return Number.isFinite(n) && n > 0 ? n : null
