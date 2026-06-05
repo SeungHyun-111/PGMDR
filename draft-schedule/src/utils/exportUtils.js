@@ -42,7 +42,7 @@ function normalizeDealTypeForExcel(dt) {
   if (d === '[직]' || d.includes('직매입'))                       return '(직)'
   if (d === '[혼]' || d.includes('혼합') || d.includes('특약'))   return '(혼)'
   if (d === '[모]' || d.includes('모바일광고'))                    return '(광)'
-  if (d === '[액]' || d.includes('정액'))                         return '(액)'
+  if (d === '[액]' || d.includes('정액'))                         return '(정)'
   return ''
 }
 

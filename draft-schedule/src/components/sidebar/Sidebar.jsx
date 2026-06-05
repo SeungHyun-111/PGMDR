@@ -4,6 +4,7 @@ import ProductCard from './ProductCard'
 import ProductFilters from './ProductFilters'
 import SidebarExpanded from './SidebarExpanded'
 import ConfirmActionModal from '../common/ConfirmActionModal'
+import MemoCodeSelect from '../common/MemoCodeSelect'
 import { DEAL_TYPES } from '../../constants/dealTypes'
 import { CATEGORIES } from '../../constants/categories'
 import { genKey } from '../../utils/uniqueKey'
@@ -284,7 +285,13 @@ export default function Sidebar({ isOpen, onToggle }) {
                   <label style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>
                     {f.label}{f.required && <span style={{ color: 'var(--red)' }}> *</span>}
                   </label>
-                  {['requestNote', 'scheduleComment'].includes(f.key) ? (
+                  {f.key === 'memoCode' ? (
+                    <MemoCodeSelect
+                      value={addForm[f.key] || ''}
+                      onChange={value => setAddForm(p => ({ ...p, [f.key]: value }))}
+                      inputStyle={inp}
+                    />
+                  ) : ['requestNote', 'scheduleComment'].includes(f.key) ? (
                     <textarea value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))}
                       rows={2} style={{ ...inp, resize: 'vertical' }} />
                   ) : f.options ? (

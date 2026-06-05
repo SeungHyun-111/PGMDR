@@ -8,6 +8,7 @@ import { makePerfKey } from '../../hooks/usePerformanceMap'
 import { normalizeTeamName } from '../../utils/teamName'
 import { extractEntityFields } from '../../utils/mergeEntity'
 import { getManualInputKey } from '../../utils/grade'
+import MemoCodeSelect from '../common/MemoCodeSelect'
 
 const inp = { background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 9px', borderRadius: 5, fontSize: 12, width: '100%' }
 
@@ -215,7 +216,11 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
               placeholder="예: 23:21" style={inp} />
           </Field>
           <Field label="메모코드">
-            <input value={form.memoCode} onChange={e => setField('memoCode', e.target.value)} style={inp} />
+            <MemoCodeSelect
+              value={form.memoCode}
+              onChange={value => setField('memoCode', value)}
+              inputStyle={inp}
+            />
           </Field>
         </div>
 

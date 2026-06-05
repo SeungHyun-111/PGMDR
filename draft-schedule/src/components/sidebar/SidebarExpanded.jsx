@@ -2,6 +2,7 @@ import React, { useState, useMemo, useCallback, useEffect } from 'react'
 import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
 import { buildDragGhost } from './ProductCard'
 import ConfirmActionModal from '../common/ConfirmActionModal'
+import MemoCodeSelect from '../common/MemoCodeSelect'
 import { getLastPerf } from '../../utils/entityKey'
 import { DEAL_TYPES } from '../../constants/dealTypes'
 import { CATEGORIES } from '../../constants/categories'
@@ -249,10 +250,10 @@ export default function SidebarExpanded({ items, onClose }) {
     setEditValue(String(item[col.key] ?? ''))
   }
 
-  const commitEdit = async item => {
+  const commitEdit = async (item, overrideValue) => {
     if (!editing) return
     const { colKey, fbIdx, uniqueKey } = editing
-    const newVal = editValue.trim()
+    const newVal = String(overrideValue ?? editValue).trim()
     const oldVal = String(item[colKey] ?? '')
     if (newVal !== oldVal) {
       await runUndoBatch(`사이드바 상품 수정 되돌리기: ${item.pgmCodeName || item.itemId}`, async () => {
@@ -541,8 +542,9 @@ export default function SidebarExpanded({ items, onClose }) {
                           color,
                           fontWeight,
                           whiteSpace: 'nowrap',
-                          overflow: 'hidden',
+                          overflow: isEditing && col.key === 'memoCode' ? 'visible' : 'hidden',
                           textOverflow: isEditing ? 'unset' : 'ellipsis',
+                          position: isEditing && col.key === 'memoCode' ? 'relative' : undefined,
                           width,
                           minWidth: width,
                           maxWidth: width,
@@ -567,6 +569,14 @@ export default function SidebarExpanded({ items, onClose }) {
                               onDragStart={e => e.stopPropagation()}
                               rows={2}
                               style={{ width: '100%', minWidth: 150, background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 11, outline: 'none', padding: 0, resize: 'vertical' }}
+                            />
+                          ) : col.key === 'memoCode' ? (
+                            <MemoCodeSelect
+                              autoFocus
+                              value={editValue}
+                              onChange={setEditValue}
+                              onCommit={value => commitEdit(item, value)}
+                              inputStyle={{ width: '100%', background: 'transparent', border: 'none', color: 'var(--text)', fontSize: 11, outline: 'none', padding: 0 }}
                             />
                           ) : (
                             <input
@@ -639,7 +649,13 @@ export default function SidebarExpanded({ items, onClose }) {
                   <label style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>
                     {f.label}{f.required && <span style={{ color: 'var(--red)' }}> *</span>}
                   </label>
-                  {['requestNote', 'scheduleComment'].includes(f.key) ? (
+                  {f.key === 'memoCode' ? (
+                    <MemoCodeSelect
+                      value={addForm[f.key] || ''}
+                      onChange={value => setAddForm(p => ({ ...p, [f.key]: value }))}
+                      inputStyle={inp}
+                    />
+                  ) : ['requestNote', 'scheduleComment'].includes(f.key) ? (
                     <textarea value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))}
                       rows={2} style={{ ...inp, resize: 'vertical' }} />
                   ) : f.options ? (

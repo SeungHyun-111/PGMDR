@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
-import { MEMO_CODES } from '../data/memoCodes'
+import { useMemo, useState } from 'react'
+import useMemoCodes from '../hooks/useMemoCodes'
 
-const STORAGE_KEY = 'settings.memoCodes'
 const DEFAULT_WIDTHS = { no: 54, code: 92, name: 280, use: 74, owner: 120, actions: 118 }
 const COLUMNS = [
   { key: 'no', label: 'No' },
@@ -11,19 +10,10 @@ const COLUMNS = [
   { key: 'owner', label: '등록자명' },
 ]
 
-function loadMemoCodes() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')
-    return Array.isArray(saved) && saved.length ? saved : MEMO_CODES
-  } catch {
-    return MEMO_CODES
-  }
-}
-
 const emptyForm = { code: '', name: '', use: 'Y', owner: '' }
 
 export default function SettingsPage() {
-  const [rows, setRows] = useState(loadMemoCodes)
+  const { memoCodes: rows, loading, error, saveMemoCodes } = useMemoCodes()
   const [keyword, setKeyword] = useState('')
   const [useFilter, setUseFilter] = useState('전체')
   const [sort, setSort] = useState({ key: 'code', dir: 'asc' })
@@ -32,10 +22,6 @@ export default function SettingsPage() {
   const [form, setForm] = useState(emptyForm)
   const [editingCode, setEditingCode] = useState(null)
   const [editing, setEditing] = useState(null)
-
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(rows))
-  }, [rows])
 
   const filtered = useMemo(() => {
     const q = keyword.trim().toLowerCase()
@@ -83,14 +69,17 @@ export default function SettingsPage() {
     document.addEventListener('mouseup', onUp)
   }
 
-  const normalizeForm = data => ({
-    code: String(data.code || '').trim().padStart(3, '0').slice(-3),
-    name: String(data.name || '').trim(),
-    use: data.use === 'N' ? 'N' : 'Y',
-    owner: String(data.owner || '').trim(),
-  })
+  const normalizeForm = data => {
+    const rawCode = String(data.code || '').trim()
+    return {
+      code: rawCode ? rawCode.padStart(3, '0').slice(-3) : '',
+      name: String(data.name || '').trim(),
+      use: data.use === 'N' ? 'N' : 'Y',
+      owner: String(data.owner || '').trim(),
+    }
+  }
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const next = normalizeForm(form)
     if (!next.code || !next.name) return
     if (rows.some(row => row.code === next.code)) {
@@ -98,7 +87,7 @@ export default function SettingsPage() {
       return
     }
     const maxNo = Math.max(0, ...rows.map(row => Number(row.no || 0)))
-    setRows(prev => [...prev, { no: String(maxNo + 1), ...next }])
+    await saveMemoCodes([...rows, { no: String(maxNo + 1), ...next }])
     setForm(emptyForm)
     setAddOpen(false)
   }
@@ -108,14 +97,14 @@ export default function SettingsPage() {
     setEditing({ code: row.code, name: row.name, use: row.use, owner: row.owner })
   }
 
-  const saveEdit = originalCode => {
+  const saveEdit = async originalCode => {
     const next = normalizeForm(editing || {})
     if (!next.code || !next.name) return
     if (next.code !== originalCode && rows.some(row => row.code === next.code)) {
       alert('이미 등록된 메모코드입니다.')
       return
     }
-    setRows(prev => prev.map(row => row.code === originalCode ? { ...row, ...next } : row))
+    await saveMemoCodes(rows.map(row => row.code === originalCode ? { ...row, ...next } : row))
     setEditingCode(null)
     setEditing(null)
   }
@@ -134,6 +123,8 @@ export default function SettingsPage() {
           <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--text)' }}>설정</div>
           <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>
             메모코드 {rows.length.toLocaleString()}건 · 사용 {activeCount.toLocaleString()}건
+            {loading && ' · 불러오는 중'}
+            {error && ' · 저장소 연결 오류'}
           </div>
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
