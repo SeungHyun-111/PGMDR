@@ -1,5 +1,6 @@
 // src/components/schedule/ScheduleBlock.jsx
 import { useState, useEffect, memo } from 'react'
+import { createPortal } from 'react-dom'
 import BlockEditModal from '../modal/BlockEditModal'
 import ConfirmActionModal from '../common/ConfirmActionModal'
 import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
@@ -144,11 +145,10 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
       inset: '1px',
       opacity: dimmed ? 0.1 : 1,
       zIndex: highlighted ? 5 : undefined,
-      filter: highlighted ? 'saturate(1.15) contrast(1.08)' : undefined,
       outline: highlighted ? '2px solid #f59e0b' : undefined,
       outlineOffset: highlighted ? 1 : undefined,
       boxShadow: highlighted ? '0 0 0 2px rgba(245,158,11,.28), 0 4px 10px rgba(15,23,42,.22)' : undefined,
-      transition: 'opacity .15s, filter .15s, box-shadow .15s',
+      transition: 'opacity .15s, box-shadow .15s',
     }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -167,7 +167,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
           setContextMenu({ x, y })
         }}
         onDoubleClick={() => { if (!readOnly) setEditModal(true) }}
-        style={{ position: 'absolute', inset: 0, background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 3, overflow: 'hidden', cursor: readOnly || isCompeting ? 'default' : 'grab', display: 'flex', alignItems: 'center', padding: '0 4px', gap: 3 }}
+        style={{ position: 'absolute', inset: 0, background: bgColor, border: `1px solid ${borderColor}`, borderRadius: 3, overflow: 'hidden', cursor: readOnly || isCompeting ? 'default' : 'grab', display: 'flex', alignItems: 'center', padding: '0 4px', gap: 3, filter: highlighted ? 'saturate(1.15) contrast(1.08)' : undefined, transition: 'filter .15s' }}
       >
         {teamShort && (
           <span style={{ fontSize: badgeSz, fontWeight: 700, color: textColor, background: badgeBg, padding: '0 3px', height: 14, borderRadius: 2, whiteSpace: 'nowrap', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
@@ -247,12 +247,13 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
         </div>
       )}
 
-      {editModal && (
+      {editModal && createPortal(
         <BlockEditModal
           block={block}
           onClose={() => setEditModal(false)}
           saveBlock={saveBlock}
-        />
+        />,
+        document.body
       )}
       {returnConfirm && (
         <ConfirmActionModal
