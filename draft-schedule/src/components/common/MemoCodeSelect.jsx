@@ -8,7 +8,7 @@ export default function MemoCodeSelect({
   style,
   inputStyle,
   placeholder = '메모코드 검색',
-  activeOnly = true,
+  activeOnly = false,
   autoFocus = false,
 }) {
   const { memoCodes, loading } = useMemoCodes({ activeOnly })
@@ -51,6 +51,7 @@ export default function MemoCodeSelect({
 
   const handleFocus = () => {
     if (blurTimer.current) clearTimeout(blurTimer.current)
+    setQuery('')
     setOpen(true)
   }
 
@@ -58,7 +59,7 @@ export default function MemoCodeSelect({
     <div style={{ position: 'relative', width: '100%', ...style }}>
       <input
         autoFocus={autoFocus}
-        value={query}
+        value={open ? query : (value || '')}
         onFocus={handleFocus}
         onBlur={handleBlur}
         onChange={e => {
@@ -86,8 +87,34 @@ export default function MemoCodeSelect({
           }
         }}
         placeholder={placeholder}
-        style={inputStyle}
+        style={{ ...inputStyle, paddingRight: 28 }}
       />
+      <button
+        type="button"
+        tabIndex={-1}
+        onMouseDown={e => {
+          e.preventDefault()
+          if (blurTimer.current) clearTimeout(blurTimer.current)
+          setQuery('')
+          setOpen(prev => !prev)
+        }}
+        style={{
+          position: 'absolute',
+          top: 1,
+          right: 1,
+          bottom: 1,
+          width: 26,
+          border: 'none',
+          borderLeft: '1px solid var(--border)',
+          background: 'transparent',
+          color: 'var(--text3)',
+          cursor: 'pointer',
+          fontSize: 10,
+          borderRadius: '0 5px 5px 0',
+        }}
+      >
+        ▾
+      </button>
       {open && (
         <div
           onMouseDown={e => e.preventDefault()}
@@ -133,7 +160,9 @@ export default function MemoCodeSelect({
               <span style={{ marginLeft: 'auto', color: 'var(--text3)', fontSize: 10, fontVariantNumeric: 'tabular-nums' }}>{row.code}</span>
             </button>
           )) : (
-            <div style={emptyStyle}>검색 결과가 없습니다.</div>
+            <div style={emptyStyle}>
+              {memoCodes.length ? '검색 결과가 없습니다.' : '등록된 메모코드가 없습니다.'}
+            </div>
           )}
         </div>
       )}
