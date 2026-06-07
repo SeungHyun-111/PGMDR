@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx'
 import { getGrade, getEffectiveProfit, getManualInputKey } from './grade'
 import { getEffectivePgmSlots } from './effectiveSlots'
-import { getCompetitionItems } from './competition'
+import { getBlockTeams, getCompetitionItems } from './competition'
 import { getResolvedEntity, getResolvedPerfKey } from './entityKey'
 import { exportToBoExcel } from './export/boExcelExport'
 
@@ -792,7 +792,7 @@ function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, p
       lastPerf: lastPerf ? { broadcastDate: lastPerf.broadcastDate, spw: lastPerf.salesPerWeightedMin, ppw: lastPerf.profitPerWeightedMin } : null,
     })
 
-    const teamVal = escAttr(block.mdTeam || block.orgName || '')
+    const teamVal = escAttr(getBlockTeams(block).join('|'))
     return `<div class="blk" style="position:absolute;inset:1px" data-tip="${escAttr(tipJson)}" data-team="${teamVal}"><div style="position:absolute;inset:0;background:${bgColor};border:1px solid ${borderColor};border-radius:3px;overflow:hidden;display:flex;align-items:center;padding:0 4px;gap:3px;box-sizing:border-box">${badges}<span style="font-size:${fontSize}px;font-weight:600;color:${textColor};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${esc(block.pgmCodeName||'-')}</span>${wmSpan}${annotCorner}${hashMark}</div></div>`
   }
 
@@ -884,8 +884,8 @@ if(sel){
   sel.addEventListener('change',function(){
     var val=sel.value;
     document.querySelectorAll('.blk').forEach(function(el){
-      var tm=el.dataset.team||'';
-      var selected=(val!==''&&tm===val);
+      var teams=(el.dataset.team||'').split('|');
+      var selected=(val!==''&&teams.indexOf(val)!==-1);
       el.style.opacity=(val===''||selected)?'1':'0.001';
       el.style.zIndex=selected?'5':'';
       el.style.filter=selected?'saturate(1.15) contrast(1.08)':'';
@@ -902,7 +902,7 @@ if(sel){
   const allTeams = [...new Set(
     Object.values(scheduleBlocks)
       .filter(b => b && !b.isDefault)
-      .map(b => b.mdTeam || b.orgName || '')
+      .flatMap(b => getBlockTeams(b))
       .filter(Boolean)
   )].sort()
   const teamOptions = allTeams.map(t => `<option value="${t}">${t}</option>`).join('')
@@ -1631,7 +1631,7 @@ function filterGridBlocksByTeams(scheduleBlocks = {}, teamFilter = null) {
   return Object.fromEntries(
     Object.entries(scheduleBlocks || {}).filter(([, block]) => {
       if (!block || block.isDefault) return true
-      return allow.has(block.mdTeam || block.orgName || '')
+      return getBlockTeams(block).some(team => allow.has(team))
     })
   )
 }

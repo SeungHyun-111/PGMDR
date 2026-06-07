@@ -3,26 +3,28 @@ import { useState, useEffect, memo } from 'react'
 import ScheduleBlock from './ScheduleBlock'
 import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
 import { splitWeightedMin } from '../../utils/weightedMin'
-import { getCompetitionItems, makeCompetitionBlock } from '../../utils/competition'
+import { getBlockTeams, getCompetitionItems, makeCompetitionBlock } from '../../utils/competition'
 import { genKey } from '../../utils/uniqueKey'
 
 function blockMatches(block, keyword) {
   if (!keyword) return true
   const kw = keyword.trim().toLowerCase()
-  return [block.pgmCodeName, block.mdTeam, block.orgName, block.mdCategory, block.dealTypeConverted, block.dealType]
+  const competitionText = getCompetitionItems(block)
+    .flatMap(item => [item.pgmCodeName, item.mdTeam, item.orgName, item.mdCategory, item.dealTypeConverted, item.dealType])
+  return [block.pgmCodeName, block.mdTeam, block.orgName, block.mdCategory, block.dealTypeConverted, block.dealType, ...competitionText]
     .join(' ').toLowerCase().includes(kw)
 }
 
 function isDimmed(block, teamFilter, gridSearch) {
   if (!block) return false
-  if (teamFilter !== '전체' && (block.mdTeam || block.orgName || '') !== teamFilter) return true
+  if (teamFilter !== '전체' && !getBlockTeams(block).includes(teamFilter)) return true
   if (gridSearch && !blockMatches(block, gridSearch)) return true
   return false
 }
 
 function isTeamHighlighted(block, teamFilter) {
   if (!block || teamFilter === '전체') return false
-  return (block.mdTeam || block.orgName || '') === teamFilter
+  return getBlockTeams(block).includes(teamFilter)
 }
 
 function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_IP, onDrop, saveBlock, removeBlock, teamFilter = '전체', gridSearch = '', readOnly = false }) {

@@ -4,6 +4,7 @@ import useScheduleStore from '../../store/useScheduleStore'
 import SlotRow from './SlotRow'
 import { splitWeightedMin, timeToMin, minToTime } from '../../utils/weightedMin'
 import { getEffectivePgmSlots } from '../../utils/effectiveSlots'
+import { getBlockTeams } from '../../utils/competition'
 
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
 const TIME_COL_WIDTH = 36
@@ -195,8 +196,7 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
     const set = new Set()
     Object.values(scheduleBlocks).forEach(b => {
       if (b && !b.isDefault) {
-        const t = b.mdTeam || b.orgName || ''
-        if (t) set.add(t)
+        getBlockTeams(b).forEach(t => set.add(t))
       }
     })
     return ['전체', ...Array.from(set).sort((a, b) => a.localeCompare(b, 'ko'))]

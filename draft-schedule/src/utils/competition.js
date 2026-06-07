@@ -7,6 +7,19 @@ export function getCompetitionItems(block) {
   return [toCompetitionItem(block)].filter(Boolean)
 }
 
+export function getBlockTeams(block) {
+  if (!block) return []
+  const source = block.isCompeting || Array.isArray(block.items)
+    ? getCompetitionItems(block)
+    : [block]
+  const teams = source
+    .map(item => String(item?.mdTeam || item?.orgName || item?.team || '').trim())
+    .filter(Boolean)
+  const fallback = String(block.mdTeam || block.orgName || block.team || '').trim()
+  if (fallback) teams.push(fallback)
+  return [...new Set(teams)]
+}
+
 export function toCompetitionItem(src, weightedMin) {
   if (!src) return null
   return {
