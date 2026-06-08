@@ -15,7 +15,7 @@ const DEFAULT_WIDTHS = {
   competingAchieve: 220,
 }
 
-export default function RatioTable({ data, groupDm = {}, stats, targetMap, totalSlotWeighted, totalTarget, showTarget, chartData, scheduledWeighted, competingIncludedData }) {
+export default function RatioTable({ data, groupDm = {}, stats, targetMap, totalSlotWeighted, totalTarget, showTarget, chartData, scheduledWeighted, competingIncludedData, previousComparison }) {
   const [colWidths, setColWidths] = useState(DEFAULT_WIDTHS)
 
   const sorted = Object.entries(data).sort((a, b) => {
@@ -141,6 +141,25 @@ export default function RatioTable({ data, groupDm = {}, stats, targetMap, total
     )
   }
 
+  const formatSignedNumber = value => {
+    const rounded = Math.round(Number(value || 0))
+    return rounded > 0 ? `+${rounded.toLocaleString()}` : rounded.toLocaleString()
+  }
+
+  const formatSignedPctPoint = value => {
+    const rounded = Number(value || 0).toFixed(1)
+    return Number(rounded) > 0 ? `+${rounded}` : rounded
+  }
+
+  const metricWithDelta = (main, delta, unit, fontSize) => (
+    <>
+      {main}
+      <span style={{ fontSize, marginLeft: 4, fontWeight: 600 }}>
+        ({unit === '분' ? formatSignedNumber(delta) : formatSignedPctPoint(delta)}{unit})
+      </span>
+    </>
+  )
+
   return (
     <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
       <div style={{ overflowX: 'auto' }}>
@@ -166,6 +185,10 @@ export default function RatioTable({ data, groupDm = {}, stats, targetMap, total
               const competingIncludedWeighted = showCompetingIncluded ? Number(competingIncludedData[name] || 0) : 0
               const competingIncludedPct = target > 0 ? (competingIncludedWeighted / target * 100) : null
               const totalPct = stats.totalWeighted > 0 ? (weighted / stats.totalWeighted * 100) : 0
+              const previousWeighted = previousComparison ? Number(previousComparison.weighted?.[name] || 0) : weighted
+              const previousPct = previousComparison ? Number(previousComparison.ratio?.[name] || 0) : totalPct
+              const weightedDelta = previousComparison ? weighted - previousWeighted : 0
+              const ratioDelta = previousComparison ? totalPct - previousPct : 0
               const targetPct = totalSlotWeighted > 0 && target > 0 ? (target / totalSlotWeighted * 100) : 0
               const achievePct = target > 0 ? (weighted / target * 100) : null
               const isDefault = name === '편성팀'
@@ -188,7 +211,7 @@ export default function RatioTable({ data, groupDm = {}, stats, targetMap, total
                     </div>
                   </td>
                   <td style={cellStyle('weighted', { textAlign: 'right', fontWeight: 700, color: isDefault || isUnscheduled ? 'var(--text3)' : teamColor })}>
-                    {Math.round(weighted).toLocaleString()}
+                    {metricWithDelta(Math.round(weighted).toLocaleString(), weightedDelta, '분', 10)}
                   </td>
                   <td style={cellStyle('duration', { textAlign: 'right', color: 'var(--text2)' })}>
                     {dm > 0 ? dm.toLocaleString() : '-'}
@@ -197,7 +220,7 @@ export default function RatioTable({ data, groupDm = {}, stats, targetMap, total
                     {avgRate}
                   </td>
                   <td style={cellStyle('ratio', { textAlign: 'right', color: 'var(--text2)', fontSize: 11 })}>
-                    {totalPct.toFixed(1)}%
+                    {metricWithDelta(`${totalPct.toFixed(1)}%`, ratioDelta, '%p', 9)}
                   </td>
                   {showTarget && <>
                     <td style={cellStyle('target', { textAlign: 'right', color: 'var(--text2)' })}>
@@ -223,12 +246,21 @@ export default function RatioTable({ data, groupDm = {}, stats, targetMap, total
             })}
             <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--bg3)' }}>
               <td style={cellStyle('name', { fontWeight: 700 })}>합계</td>
-              <td style={cellStyle('weighted', { textAlign: 'right', fontWeight: 700, color: 'var(--accent)' })}>{Math.round(stats.totalWeighted).toLocaleString()}</td>
+              <td style={cellStyle('weighted', { textAlign: 'right', fontWeight: 700, color: 'var(--accent)' })}>
+                {metricWithDelta(
+                  Math.round(stats.totalWeighted).toLocaleString(),
+                  previousComparison ? stats.totalWeighted - Number(previousComparison.totalWeighted || 0) : 0,
+                  '분',
+                  10
+                )}
+              </td>
               <td style={cellStyle('duration', { textAlign: 'right', fontWeight: 700, color: 'var(--text2)' })}>{(stats.totalDm || 0) > 0 ? stats.totalDm.toLocaleString() : '-'}</td>
               <td style={cellStyle('avgRate', { textAlign: 'right', fontWeight: 700, color: 'var(--text2)', fontSize: 11 })}>
                 {(stats.totalDm || 0) > 0 ? (stats.totalWeighted / stats.totalDm * 100).toFixed(1) + '%' : '-'}
               </td>
-              <td style={cellStyle('ratio', { textAlign: 'right', fontWeight: 700, color: 'var(--text2)' })}>100%</td>
+              <td style={cellStyle('ratio', { textAlign: 'right', fontWeight: 700, color: 'var(--text2)' })}>
+                {metricWithDelta('100%', 0, '%p', 10)}
+              </td>
               {showTarget && <>
                 <td style={cellStyle('target', { textAlign: 'right', fontWeight: 700, color: 'var(--text2)' })}>
                   {totalTarget > 0 ? Math.round(totalTarget).toLocaleString() : '-'}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import useScheduleStore from '../store/useScheduleStore'
 import useCategoryMap from '../hooks/useCategoryMap'
 import useRatioStats from '../hooks/useRatioStats'
@@ -8,7 +8,9 @@ import RatioDonutChart, { TEAM_COLORS } from '../components/ratio/RatioDonutChar
 import RatioTable from '../components/ratio/RatioTable'
 import RatioPgmCount from '../components/ratio/RatioPgmCount'
 import { getCompetitionItems } from '../utils/competition'
-import { resolveEntity } from '../utils/mergeEntity'
+import { applyEntityProps, resolveEntity } from '../utils/mergeEntity'
+import { db, ref, get } from '../api/firebase'
+import { VERSION_OPS, getVersionPath } from '../utils/sessionVersion'
 
 const UNSCHEDULED_NAME = '미편성'
 const DEFAULT_TEAM_NAME = '편성팀'
@@ -29,6 +31,35 @@ function getTeamRatioOrder(name) {
   return aliasIdx >= 0 ? aliasIdx : 999
 }
 
+function getPreviousWeekKeys(startDate, poolType) {
+  if (!startDate || !poolType) return []
+  const [year, month, day] = String(startDate).split('-').map(Number)
+  if (!year || !month || !day) return []
+  const d = new Date(Date.UTC(year, month - 1, day))
+  d.setUTCDate(d.getUTCDate() - 7)
+  const date = d.toISOString().slice(0, 10)
+  const altPool = poolType === 'A' ? 'B' : poolType === 'B' ? 'A' : ''
+  return [altPool, poolType]
+    .filter(Boolean)
+    .filter((pool, idx, list) => list.indexOf(pool) === idx)
+    .map(pool => `${date}_${pool}`)
+}
+
+function getValidScheduleBlocks(scheduleBlocks, effectiveSlots, splitSlots) {
+  const result = {}
+  ;(effectiveSlots || []).forEach(slot => {
+    if (splitSlots?.[slot.slotId]) {
+      const caKey = `${slot.slotId}_CA`
+      const ipKey = `${slot.slotId}_IP`
+      if (scheduleBlocks?.[caKey]) result[caKey] = scheduleBlocks[caKey]
+      if (scheduleBlocks?.[ipKey]) result[ipKey] = scheduleBlocks[ipKey]
+    } else if (scheduleBlocks?.[slot.slotId]) {
+      result[slot.slotId] = scheduleBlocks[slot.slotId]
+    }
+  })
+  return result
+}
+
 export default function ScheduleRatio() {
   const {
     scheduleBlocks,
@@ -40,29 +71,39 @@ export default function ScheduleRatio() {
     perfMap,
     manualInputs,
     entityProps,
+    startDate,
+    poolType,
   } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const [viewType, setViewType] = useState('team')
+  const [previousOpsVersion, setPreviousOpsVersion] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    const previousWeekKeys = getPreviousWeekKeys(startDate, poolType)
+    if (!previousWeekKeys.length) {
+      setPreviousOpsVersion(null)
+      return
+    }
+    Promise.all(previousWeekKeys.map(weekKey => get(ref(db, getVersionPath(weekKey, VERSION_OPS))))).then(snaps => {
+      if (cancelled) return
+      const snap = snaps.find(s => s.exists())
+      setPreviousOpsVersion(snap ? snap.val() : null)
+    }).catch(() => {
+      if (!cancelled) setPreviousOpsVersion(null)
+    })
+    return () => { cancelled = true }
+  }, [startDate, poolType])
 
   const effectiveSlots = useMemo(
     () => getEffectivePgmSlots(pgmSlots || [], customSlots || {}),
     [pgmSlots, customSlots]
   )
 
-  const validScheduleBlocks = useMemo(() => {
-    const result = {}
-    effectiveSlots.forEach(slot => {
-      if (splitSlots?.[slot.slotId]) {
-        const caKey = `${slot.slotId}_CA`
-        const ipKey = `${slot.slotId}_IP`
-        if (scheduleBlocks[caKey]) result[caKey] = scheduleBlocks[caKey]
-        if (scheduleBlocks[ipKey]) result[ipKey] = scheduleBlocks[ipKey]
-      } else if (scheduleBlocks[slot.slotId]) {
-        result[slot.slotId] = scheduleBlocks[slot.slotId]
-      }
-    })
-    return result
-  }, [scheduleBlocks, effectiveSlots, splitSlots])
+  const validScheduleBlocks = useMemo(
+    () => getValidScheduleBlocks(scheduleBlocks, effectiveSlots, splitSlots),
+    [scheduleBlocks, effectiveSlots, splitSlots]
+  )
 
   const enrichedBlocks = useMemo(() => {
     const result = {}
@@ -77,17 +118,58 @@ export default function ScheduleRatio() {
 
   const stats = useRatioStats(enrichedBlocks, categoryMap, viewType)
 
+  const previousEffectiveSlots = useMemo(
+    () => previousOpsVersion
+      ? getEffectivePgmSlots(previousOpsVersion.pgmSlots || [], previousOpsVersion.customSlots || {})
+      : [],
+    [previousOpsVersion]
+  )
+
+  const previousBlocks = useMemo(() => {
+    if (!previousOpsVersion) return {}
+    return applyEntityProps(previousOpsVersion.scheduleBlocks || {}, previousOpsVersion.entityProps || {})
+  }, [previousOpsVersion])
+
+  const previousValidScheduleBlocks = useMemo(
+    () => getValidScheduleBlocks(previousBlocks, previousEffectiveSlots, previousOpsVersion?.splitSlots || {}),
+    [previousBlocks, previousEffectiveSlots, previousOpsVersion]
+  )
+
+  const previousEnrichedBlocks = useMemo(() => {
+    const result = {}
+    Object.entries(previousValidScheduleBlocks).forEach(([key, block]) => {
+      result[key] = {
+        ...block,
+        mdCategory: block.mdCategory || categoryMap[block.pgmCodeName] || UNCATEGORIZED_NAME,
+      }
+    })
+    return result
+  }, [previousValidScheduleBlocks, categoryMap])
+
+  const previousStats = useRatioStats(previousEnrichedBlocks, categoryMap, viewType)
+
   const totalSlotWeighted = useMemo(
     () => effectiveSlots.reduce((acc, s) => acc + (s.weightedMin || 0), 0),
     [effectiveSlots]
   )
 
   const unscheduledWeighted = Math.max(0, totalSlotWeighted - stats.totalWeighted)
+  const previousTotalSlotWeighted = useMemo(
+    () => previousEffectiveSlots.reduce((acc, s) => acc + (s.weightedMin || 0), 0),
+    [previousEffectiveSlots]
+  )
+  const previousUnscheduledWeighted = Math.max(0, previousTotalSlotWeighted - previousStats.totalWeighted)
 
   const ratioData = useMemo(() => {
     if (unscheduledWeighted <= 0) return stats.group
     return { ...stats.group, [UNSCHEDULED_NAME]: unscheduledWeighted }
   }, [stats.group, unscheduledWeighted])
+
+  const previousRatioData = useMemo(() => {
+    if (!previousOpsVersion) return null
+    if (previousUnscheduledWeighted <= 0) return previousStats.group
+    return { ...previousStats.group, [UNSCHEDULED_NAME]: previousUnscheduledWeighted }
+  }, [previousOpsVersion, previousStats.group, previousUnscheduledWeighted])
 
   const ratioStats = useMemo(() => {
     if (unscheduledWeighted <= 0) return stats
@@ -98,6 +180,17 @@ export default function ScheduleRatio() {
       totalWeighted: stats.totalWeighted + unscheduledWeighted,
     }
   }, [stats, ratioData, unscheduledWeighted])
+
+  const previousRatioStats = useMemo(() => {
+    if (!previousOpsVersion || !previousRatioData) return null
+    if (previousUnscheduledWeighted <= 0) return previousStats
+    return {
+      ...previousStats,
+      group: previousRatioData,
+      groupDm: { ...previousStats.groupDm, [UNSCHEDULED_NAME]: 0 },
+      totalWeighted: previousStats.totalWeighted + previousUnscheduledWeighted,
+    }
+  }, [previousOpsVersion, previousRatioData, previousStats, previousUnscheduledWeighted])
 
   const targetTeams = useMemo(() =>
     (weightedMinTargets || [])
@@ -141,6 +234,22 @@ export default function ScheduleRatio() {
     return next
   }, [ratioData, targetTeams, viewType])
 
+  const previousDisplayRatioData = useMemo(() => {
+    if (!previousOpsVersion || !previousRatioData) return null
+    if (viewType !== 'team') return previousRatioData
+    const next = { ...previousRatioData }
+    targetTeams.forEach(({ name }) => {
+      const alias = getTeamAlias(name)
+      if (next[name] == null && next[alias] != null) {
+        next[name] = next[alias]
+        delete next[alias]
+      } else if (next[name] == null) {
+        next[name] = 0
+      }
+    })
+    return next
+  }, [previousOpsVersion, previousRatioData, targetTeams, viewType])
+
   const displayRatioStats = useMemo(() => {
     if (viewType !== 'team') return ratioStats
     return {
@@ -158,6 +267,39 @@ export default function ScheduleRatio() {
       }, { ...ratioStats.groupDm }),
     }
   }, [displayRatioData, ratioStats, targetTeams, viewType])
+
+  const previousDisplayRatioStats = useMemo(() => {
+    if (!previousOpsVersion || !previousRatioStats || !previousDisplayRatioData) return null
+    if (viewType !== 'team') return previousRatioStats
+    return {
+      ...previousRatioStats,
+      group: previousDisplayRatioData,
+      groupDm: targetTeams.reduce((acc, { name }) => {
+        const alias = getTeamAlias(name)
+        if (acc[name] == null && acc[alias] != null) {
+          acc[name] = acc[alias]
+          delete acc[alias]
+        } else if (acc[name] == null) {
+          acc[name] = 0
+        }
+        return acc
+      }, { ...previousRatioStats.groupDm }),
+    }
+  }, [previousOpsVersion, previousRatioStats, previousDisplayRatioData, targetTeams, viewType])
+
+  const previousComparison = useMemo(() => {
+    if (!previousOpsVersion || !previousDisplayRatioStats || !previousDisplayRatioData) return null
+    const total = previousDisplayRatioStats.totalWeighted || 0
+    const ratioMap = {}
+    Object.entries(previousDisplayRatioData).forEach(([name, weighted]) => {
+      ratioMap[name] = total > 0 ? Number(weighted || 0) / total * 100 : 0
+    })
+    return {
+      weighted: previousDisplayRatioData,
+      ratio: ratioMap,
+      totalWeighted: previousDisplayRatioStats.totalWeighted || 0,
+    }
+  }, [previousOpsVersion, previousDisplayRatioStats, previousDisplayRatioData])
 
   const competingIncludedData = useMemo(() => {
     if (viewType !== 'team') return null
@@ -250,6 +392,7 @@ export default function ScheduleRatio() {
         chartData={chartData}
         scheduledWeighted={stats.totalWeighted}
         competingIncludedData={competingIncludedData}
+        previousComparison={previousComparison}
       />
 
       <RatioPgmCount enrichedBlocks={enrichedBlocks} perfMap={perfMap} manualInputs={manualInputs} />
