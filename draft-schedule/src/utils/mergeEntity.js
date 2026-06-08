@@ -22,6 +22,16 @@ export function extractEntityFields(src) {
   return out
 }
 
+export function stripEntityFields(src, deleteFields = false) {
+  if (!src) return src
+  const out = { ...src }
+  ENTITY_FIELDS.forEach(f => {
+    if (deleteFields) out[f] = null
+    else delete out[f]
+  })
+  return out
+}
+
 // entityProps[uniqueKey]를 base 위에 머지 — entityProps 값이 항상 우선
 export function resolveEntity(base, entityProps) {
   if (!base?.uniqueKey || !entityProps) return base

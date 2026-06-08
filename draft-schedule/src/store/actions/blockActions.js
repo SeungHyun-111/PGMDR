@@ -1,6 +1,6 @@
 import { db, ref, set, get, update } from '../../api/firebase'
 import { buildProposalItem, makeDefaultBlock } from '../helpers/blockBuilders'
-import { extractEntityFields, resolveEntity } from '../../utils/mergeEntity'
+import { extractEntityFields, resolveEntity, stripEntityFields } from '../../utils/mergeEntity'
 import { splitWeightedMin } from '../../utils/weightedMin'
 import { normalizeTeamName } from '../../utils/teamName'
 import { genKey } from '../../utils/uniqueKey'
@@ -36,7 +36,7 @@ export function createBlockActions(setState, getState) {
     },
 
     async removeBlock(blockKey, options = {}) {
-      const { startDate, poolType, scheduleBlocks } = getState()
+      const { startDate, poolType, scheduleBlocks, entityProps } = getState()
       const weekKey = `${startDate}_${poolType}`
       const versionPath = getCurrentVersionPath(getState, weekKey)
       const block = scheduleBlocks[blockKey]
@@ -48,7 +48,7 @@ export function createBlockActions(setState, getState) {
       try {
       if (!keepScheduled && block?.isCompeting) {
         // 경쟁 해제: item1/item2 양쪽 scheduledItemIds 제거 + 사이드바 복원
-        const compItems = getCompetitionItems(block)
+        const compItems = getCompetitionItems(block).map(item => resolveEntity(item, entityProps))
         for (const it of compItems) {
           if (it.itemId) {
             undoChanges.push({
@@ -140,13 +140,13 @@ export function createBlockActions(setState, getState) {
 
     // 채널 변경 + 그리드 분리/합치기 동시 처리
     async releaseCompetition(blockKey, { mode, selectedKey } = {}) {
-      const { startDate, poolType, scheduleBlocks } = getState()
+      const { startDate, poolType, scheduleBlocks, entityProps } = getState()
       const weekKey = `${startDate}_${poolType}`
       const versionPath = getCurrentVersionPath(getState, weekKey)
       const block = scheduleBlocks[blockKey]
       if (!block?.isCompeting) return
 
-      const items = getCompetitionItems(block)
+      const items = getCompetitionItems(block).map(item => resolveEntity(item, entityProps))
       const selectedIndex = items.findIndex((item, i) => competitionItemKey(item, i) === selectedKey)
       const selectedItem = mode === 'select' ? items[selectedIndex] : null
       const restoreItems = selectedItem
@@ -225,7 +225,7 @@ export function createBlockActions(setState, getState) {
         await updateVersionPatch(getState, versionPath, '채널 변경 되돌리기', {
           [`splitSlots/${slotId}`]: true,
           [`scheduleBlocks/${slotId}`]: null,
-          [`scheduleBlocks/${newKey}`]: { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false },
+          [`scheduleBlocks/${newKey}`]: stripEntityFields({ ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false }, true),
         })
 
       } else if (newChannel === 'ALL' && isSplit) {
@@ -252,7 +252,7 @@ export function createBlockActions(setState, getState) {
           [`scheduleBlocks/${slotId}_${otherCh}`]: null,
           [`scheduleBlocks/${fromKey}`]: null,
           [`splitSlots/${slotId}`]: null,
-          [`scheduleBlocks/${slotId}`]: { ...block, ...patch, blockKey: slotId, channel: 'ALL', weightedMin: slot.weightedMin, isDefault: false },
+          [`scheduleBlocks/${slotId}`]: stripEntityFields({ ...block, ...patch, blockKey: slotId, channel: 'ALL', weightedMin: slot.weightedMin, isDefault: false }, true),
         })
 
       } else if (newChannel !== 'ALL' && isSplit && origChannel !== newChannel) {
@@ -277,15 +277,15 @@ export function createBlockActions(setState, getState) {
           return { ok: true }
         } else if (targetBlock && mode === 'swap') {
           await updateVersionPatch(getState, versionPath, '채널 변경 되돌리기', {
-            [`scheduleBlocks/${fromKey}`]: { ...targetBlock, blockKey: fromKey, channel: origChannel, weightedMin: origWm, isDefault: false },
-            [`scheduleBlocks/${newKey}`]: { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false },
+            [`scheduleBlocks/${fromKey}`]: stripEntityFields({ ...targetBlock, blockKey: fromKey, channel: origChannel, weightedMin: origWm, isDefault: false }, true),
+            [`scheduleBlocks/${newKey}`]: stripEntityFields({ ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false }, true),
           })
           getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })
           return { ok: true }
         }
         await updateVersionPatch(getState, versionPath, '채널 변경 되돌리기', {
           [`scheduleBlocks/${fromKey}`]: null,
-          [`scheduleBlocks/${newKey}`]: { ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false },
+          [`scheduleBlocks/${newKey}`]: stripEntityFields({ ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false }, true),
         })
 
       } else {

@@ -10,6 +10,7 @@ import { splitWeightedMin } from '../utils/weightedMin'
 import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
 import { db, ref, get } from '../api/firebase'
 import { getCompetitionItems, makeCompetitionBlock, toCompetitionItem } from '../utils/competition'
+import { stripEntityFields } from '../utils/mergeEntity'
 
 export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   const {
@@ -121,7 +122,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
     }
 
     await saveBlock(blockKey, {
-      ...newBlock,
+      ...stripEntityFields(newBlock, true),
       ...(existingBlock && !existingBlock.isDefault && mode === 'replace' ? { __skipLog: true } : {}),
     })
     if (existingBlock && !existingBlock.isDefault && mode === 'replace') {

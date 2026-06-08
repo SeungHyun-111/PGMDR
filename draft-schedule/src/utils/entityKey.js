@@ -2,7 +2,7 @@ import { makePerfKey } from '../hooks/usePerformanceMap'
 
 export function getUniqueKey(item) {
   if (!item) return null
-  return item.uniqueKey || item.itemId || null
+  return item.uniqueKey || null
 }
 
 export function getManualKey(item) {

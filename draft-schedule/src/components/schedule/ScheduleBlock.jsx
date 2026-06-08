@@ -7,6 +7,7 @@ import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore
 import { getDealTypeChar } from '../../constants/dealTypes'
 import { competitionItemKey, getCompetitionItems } from '../../utils/competition'
 import { genKey } from '../../utils/uniqueKey'
+import { resolveEntity } from '../../utils/mergeEntity'
 
 function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, dimmed = false, highlighted = false, readOnly = false }) {
   const [hover, setHover]               = useState(false)
@@ -19,7 +20,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
   const [competitionSelect, setCompetitionSelect] = useState(null)
   const [annotationPopup, setAnnotationPopup] = useState(false)
   const [annotationText, setAnnotationText]   = useState('')
-  const { returnBlockToSidebar: returnBlockToSidebarRaw, releaseCompetition, perfMap, manualInputs, runUndoBatch, saveEntityProps } = useScheduleStore()
+  const { returnBlockToSidebar: returnBlockToSidebarRaw, releaseCompetition, perfMap, manualInputs, runUndoBatch, saveEntityProps, entityProps } = useScheduleStore()
   const returnBlockToSidebar = async (targetBlock) => {
     await runUndoBatch(`사이드바 반환 되돌리기: ${targetBlock.pgmCodeName || targetBlock.blockKey || targetBlock.slotId}`, async () => {
     await returnBlockToSidebarRaw(targetBlock)
@@ -49,7 +50,9 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
   }, [])
 
   const isCompeting = block.isCompeting
-  const competitionItems = isCompeting ? getCompetitionItems(block) : []
+  const competitionItems = isCompeting
+    ? getCompetitionItems(block).map(item => resolveEntity(item, entityProps))
+    : []
   const hasAnnotation = !!block.annotation
   const hasHash = !!(block.scheduleComment && block.scheduleComment.includes('#'))
 
@@ -205,7 +208,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
 
       {/* 툴팁: contextMenu/editModal/annotationPopup 없을 때만 표시 */}
       {hover && tooltipPos && !contextMenu && !editModal && !annotationPopup && createPortal(
-        <BlockTooltip block={block} lastPerf={lastPerf} manual={manual} pos={tooltipPos} />
+        <BlockTooltip block={block} lastPerf={lastPerf} manual={manual} pos={tooltipPos} competitionItems={competitionItems} />
         ,
         document.body
       )}
@@ -473,13 +476,13 @@ function ReturnSlotChoice({ value, onChange }) {
   )
 }
 
-function BlockTooltip({ block, lastPerf, manual, pos }) {
+function BlockTooltip({ block, lastPerf, manual, pos, competitionItems }) {
   // 화면 오른쪽/아래 잘림 방지
   const tooltipW = 230
   const gap = 8
   const margin = 8
   const hasManual = manual && (manual.expectedSalesPerWeightedMin != null || manual.expectedProfitPerWeightedMin != null)
-  const compItems = getCompetitionItems(block)
+  const compItems = competitionItems || getCompetitionItems(block)
   const approxH  = block.isCompeting ? Math.min(360, 60 + compItems.length * 62) : (block.annotation ? 290 : 220) + (hasManual ? 60 : 0)
   const viewportW = window.innerWidth || 0
   const viewportH = window.innerHeight || 0
