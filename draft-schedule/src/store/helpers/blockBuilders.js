@@ -25,8 +25,11 @@ export function makeDefaultBlock(slot, channel = 'ALL') {
   const fullWm = slot.weightedMin || 0
   let weightedMin = fullWm
   if (channel === 'CA' || channel === 'IP') {
-    const { caWeighted, ipWeighted } = splitWeightedMin(fullWm, slot.dateKey, slot.timeText)
-    weightedMin = channel === 'CA' ? caWeighted : ipWeighted
+    const alreadySplitChannel = slot.channel === channel || String(slot.blockKey || '').endsWith(`_${channel}`)
+    if (!alreadySplitChannel) {
+      const { caWeighted, ipWeighted } = splitWeightedMin(fullWm, slot.dateKey, slot.timeText)
+      weightedMin = channel === 'CA' ? caWeighted : ipWeighted
+    }
   }
   return {
     slotId: slot.slotId, blockKey,
