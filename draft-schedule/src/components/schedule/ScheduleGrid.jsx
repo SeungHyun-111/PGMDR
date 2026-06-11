@@ -5,6 +5,8 @@ import SlotRow from './SlotRow'
 import { splitWeightedMin, timeToMin, minToTime } from '../../utils/weightedMin'
 import { getEffectivePgmSlots } from '../../utils/effectiveSlots'
 import { getBlockTeams } from '../../utils/competition'
+import { db, ref, onValue } from '../../api/firebase'
+import { DEFAULT_WEATHER_LOCATION_KEY, buildWeatherByDate } from '../../utils/weatherDisplay'
 
 const DAY_LABELS = ['월', '화', '수', '목', '금', '토', '일']
 const TIME_COL_WIDTH = 36
@@ -23,6 +25,7 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
   const [timeSplitModal, setTimeSplitModal] = useState(null) // 시간 분할 모달
   const [timeSplitInput, setTimeSplitInput] = useState('')
   const [teamFilter, setTeamFilter] = useState('전체')
+  const [weatherByDate, setWeatherByDate] = useState({})
 
   // pgmSlots가 실제로 로드된 뒤 컨테이너가 DOM에 붙으므로 hasPgmSlots 변화 시 재실행
   const hasPgmSlots = pgmSlots.length > 0
@@ -43,6 +46,17 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
   }, [])
 
   // GAS 원본 + customSlots 오버라이드/추가를 합산한 실효 슬롯
+  useEffect(() => {
+    const weatherRef = ref(db, `globalWeather/kma/${DEFAULT_WEATHER_LOCATION_KEY}/daily`)
+    const unsubscribe = onValue(weatherRef, snap => {
+      setWeatherByDate(buildWeatherByDate(snap.exists() ? snap.val() : {}))
+    }, error => {
+      console.warn('[weather] daily subscribe failed:', error)
+      setWeatherByDate({})
+    })
+    return unsubscribe
+  }, [])
+
   const effectivePgmSlots = useMemo(
     () => getEffectivePgmSlots(pgmSlots, customSlots),
     [pgmSlots, customSlots]
@@ -299,16 +313,71 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
 
       {/* 헤더 */}
       <div style={{ display: 'flex', flexShrink: 0, height: HEADER_HEIGHT, borderBottom: '1px solid var(--border)', background: 'var(--bg2)', zIndex: 20 }}>
-        {dates.map((date, di) => (
-          <div key={date} style={{ display: 'flex', flexShrink: 0, width: TIME_COL_WIDTH + colWidth, borderLeft: di === 0 ? 'none' : '2px solid var(--border2)' }}>
-            <div style={{ width: TIME_COL_WIDTH, flexShrink: 0 }} />
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
-                {DAY_LABELS[di]} <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text3)' }}>{date.slice(5)}</span>
+        {dates.map((date, di) => {
+          const weather = weatherByDate[date]
+          return (
+            <div key={date} style={{ display: 'flex', flexShrink: 0, width: TIME_COL_WIDTH + colWidth, borderLeft: di === 0 ? 'none' : '2px solid var(--border2)' }}>
+              <div style={{ width: TIME_COL_WIDTH, flexShrink: 0, position: 'relative', overflow: 'visible' }}>
+                {weather && (
+                  <div
+                    title={weather.title}
+                    style={{
+                      position: 'absolute',
+                      left: 4,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: 2,
+                      width: 96,
+                      overflow: 'visible',
+                      pointerEvents: 'auto',
+                      zIndex: 2,
+                    }}
+                  >
+                    <div style={{ minHeight: 11, fontSize: 8.5, fontWeight: 800, color: 'var(--text)', lineHeight: 1.05, whiteSpace: 'nowrap' }}>
+                      {weather.emojiText}
+                    </div>
+                    <div style={{ minHeight: 10, fontSize: 8.5, fontWeight: 800, color: 'var(--text)', lineHeight: 1.05, whiteSpace: 'nowrap' }}>
+                      {weather.tempText}
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '0 40px' }}>
+                {!!weather?.detailLines?.length && (
+                  <div
+                    title={weather.title}
+                    style={{
+                      position: 'absolute',
+                      right: 5,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-end',
+                      gap: 1,
+                      fontSize: 8.5,
+                      fontWeight: 800,
+                      color: 'var(--text3)',
+                      lineHeight: 1.05,
+                      whiteSpace: 'nowrap',
+                      pointerEvents: 'auto',
+                    }}
+                  >
+                    {weather.detailLines.map((line, index) => (
+                      <span key={`${line}-${index}`}>{line}</span>
+                    ))}
+                  </div>
+                )}
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>
+                  {DAY_LABELS[di]} <span style={{ fontSize: 10, fontWeight: 400, color: 'var(--text3)' }}>{date.slice(5)}</span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* 바디 */}

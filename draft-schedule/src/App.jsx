@@ -14,6 +14,7 @@ import { applyTheme, getStoredTheme } from './styles/theme'
 import SessionSwitcher from './components/session/SessionSwitcher'
 import VersionSwitcher from './components/session/VersionSwitcher'
 import { VERSION_OPS, VERSION_SALES, getVersionLabel } from './utils/sessionVersion'
+import { refreshKmaWeatherIfStale } from './api/weather'
 
 const TABS = [
   { id: 'draft',    label: '초안 편성' },
@@ -33,6 +34,12 @@ export default function App() {
   const [toast, setToast]             = useState(null)
   const [theme, setTheme]             = useState(getStoredTheme())
   const menuRef = useRef(null)
+
+  useEffect(() => {
+    refreshKmaWeatherIfStale().catch(error => {
+      console.warn('[weather] Firebase sync failed:', error)
+    })
+  }, [])
 
   const {
     isLoaded, startDate, endDate, poolType,
