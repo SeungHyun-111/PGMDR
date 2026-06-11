@@ -59,6 +59,16 @@ export function splitWeightedMin(weightedMin, dateKey, timeText) {
   return { caWeighted, ipWeighted, caRatio, ipRatio: 100 - caRatio }
 }
 
+export function isPgmTeamName(value) {
+  return String(value || '').trim() === '편성팀'
+}
+
+export function getEffectiveBlockWeightedMin(block) {
+  const weightedMin = Number(block?.weightedMin || 0)
+  const teamName = block?.mdTeam || block?.orgName || ''
+  return weightedMin === 0 && !isPgmTeamName(teamName) ? 1 : weightedMin
+}
+
 // 기존 함수 유지
 export function calcWeightedMin(pgmSlots, startTime, endTime) {
   const startTotal = timeToMin(startTime)

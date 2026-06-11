@@ -9,6 +9,7 @@ import RatioTable from '../components/ratio/RatioTable'
 import RatioPgmCount from '../components/ratio/RatioPgmCount'
 import { getCompetitionItems } from '../utils/competition'
 import { applyEntityProps, resolveEntity } from '../utils/mergeEntity'
+import { getEffectiveBlockWeightedMin } from '../utils/weightedMin'
 import { db, ref, get } from '../api/firebase'
 import { VERSION_OPS, getVersionPath } from '../utils/sessionVersion'
 
@@ -312,7 +313,13 @@ export default function ScheduleRatio() {
         const resolved = resolveEntity(item, entityProps)
         const team = resolved?.mdTeam || resolved?.orgName || item?.mdTeam || item?.orgName || COMPETING_NAME
         const key = targetTeamNameMap[team] || targetTeamNameMap[getTeamAlias(team)] || team
-        next[key] = (next[key] || 0) + (Number(block.weightedMin || item.weightedMin || 0))
+        next[key] = (next[key] || 0) + getEffectiveBlockWeightedMin({
+          ...block,
+          ...item,
+          weightedMin: block.weightedMin || item.weightedMin || 0,
+          mdTeam: team,
+          orgName: team,
+        })
       })
     })
     targetTeams.forEach(({ name }) => {

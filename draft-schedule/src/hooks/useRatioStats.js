@@ -1,4 +1,5 @@
 import { useMemo } from 'react'
+import { getEffectiveBlockWeightedMin } from '../utils/weightedMin'
 
 export default function useRatioStats(scheduleBlocks, categoryMap, viewType) {
   return useMemo(() => {
@@ -11,7 +12,7 @@ export default function useRatioStats(scheduleBlocks, categoryMap, viewType) {
 
     Object.values(scheduleBlocks).forEach(block => {
       if (!block) return
-      const w = block.weightedMin || 0
+      const w = getEffectiveBlockWeightedMin(block)
       const d = block.durationMin || 0
       totalWeighted += w
       totalDm += d

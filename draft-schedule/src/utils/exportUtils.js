@@ -5,6 +5,7 @@ import { getBlockTeams, getCompetitionItems } from './competition'
 import { getResolvedEntity, getResolvedPerfKey } from './entityKey'
 import { exportToBoExcel } from './export/boExcelExport'
 import { getScheduledBlockPerformance } from './performanceHistory'
+import { getEffectiveBlockWeightedMin } from './weightedMin'
 
 // ── 시간 비교 헬퍼 ────────────────────────────────────────────────────────
 function timeToMin(t) {
@@ -547,9 +548,10 @@ function calcForecastLocal(block, perfMap, manualInputs, performanceHistoryByKey
   const mp = perf.manualProfit
   const sp = perf.salesPerMin
   const pp = perf.profitPerMin
-  const wm = Number(block.weightedMin || 0)
+  const wm = getEffectiveBlockWeightedMin(block)
   return {
     lastPerf,
+    weightedMin: wm,
     salesPerMin: sp, profitPerMin: pp,
     expectedSales:  (sp ?? 0) * wm,
     expectedProfit: (pp ?? 0) * wm,
@@ -592,7 +594,7 @@ function calcRatioStats(scheduleBlocks, categoryMap, viewType) {
   let totalWeighted = 0, totalDm = 0, competingWeighted = 0
   Object.values(scheduleBlocks).forEach(block => {
     if (!block) return
-    const w = block.weightedMin || 0
+    const w = getEffectiveBlockWeightedMin(block)
     const d = block.durationMin || 0
     totalWeighted += w
     totalDm += d
@@ -769,8 +771,9 @@ function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, p
         : '',
     ].filter(Boolean).join('')
 
-    const wmSpan = (block.weightedMin || 0) > 0
-      ? `<span style="font-size:${badgeSz}px;color:${isColored?'rgba(255,255,255,.45)':'#8b90ab'};white-space:nowrap;flex-shrink:0">${block.weightedMin}</span>`
+    const blockWeightedMin = getEffectiveBlockWeightedMin(block)
+    const wmSpan = blockWeightedMin > 0
+      ? `<span style="font-size:${badgeSz}px;color:${isColored?'rgba(255,255,255,.45)':'#8b90ab'};white-space:nowrap;flex-shrink:0">${blockWeightedMin}</span>`
       : ''
     const annotCorner = block.annotation
       ? `<div style="position:absolute;top:0;right:0;width:0;height:0;border-style:solid;border-width:0 8px 8px 0;border-color:transparent #d97706 transparent transparent"></div>`
@@ -787,7 +790,7 @@ function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, p
       dealType: block.dealType || null, newProductType: block.newProductType || null,
       mdCategory: block.mdCategory || null, dateKey: block.dateKey || null,
       timeText: block.timeText || null, durationMin: block.durationMin || null,
-      weightedMin: block.weightedMin || null, memoCode: block.memoCode || null, memoCode2: block.memoCode2 || null,
+      weightedMin: blockWeightedMin || null, memoCode: block.memoCode || null, memoCode2: block.memoCode2 || null,
       scheduleComment: block.scheduleComment || null, requestNote: block.requestNote || null, annotation: block.annotation || null,
       lastPerf: lastPerf ? { broadcastDate: lastPerf.broadcastDate, spw: lastPerf.salesPerWeightedMin, ppw: lastPerf.profitPerWeightedMin } : null,
     })
@@ -1352,7 +1355,7 @@ function buildRatioSection({ scheduleBlocks, pgmSlots, weightedMinTargets, categ
       if (!piv[rk])     piv[rk]     = {}
       if (!piv[rk][ck]) piv[rk][ck] = { count: 0, wm: 0, perfWm: 0, sales: 0, profit: 0, perfCount: 0 }
       const { sp, pp, hasPerf } = getExpectedForBlock(b)
-      const wm = b.weightedMin || 0
+      const wm = getEffectiveBlockWeightedMin(b)
       piv[rk][ck].count += 1
       piv[rk][ck].wm    += wm
       if (hasPerf) {
@@ -1563,6 +1566,7 @@ function buildStatusSection({ scheduleBlocks, proposalItems, perfMap, performanc
       ? `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#e8eaf2;color:#8b90ab;font-weight:700">선편성</span>`
       : `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#f0fdf4;color:#16a34a;font-weight:700">편성</span>`
     const rowBg = i % 2 !== 0 ? 'background:#fafafa' : ''
+    const weightedMin = getEffectiveBlockWeightedMin(block)
     return `<tr style="${rowBg}">
       <td class="c">${!isCompeting ? gBadge(grade) : '-'}</td>
       <td style="color:#4a4f6e">${block.dateKey||'-'}</td>
@@ -1571,7 +1575,7 @@ function buildStatusSection({ scheduleBlocks, proposalItems, perfMap, performanc
       <td style="color:#4a4f6e">${block.mdTeam||block.orgName||'-'}</td>
       <td style="color:#8b90ab;font-size:11px">${block.mdCategory||'-'}</td>
       <td style="${isCompeting?'color:#dc2626;font-weight:700':''}max-width:200px;overflow:hidden;text-overflow:ellipsis">${isCompeting?'⚔ ':''}${block.pgmCodeName||'-'}</td>
-      <td class="r" style="font-weight:700;color:#4a6cf7">${hf(block.weightedMin)}</td>
+      <td class="r" style="font-weight:700;color:#4a6cf7">${hf(weightedMin)}</td>
       <td style="color:#8b90ab;font-size:11px">${block.memoCode||'-'}</td>
       <td style="color:#8b90ab;font-size:11px">${block.memoCode2||'-'}</td>
       <td style="color:#8b90ab;font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis">${block.scheduleComment||'-'}</td>

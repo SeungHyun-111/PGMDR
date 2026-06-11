@@ -7,7 +7,7 @@ import useScheduleStore from '../store/useScheduleStore'
 import useCategoryMap from '../hooks/useCategoryMap'
 import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
 import { getEffectivePgmSlots } from '../utils/effectiveSlots'
-import { timeToMin } from '../utils/weightedMin'
+import { getEffectiveBlockWeightedMin, timeToMin } from '../utils/weightedMin'
 import { getManualInputKey } from '../utils/grade'
 import { extractEntityFields } from '../utils/mergeEntity'
 import { getScheduledBlockPerformance } from '../utils/performanceHistory'
@@ -26,13 +26,14 @@ function calcForecast(block, perfMap, manualInputs, performanceHistoryByKey) {
   const manualProfit = perfState.manualProfit
   const salesPerMin  = perfState.salesPerMin
   const profitPerMin = perfState.profitPerMin
-  const wm = Number(block.weightedMin || 0)
+  const wm = getEffectiveBlockWeightedMin(block)
 
   return {
     lastPerf,
     sameBroadcastPerf,
     salesPerMin, profitPerMin,
     manualSales, manualProfit,
+    weightedMin: wm,
     expectedSales:  (salesPerMin  ?? 0) * wm,
     expectedProfit: (profitPerMin ?? 0) * wm,
     missingPerf: perfState.missingPerf,

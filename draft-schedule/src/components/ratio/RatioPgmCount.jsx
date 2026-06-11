@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { getScheduledBlockPerformance } from '../../utils/performanceHistory'
+import { getEffectiveBlockWeightedMin } from '../../utils/weightedMin'
 
 const CH_ORDER = ['CA', 'IP', 'ALL']
 const CH_BG    = { CA: 'var(--ca)', IP: 'var(--ip)', ALL: 'var(--all)' }
@@ -60,7 +61,7 @@ function PgmCard({ title, colLabel, colKeyFn, colRenderer, blocks, rowType, perf
       if (!piv[rk])     piv[rk]     = {}
       if (!piv[rk][ck]) piv[rk][ck] = { count: 0, wm: 0, perfWm: 0, sales: 0, profit: 0, perfCount: 0 }
       const { sp, pp, hasPerf } = getExpected(b, perfMap, manualInputs, performanceHistoryByKey)
-      const wm = b.weightedMin || 0
+      const wm = getEffectiveBlockWeightedMin(b)
       piv[rk][ck].count  += 1
       piv[rk][ck].wm     += wm
       if (hasPerf) {
