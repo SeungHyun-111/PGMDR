@@ -5,6 +5,7 @@ import { createBlockActions }    from './actions/blockActions'
 import { createItemActions }     from './actions/itemActions'
 import { createRefreshActions }  from './actions/refreshActions'
 import { createTimeSlotActions } from './actions/timeSlotActions'
+import { createPerformanceHistoryActions } from './actions/performanceHistoryActions'
 import { VERSION_DRAFT } from '../utils/sessionVersion'
 
 export { makeDefaultBlock } from './helpers/blockBuilders'
@@ -31,6 +32,11 @@ const useScheduleStore = create((setState, getState) => ({
   weightedMinTargets: [],
   targetMetrics:      null,
   perfMap:            {},
+  latestPerfByKey:    {},
+  performanceHistoryByKey: {},
+  performanceRows:    {},
+  loadedPerfKeys:     {},
+  performanceGlobalLoaded: false,
 
   scheduleBlocks:   {},
   _rawBlocks:       {},  // Firebase 원본 (entityProps 머지 전)
@@ -166,6 +172,7 @@ const useScheduleStore = create((setState, getState) => ({
   isLoadingPerformance:   false,
   isLoadingPreSchedule:   false,
   isLoadingGasAll:        false,
+  isLoadingPerformanceKeys: false,
 
   // ── 로그 (내부용) ─────────────────────
   async _writeLog(action, blockKey, before, after, meta = {}) {
@@ -191,6 +198,7 @@ const useScheduleStore = create((setState, getState) => ({
   ...createItemActions(setState, getState),
   ...createRefreshActions(setState, getState),
   ...createTimeSlotActions(setState, getState),
+  ...createPerformanceHistoryActions(setState, getState),
 }))
 
 export default useScheduleStore

@@ -69,6 +69,7 @@ export default function ScheduleRatio() {
     weightedMinTargets,
     proposalItems,
     perfMap,
+    performanceHistoryByKey,
     manualInputs,
     entityProps,
     startDate,
@@ -395,7 +396,7 @@ export default function ScheduleRatio() {
         previousComparison={previousComparison}
       />
 
-      <RatioPgmCount enrichedBlocks={enrichedBlocks} perfMap={perfMap} manualInputs={manualInputs} />
+      <RatioPgmCount enrichedBlocks={enrichedBlocks} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} />
     </div>
   )
 }

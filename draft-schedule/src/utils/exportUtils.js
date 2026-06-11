@@ -4,6 +4,7 @@ import { getEffectivePgmSlots } from './effectiveSlots'
 import { getBlockTeams, getCompetitionItems } from './competition'
 import { getResolvedEntity, getResolvedPerfKey } from './entityKey'
 import { exportToBoExcel } from './export/boExcelExport'
+import { getScheduledBlockPerformance } from './performanceHistory'
 
 // ── 시간 비교 헬퍼 ────────────────────────────────────────────────────────
 function timeToMin(t) {
@@ -539,22 +540,21 @@ const gBadge = g => {
   return `<span style="font-size:11px;font-weight:800;padding:2px 7px;border-radius:4px;background:${bg};color:${c};border:1px solid ${c}40">${g}</span>`
 }
 
-function calcForecastLocal(block, perfMap, manualInputs) {
-  const isDefaultPgmTeam = block.pgmCodeName === '[편성팀]' && block.memoCode === '[전사블록]'
-  const manualKey = isDefaultPgmTeam ? 'sim_pgm_team' : block.uniqueKey
-  const manual = manualKey ? (manualInputs[manualKey] || {}) : {}
-  const lastPerf = block.perfKey ? (perfMap[block.perfKey] || null) : null
-  const ms = manual.expectedSalesPerWeightedMin  ?? null
-  const mp = manual.expectedProfitPerWeightedMin ?? null
-  const sp = ms ?? lastPerf?.salesPerWeightedMin  ?? null
-  const pp = mp ?? lastPerf?.profitPerWeightedMin ?? null
+function calcForecastLocal(block, perfMap, manualInputs, performanceHistoryByKey) {
+  const perf = getScheduledBlockPerformance(block, { performanceHistoryByKey, manualInputs, fallbackPerfMap: perfMap })
+  const lastPerf = perf.lastPerf
+  const ms = perf.manualSales
+  const mp = perf.manualProfit
+  const sp = perf.salesPerMin
+  const pp = perf.profitPerMin
   const wm = Number(block.weightedMin || 0)
   return {
     lastPerf,
     salesPerMin: sp, profitPerMin: pp,
     expectedSales:  (sp ?? 0) * wm,
     expectedProfit: (pp ?? 0) * wm,
-    missingPerf: !lastPerf && (ms == null || mp == null),
+    sameBroadcastPerf: perf.sameBroadcastPerf,
+    missingPerf: perf.missingPerf,
     manualSales: ms, manualProfit: mp,
   }
 }
@@ -938,7 +938,7 @@ ${gridContent}
 // ── 시뮬레이션 ────────────────────────────────────────────────────────────
 // PerformanceForecast.jsx 구조를 그대로 복제
 
-function buildSimSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, perfMap, manualInputs, categoryMap, targetMetrics, weightedMinTargets }) {
+function buildSimSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, perfMap, performanceHistoryByKey, manualInputs, categoryMap, targetMetrics, weightedMinTargets }) {
   const { teamMap: teamTargetMap, companyTotal } = parseTargetMetrics(targetMetrics)
 
   const rows = Object.values(scheduleBlocks)
@@ -947,7 +947,7 @@ function buildSimSection({ scheduleBlocks, pgmSlots, customSlots, splitSlots, pe
       ...b,
       mdCategory: b.mdCategory || categoryMap[b.pgmCodeName] || '미분류',
       mdTeam: b.mdTeam || b.orgName || '미지정',
-      ...calcForecastLocal(b, perfMap, manualInputs),
+      ...calcForecastLocal(b, perfMap, manualInputs, performanceHistoryByKey),
     }))
     .sort((a, b) => a.dateKey !== b.dateKey
       ? (a.dateKey || '').localeCompare(b.dateKey || '')
@@ -1497,7 +1497,7 @@ ${pgmCountSection}`
 // ── 편성현황 ──────────────────────────────────────────────────────────────
 // ScheduleStatus → GradeDonutChart(→ grade summary table) + StatusScheduled + StatusUnscheduled
 
-function buildStatusSection({ scheduleBlocks, proposalItems, perfMap, manualInputs, categoryMap }) {
+function buildStatusSection({ scheduleBlocks, proposalItems, perfMap, performanceHistoryByKey, manualInputs, categoryMap }) {
   const GRADES = ['S', 'A', 'B', 'C', 'D']
 
   // enrichedBlocks (경쟁 제외)
@@ -1506,7 +1506,7 @@ function buildStatusSection({ scheduleBlocks, proposalItems, perfMap, manualInpu
     .map(b => ({
       ...b,
       mdCategory: b.mdCategory || categoryMap[b.pgmCodeName] || '미분류',
-      _grade: getGrade(getEffectiveProfit(b, perfMap, manualInputs)),
+      _grade: getGrade(getEffectiveProfit(b, perfMap, manualInputs, performanceHistoryByKey)),
       _team:  b.mdTeam || b.orgName || '미지정',
     }))
     .sort((a, b) => a.dateKey !== b.dateKey
@@ -1556,7 +1556,7 @@ function buildStatusSection({ scheduleBlocks, proposalItems, perfMap, manualInpu
   const allScheduled = [...enrichedBlocks, ...competingBlocks]
   const scheduledRows = allScheduled.map((block, i) => {
     const isCompeting = block.isCompeting
-    const grade = block._grade || getGrade(getEffectiveProfit(block, perfMap, manualInputs))
+    const grade = block._grade || getGrade(getEffectiveProfit(block, perfMap, manualInputs, performanceHistoryByKey))
     const statusBadge = isCompeting
       ? `<span style="font-size:10px;padding:2px 6px;border-radius:4px;background:#fef2f2;color:#dc2626;font-weight:700">경쟁</span>`
       : block.isPreSchedule

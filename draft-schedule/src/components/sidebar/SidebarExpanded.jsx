@@ -67,7 +67,7 @@ const memoCodePatch = (key, value, meta) => ({
 })
 
 export default function SidebarExpanded({ items, onClose }) {
-  const { perfMap, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar, weightedMinTargets, entityProps, saveBlock, saveEntityProps, runUndoBatch } = useScheduleStore()
+  const { perfMap, latestPerfByKey, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar, weightedMinTargets, entityProps, saveBlock, saveEntityProps, runUndoBatch } = useScheduleStore()
   const [keyword, setKeyword]       = useState('')
   const [teamFilter, setTeamFilter] = useState('전체')
   const [starOnly, setStarOnly]     = useState(false)
@@ -156,15 +156,15 @@ export default function SidebarExpanded({ items, onClose }) {
     }
     return [...list].sort((a, b) => {
       const col = COLS.find(c => c.key === sortKey)
-      let va = col?.perf ? (perfMap[a.perfKey]?.[col.perf] ?? '') : (a[sortKey] ?? '')
-      let vb = col?.perf ? (perfMap[b.perfKey]?.[col.perf] ?? '') : (b[sortKey] ?? '')
+      let va = col?.perf ? (getLastPerf(a, entityProps, perfMap, latestPerfByKey)?.[col.perf] ?? '') : (a[sortKey] ?? '')
+      let vb = col?.perf ? (getLastPerf(b, entityProps, perfMap, latestPerfByKey)?.[col.perf] ?? '') : (b[sortKey] ?? '')
       const isNum = va !== '' && !isNaN(Number(va))
       const cmp = isNum
         ? Number(va || 0) - Number(vb || 0)
         : String(va).localeCompare(String(vb), 'ko')
       return sortDir === 'asc' ? cmp : -cmp
     })
-  }, [items, keyword, teamFilter, starOnly, starred, sortKey, sortDir, perfMap])
+  }, [items, keyword, teamFilter, starOnly, starred, sortKey, sortDir, perfMap, latestPerfByKey, entityProps])
 
   const visibleRows = useMemo(() => {
     if (!pinnedReturn) return displayed
@@ -470,7 +470,7 @@ export default function SidebarExpanded({ items, onClose }) {
           </thead>
           <tbody>
             {visibleRows.map((item, rowIdx) => {
-              const lastPerf  = getLastPerf(item, entityProps, perfMap)
+              const lastPerf  = getLastPerf(item, entityProps, perfMap, latestPerfByKey)
               const isStarred = !!starred[item.itemId]
               const stripeBg  = rowIdx % 2 === 0 ? 'var(--bg)' : 'var(--bg2)'
               const baseBg    = isStarred ? 'rgba(217,119,6,.10)' : stripeBg

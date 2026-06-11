@@ -1,5 +1,5 @@
 // src/store/actions/refreshActions.js
-import { db, ref, set, update } from '../../api/firebase'
+import { db, ref, set, get, update } from '../../api/firebase'
 import { buildPreScheduleBlocks, buildDefaultBlocks, buildSlot, buildProposalItem, encodePerfMap, buildPerfMapFromGas } from '../helpers/blockBuilders'
 import { genKey } from '../../utils/uniqueKey'
 import { normalizeItemsTeamNames } from '../../utils/teamName'
@@ -7,6 +7,13 @@ import { extractEntityFields } from '../../utils/mergeEntity'
 import { filterUnscheduledItems } from '../../utils/proposalVisibility'
 import { getCompetitionItems } from '../../utils/competition'
 import { getCurrentVersionPath } from '../../utils/sessionVersion'
+import { encodeKey } from '../../utils/firebaseKey'
+import {
+  buildHistoryByKeyFromRows,
+  buildLatestByKeyFromHistory,
+  normalizePerfHistory,
+  normalizePerformanceRows,
+} from '../../utils/performanceHistory'
 
 function withFreshUniqueKeys(items = []) {
   return items.map(item => ({
@@ -57,18 +64,30 @@ export function createRefreshActions(setState, getState) {
       setState({ isLoadingPerformance: true })
       try {
         const { fetchRefreshPerformance } = await import('../../api/gas')
-        const rawData = await fetchRefreshPerformance()
+        const cursor = await getGlobalPerformanceCursor()
+        const rawData = await fetchRefreshPerformance({ afterDate: cursor.latestDate || '' })
         // GAS가 { perfMap: {...} } 래핑 형태로 반환하는 경우 unwrap
         const rawPerfMap = (rawData && rawData.perfMap) ? rawData.perfMap : rawData
         // buildPerfMapFromGas: 배열/map-of-arrays/flat-map 모두 처리 + 연도 포함 최신값 선택
         const perfMap = buildPerfMapFromGas(rawPerfMap)
+        const hasPerformanceRows = normalizePerformanceRows(getPerformanceRowsSource(rawData, rawPerfMap)).length > 0
+        const nextPerfMap = Object.keys(perfMap).length ? perfMap : (getState().perfMap || {})
         const encoded = encodePerfMap(rawPerfMap)
         const weekKey = `${startDate}_${poolType}`
         const now = Date.now()
-        await update(ref(db, `sessions/${weekKey}/gasData`), { perfMap: encoded })
+        if (hasPerformanceRows) {
+          await update(ref(db, `sessions/${weekKey}/gasData`), {
+            perfMap: encoded,
+          })
+        }
+        await writeGlobalPerformanceData(rawData, rawPerfMap)
         await update(ref(db, `sessions/${weekKey}/lastUpdated`), { performance: now, performanceBy: userName || '' })
+        getState().seedPerformanceFromPerfMap?.(perfMap)
+        getState().invalidatePerformanceKeys?.()
+        getState().loadGlobalPerformanceData?.({ force: true })
         setState(s => ({
-          perfMap,
+          perfMap: nextPerfMap,
+          ...buildPerformanceStateFromRaw(rawData, rawPerfMap, s),
           isLoadingPerformance: false,
           lastUpdated: { ...s.lastUpdated, performance: now, performanceBy: userName || '' },
         }))
@@ -137,6 +156,7 @@ export function createRefreshActions(setState, getState) {
           proposalItems: proposalItemsRaw,
           perfMap: encodePerfMap(gasData.perfMap || {}),
         })
+        await writeGlobalPerformanceData(gasData, gasData.perfMap || {})
         await update(ref(db, versionPath), {
           pgmSlots: pgmSlotsNew,
           proposalItems: proposalItemsRaw,
@@ -167,9 +187,13 @@ export function createRefreshActions(setState, getState) {
         )
 
         const perfMap = buildPerfMapFromGas(gasData.perfMap || {})
+        getState().seedPerformanceFromPerfMap?.(perfMap)
+        getState().invalidatePerformanceKeys?.()
+        getState().loadGlobalPerformanceData?.({ force: true })
         setState(s => ({
           pgmSlots:        pgmSlotsNew,
           perfMap,
+          ...buildPerformanceStateFromRaw(gasData, gasData.perfMap || {}, s),
           preScheduleRows: gasData.preScheduleRows || [],
           allProposalItems: proposalItems,
           proposalItems: filterUnscheduledItems(proposalItems, scheduledItemIds, scheduledUniqueKeys),
@@ -231,4 +255,123 @@ export function createRefreshActions(setState, getState) {
       }
     },
   }
+}
+
+async function writeGlobalPerformanceData(rawData, rawPerfMap) {
+  const updates = {}
+  const performanceRows = getPerformanceRowsSource(rawData, rawPerfMap)
+  const normalizedRows = normalizePerformanceRows(performanceRows)
+  normalizedRows.forEach(entry => {
+    updates[`performanceEntries/${makePerformanceEntryId(entry)}`] = entry
+  })
+
+  const historyByKey = buildHistoryByKeyFromRows(normalizedRows)
+  const latestByKey = buildLatestByKeyFromHistory(historyByKey)
+  Object.entries(latestByKey).forEach(([perfKey, entry]) => {
+    updates[`latestPerfMap/${encodeKey(perfKey)}`] = entry
+  })
+
+  if (Object.keys(updates).length > 0) {
+    const latestEntry = getLatestEntry(normalizedRows)
+    if (latestEntry) {
+      updates.performanceMeta = {
+        latestTimestamp: latestEntry.broadcastTimestamp,
+        latestDate: latestEntry.broadcastDate || '',
+        latestTime: latestEntry.broadcastTime || '',
+        latestPerfKey: latestEntry.perfKey || '',
+        updatedAt: Date.now(),
+      }
+    }
+    await update(ref(db), updates)
+  }
+}
+
+async function getGlobalPerformanceCursor() {
+  const metaSnap = await get(ref(db, 'performanceMeta'))
+  if (metaSnap.exists()) {
+    const meta = metaSnap.val() || {}
+    return {
+      latestDate: meta.latestDate || '',
+    }
+  }
+
+  const entriesSnap = await get(ref(db, 'performanceEntries'))
+  const legacyRowsSnap = entriesSnap.exists() ? null : await get(ref(db, 'performanceRows'))
+  const rows = normalizePerformanceRows(entriesSnap.exists()
+    ? entriesSnap.val()
+    : legacyRowsSnap?.exists()
+      ? legacyRowsSnap.val()
+      : {})
+  const latestEntry = getLatestEntry(rows)
+  return {
+    latestDate: latestEntry?.broadcastDate || '',
+  }
+}
+
+function getLatestEntry(rows = []) {
+  return (rows || []).reduce((latest, entry) => {
+    if (!entry) return latest
+    if (!latest) return entry
+    const entryDate = normalizeDateKey(entry.broadcastDate)
+    const latestDate = normalizeDateKey(latest.broadcastDate)
+    if (entryDate !== latestDate) {
+      return entryDate > latestDate ? entry : latest
+    }
+    if (entry.broadcastTimestamp !== latest.broadcastTimestamp) {
+      return entry.broadcastTimestamp > latest.broadcastTimestamp ? entry : latest
+    }
+    return latest
+  }, null)
+}
+
+function normalizeDateKey(value) {
+  return String(value || '').replace(/\D/g, '')
+}
+
+function makePerformanceEntryId(entry) {
+  return `${entry.broadcastTimestamp}_${encodeKey(entry.perfKey || '')}`
+}
+
+function buildPerformanceStateFromRaw(rawData, rawPerfMap, state) {
+  const rows = normalizePerformanceRows(getPerformanceRowsSource(rawData, rawPerfMap))
+  if (!rows.length) return {}
+  const historyByKey = buildHistoryByKeyFromRows(rows)
+  const latestByKey = buildLatestByKeyFromHistory(historyByKey)
+  return {
+    performanceRows: Object.fromEntries(rows.map(entry => [makePerformanceEntryId(entry), entry])),
+    performanceHistoryByKey: {
+      ...(state.performanceHistoryByKey || {}),
+      ...historyByKey,
+    },
+    latestPerfByKey: {
+      ...(state.latestPerfByKey || {}),
+      ...latestByKey,
+    },
+  }
+}
+
+function getPerformanceRowsSource(rawData, rawPerfMap) {
+  if (rawData?.performanceRows) return rawData.performanceRows
+  if (rawData?.perfRows) return rawData.perfRows
+  if (rawData?.rows) return rawData.rows
+  if (rawData?.perfHistory) return flattenHistory(rawData.perfHistory)
+  if (rawData?.performanceHistory) return flattenHistory(rawData.performanceHistory)
+  const source = rawData?.perfMap || rawPerfMap || {}
+  const rows = []
+  Object.entries(source || {}).forEach(([perfKey, value]) => {
+    if (Array.isArray(value)) {
+      value.forEach(row => rows.push({ ...row, perfKey: row?.perfKey || perfKey }))
+    } else if (value && typeof value === 'object') {
+      rows.push({ ...value, perfKey: value.perfKey || perfKey })
+    }
+  })
+  return rows
+}
+
+function flattenHistory(history = {}) {
+  const rows = []
+  Object.entries(history || {}).forEach(([perfKey, entries]) => {
+    normalizePerfHistory(entries, perfKey).forEach(entry => rows.push(entry))
+  })
+  return rows
 }

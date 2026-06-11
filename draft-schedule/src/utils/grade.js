@@ -1,3 +1,5 @@
+import { getScheduledBlockPerformance } from './performanceHistory'
+
 export const GRADES = ['S', 'A', 'B', 'C', 'D']
 
 export const GRADE_META = {
@@ -27,8 +29,15 @@ export function getManualInputKey(item) {
   return isPgmTeamBlock(item) ? 'sim_pgm_team' : item.uniqueKey || null
 }
 
-export function getEffectiveProfit(item, perfMap, manualInputs) {
+export function getEffectiveProfit(item, perfMap, manualInputs, performanceHistoryByKey = {}) {
   if (!item) return null
+  if (item.dateKey && item.timeText) {
+    return getScheduledBlockPerformance(item, {
+      performanceHistoryByKey,
+      manualInputs,
+      fallbackPerfMap: perfMap,
+    }).profitPerMin
+  }
   const manualKey = getManualInputKey(item)
   const manual = manualKey ? ((manualInputs || {})[manualKey] || {}) : {}
   const perf   = item.perfKey   ? ((perfMap     || {})[item.perfKey]   || {}) : {}
@@ -36,8 +45,20 @@ export function getEffectiveProfit(item, perfMap, manualInputs) {
   return v === null ? null : Number(v)
 }
 
-export function getEffectiveMetrics(item, perfMap, manualInputs) {
+export function getEffectiveMetrics(item, perfMap, manualInputs, performanceHistoryByKey = {}) {
   if (!item) return { salesPerMin: 0, profitPerMin: 0, source: 'missing' }
+  if (item.dateKey && item.timeText) {
+    const perf = getScheduledBlockPerformance(item, {
+      performanceHistoryByKey,
+      manualInputs,
+      fallbackPerfMap: perfMap,
+    })
+    return {
+      salesPerMin: perf.salesPerMin,
+      profitPerMin: perf.profitPerMin,
+      source: perf.source,
+    }
+  }
   const manualKey = getManualInputKey(item)
   const manual = manualKey ? ((manualInputs || {})[manualKey] || {}) : {}
   const perf = item.perfKey ? ((perfMap || {})[item.perfKey] || {}) : {}
@@ -52,10 +73,10 @@ export function getEffectiveMetrics(item, perfMap, manualInputs) {
   }
 }
 
-export function calcGradeDist(items, perfMap, manualInputs) {
+export function calcGradeDist(items, perfMap, manualInputs, performanceHistoryByKey = {}) {
   const counts = { S: 0, A: 0, B: 0, C: 0, D: 0 }
   items.forEach(item => {
-    counts[getGrade(getEffectiveProfit(item, perfMap, manualInputs))]++
+    counts[getGrade(getEffectiveProfit(item, perfMap, manualInputs, performanceHistoryByKey))]++
   })
   return counts
 }

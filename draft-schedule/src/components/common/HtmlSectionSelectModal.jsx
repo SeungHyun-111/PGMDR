@@ -15,7 +15,7 @@ const SECTIONS = [
 export default function HtmlSectionSelectModal({ onBack, onClose }) {
   const {
     scheduleBlocks, pgmSlots, customSlots, proposalItems,
-    perfMap, manualInputs, startDate, endDate,
+    perfMap, performanceHistoryByKey, manualInputs, startDate, endDate,
     weightedMinTargets, splitSlots, targetMetrics,
   } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
@@ -47,7 +47,7 @@ export default function HtmlSectionSelectModal({ onBack, onClose }) {
       : null
     exportToHtmlSections(selected, {
       scheduleBlocks, pgmSlots, customSlots, proposalItems,
-      perfMap, manualInputs, startDate, endDate,
+      perfMap, performanceHistoryByKey, manualInputs, startDate, endDate,
       weightedMinTargets, categoryMap, splitSlots, targetMetrics,
       gridTeamFilter,
     })

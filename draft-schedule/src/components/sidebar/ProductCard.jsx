@@ -50,9 +50,9 @@ export default function ProductCard({ item, perfMap }) {
   const [tooltipPos, setTooltipPos] = useState(null)
   const [ctxMenu, setCtxMenu]       = useState(null)
   const [deleteConfirm, setDeleteConfirm] = useState(false)
-  const { starred, toggleStarred, deleteProposalItem, duplicateProposalItem, entityProps } = useScheduleStore()
+  const { starred, toggleStarred, deleteProposalItem, duplicateProposalItem, entityProps, latestPerfByKey } = useScheduleStore()
   const isStarred = !!starred[item.itemId]
-  const lastPerf = getLastPerf(item, entityProps, perfMap)
+  const lastPerf = getLastPerf(item, entityProps, perfMap, latestPerfByKey)
   const isNew = !!item.newProductType
 
   useEffect(() => {
@@ -177,7 +177,7 @@ export default function ProductCard({ item, perfMap }) {
         </strong>
       </div>
 
-      {hover && tooltipPos && <ProductTooltip item={item} perfMap={perfMap} entityProps={entityProps} pos={tooltipPos} />}
+      {hover && tooltipPos && <ProductTooltip item={item} perfMap={perfMap} latestPerfByKey={latestPerfByKey} entityProps={entityProps} pos={tooltipPos} />}
     </div>
 
     {ctxMenu && (

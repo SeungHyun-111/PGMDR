@@ -1,4 +1,5 @@
 import { makePerfKey } from '../hooks/usePerformanceMap'
+import { getSidebarPerformance } from './performanceHistory'
 
 export function getUniqueKey(item) {
   if (!item) return null
@@ -26,10 +27,10 @@ export function getResolvedPerfKey(item, entityProps) {
   return pgmCodeName ? makePerfKey(dealType, pgmCodeName) : null
 }
 
-export function getLastPerf(item, entityProps, perfMap) {
-  if (!item || !perfMap) return null
+export function getLastPerf(item, entityProps, perfMap, latestPerfByKey = {}) {
+  if (!item) return null
   const perfKey = getResolvedPerfKey(item, entityProps)
-  return perfKey ? (perfMap[perfKey] || null) : null
+  return perfKey ? getSidebarPerformance({ ...item, perfKey }, { latestPerfByKey, fallbackPerfMap: perfMap }) : null
 }
 
 export function getManualInput(item, manualInputs) {

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { getScheduledBlockPerformance } from '../../utils/performanceHistory'
 
 const CH_ORDER = ['CA', 'IP', 'ALL']
 const CH_BG    = { CA: 'var(--ca)', IP: 'var(--ip)', ALL: 'var(--all)' }
@@ -17,13 +18,10 @@ function getRowKey(b, rowType) {
     : (b.mdTeam || b.orgName || '미지정')
 }
 
-function getExpected(b, perfMap, manualInputs) {
-  const isDefaultPgmTeam = b.pgmCodeName === '[편성팀]' && b.memoCode === '[전사블록]'
-  const manualKey = isDefaultPgmTeam ? 'sim_pgm_team' : b.uniqueKey
-  const m  = manualKey ? (manualInputs?.[manualKey] || {}) : {}
-  const p  = b.perfKey ? (perfMap?.[b.perfKey]      || {}) : {}
-  const sp = Number(m.expectedSalesPerWeightedMin  ?? p.salesPerWeightedMin  ?? 0)
-  const pp = Number(m.expectedProfitPerWeightedMin ?? p.profitPerWeightedMin ?? 0)
+function getExpected(b, perfMap, manualInputs, performanceHistoryByKey) {
+  const perf = getScheduledBlockPerformance(b, { performanceHistoryByKey, manualInputs, fallbackPerfMap: perfMap })
+  const sp = Number(perf.salesPerMin || 0)
+  const pp = Number(perf.profitPerMin || 0)
   return { sp, pp, hasPerf: sp > 0 || pp > 0 }
 }
 
@@ -52,7 +50,7 @@ function Cell({ count, wm, avgSp, avgPp, perfCount, showPerf }) {
   )
 }
 
-function PgmCard({ title, colLabel, colKeyFn, colRenderer, blocks, rowType, perfMap, manualInputs }) {
+function PgmCard({ title, colLabel, colKeyFn, colRenderer, blocks, rowType, perfMap, manualInputs, performanceHistoryByKey }) {
   const { pivot, rowOrder, allCols, colTotals, grand, showPerf } = useMemo(() => {
     const piv = {}
 
@@ -61,7 +59,7 @@ function PgmCard({ title, colLabel, colKeyFn, colRenderer, blocks, rowType, perf
       const ck = colKeyFn(b)
       if (!piv[rk])     piv[rk]     = {}
       if (!piv[rk][ck]) piv[rk][ck] = { count: 0, wm: 0, perfWm: 0, sales: 0, profit: 0, perfCount: 0 }
-      const { sp, pp, hasPerf } = getExpected(b, perfMap, manualInputs)
+      const { sp, pp, hasPerf } = getExpected(b, perfMap, manualInputs, performanceHistoryByKey)
       const wm = b.weightedMin || 0
       piv[rk][ck].count  += 1
       piv[rk][ck].wm     += wm
@@ -109,7 +107,7 @@ function PgmCard({ title, colLabel, colKeyFn, colRenderer, blocks, rowType, perf
     const showPerf = grandSales > 0 || grandProfit > 0
 
     return { pivot: piv, rowOrder, allCols, colTotals, grand, showPerf }
-  }, [blocks, rowType, perfMap, manualInputs, colLabel, colKeyFn])
+  }, [blocks, rowType, perfMap, manualInputs, performanceHistoryByKey, colLabel, colKeyFn])
 
   // 행별 합산
   function rowSum(row) {
@@ -226,7 +224,7 @@ function PgmCard({ title, colLabel, colKeyFn, colRenderer, blocks, rowType, perf
   )
 }
 
-export default function RatioPgmCount({ enrichedBlocks, perfMap, manualInputs }) {
+export default function RatioPgmCount({ enrichedBlocks, perfMap, manualInputs, performanceHistoryByKey }) {
   const [open,    setOpen]    = useState(true)
   const [rowType, setRowType] = useState('team')
 
@@ -266,13 +264,13 @@ export default function RatioPgmCount({ enrichedBlocks, perfMap, manualInputs })
 
           <PgmCard title="채널별"    colLabel={CH_ORDER}  colKeyFn={b => CH_ORDER.includes(b.channel) ? b.channel : 'ALL'}
             colRenderer={c => <span style={{ fontSize: 10, padding: '1px 7px', borderRadius: 3, fontWeight: 700, background: CH_BG[c] || 'var(--bg4)', color: CH_TEXT[c] || 'var(--text)' }}>{c}</span>}
-            blocks={blocks} rowType={rowType} perfMap={perfMap} manualInputs={manualInputs} />
+            blocks={blocks} rowType={rowType} perfMap={perfMap} manualInputs={manualInputs} performanceHistoryByKey={performanceHistoryByKey} />
 
           <PgmCard title="거래형태별" colLabel={DT_ORDER}  colKeyFn={b => b.dealTypeConverted || b.dealType || '미지정'}
-            colRenderer={null} blocks={blocks} rowType={rowType} perfMap={perfMap} manualInputs={manualInputs} />
+            colRenderer={null} blocks={blocks} rowType={rowType} perfMap={perfMap} manualInputs={manualInputs} performanceHistoryByKey={performanceHistoryByKey} />
 
           <PgmCard title="영상구분별" colLabel={VS_ORDER}  colKeyFn={b => b.newProductType || '기존'}
-            colRenderer={null} blocks={blocks} rowType={rowType} perfMap={perfMap} manualInputs={manualInputs} />
+            colRenderer={null} blocks={blocks} rowType={rowType} perfMap={perfMap} manualInputs={manualInputs} performanceHistoryByKey={performanceHistoryByKey} />
         </div>
       )}
     </div>

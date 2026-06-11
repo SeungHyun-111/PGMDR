@@ -20,7 +20,7 @@ const DRAFT_CONFIG = {
 
   TIMEZONE: 'Asia/Seoul'
 };
-ㄴㄴ ㅔ안
+
 /************************************
  * 컬럼 사전
  ************************************/
@@ -118,7 +118,15 @@ function doGet(e) {
     }
 
     if (action === 'refreshPerformance') {
-      return jsonOk_({ perfMap: buildPerfMap_() });
+      const afterDate = String(params.afterDate || '').trim();
+      const performanceRows = buildPerformanceRows_({ afterDate: afterDate });
+      const perfHistory = buildPerfHistory_(performanceRows);
+      return jsonOk_({
+        perfMap: buildLatestPerfMap_(perfHistory),
+        performanceRows: performanceRows,
+        afterDate: afterDate,
+        incremental: afterDate !== ''
+      });
     }
 
     if (action === 'refreshProposals') {
@@ -149,7 +157,9 @@ function buildInitJson_(startDate, poolType) {
   const targetMonth       = baseMonday.getMonth() + 1;
   const proposalSheetName = DRAFT_CONFIG.PROPOSAL_SHEETS[pool];
 
-  const perfMap            = buildPerfMap_();
+  const performanceRows    = buildPerformanceRows_();
+  const perfHistory        = buildPerfHistory_(performanceRows);
+  const perfMap            = buildLatestPerfMap_(perfHistory);
   const proposalItems      = loadProposalItemsAsJson_(proposalSheetName, perfMap);
   const pgmSlots           = loadPgmSlotsAsJson_(startDate);
   const preScheduleRows    = loadPreScheduleRowsAsJson_(perfMap);
@@ -182,6 +192,7 @@ function buildInitJson_(startDate, poolType) {
     proposalItems:      proposalItems,
     pgmSlots:           pgmSlots,
     perfMap:            perfMap,
+    performanceRows:    performanceRows,
     preScheduleRows:    preScheduleRows,
     targetMetrics:      targetMetrics,
     weightedMinTargets: weightedMinTargets
@@ -293,22 +304,46 @@ function toComparableDateStr_(dateStr) {
   return String(dateStr).replace(/\D/g, '');
 }
 
-function buildPerfMap_() {
+function toBroadcastTimestamp_(dateStr, timeStr) {
+  const date = toComparableDateStr_(dateStr);
+  const tm = String(timeStr || '00:00').match(/(\d{1,2})(?::(\d{1,2}))?/);
+  const hh = tm ? String(Math.min(23, Math.max(0, Number(tm[1]) || 0))).padStart(2, '0') : '00';
+  const mm = tm ? String(Math.min(59, Math.max(0, Number(tm[2] || 0) || 0))).padStart(2, '0') : '00';
+  return Number(date + hh + mm);
+}
+
+function parsePerformanceStartTime_(slotLabel, rangeText) {
+  const rangeMatch = String(rangeText || '').match(/(\d{1,2}):(\d{2})/);
+  if (rangeMatch) {
+    return rangeMatch[1].padStart(2, '0') + ':' + rangeMatch[2].padStart(2, '0');
+  }
+  const slotMatch = String(slotLabel || '').match(/(\d{1,2})/);
+  if (slotMatch) {
+    return slotMatch[1].padStart(2, '0') + ':31';
+  }
+  return '00:00';
+}
+
+function buildPerformanceRows_(options) {
+  options = options || {};
+  const afterDateKey = toComparableDateStr_(options.afterDate || '');
+
   const ss    = SpreadsheetApp.openById(DRAFT_CONFIG.PROPOSAL_SPREADSHEET_ID);
   const sheet = ss.getSheetByName(DRAFT_CONFIG.PERFORMANCE_SHEET_NAME);
   if (!sheet) throw new Error('실적DB 시트를 찾을 수 없습니다.');
 
   const lastRow = sheet.getLastRow();
-  if (lastRow < 2) return {};
+  if (lastRow < 2) return [];
 
   // getValues()로 읽어 Date 객체를 직접 처리 (getDisplayValues는 연도 없는 "MM/DD 요일" 반환)
-  const values = sheet.getRange(2, 1, lastRow - 1, 6).getValues();
+  const values = sheet.getRange(2, 1, lastRow - 1, 13).getValues();
+  const displayValues = sheet.getRange(2, 1, lastRow - 1, 13).getDisplayValues();
 
-  const map = {};
-  values
-    .filter(row => String(row[0]).trim() !== '')
-    .forEach(row => {
+  return values
+    .map((row, idx) => {
+      const displayRow = displayValues[idx] || [];
       const perfKey = String(row[0]).trim();
+      if (!perfKey) return null;
 
       // row[1]이 Date 객체면 yyyy-MM-dd로 변환, 아니면 문자열 그대로
       const rawDate = row[1];
@@ -316,22 +351,66 @@ function buildPerfMap_() {
         ? Utilities.formatDate(rawDate, DRAFT_CONFIG.TIMEZONE, 'yyyy-MM-dd')
         : String(rawDate).trim();
 
-      const broadcastTime        = String(row[2]).trim();
+      const sourceRow            = idx + 2;
+      const broadcastTimeLabel   = String(displayRow[2] || row[2]).trim();
+      const broadcastTimeRange   = String(displayRow[8] || row[8] || '').trim();
+      const broadcastTime        = parsePerformanceStartTime_(broadcastTimeLabel, broadcastTimeRange);
+      const broadcastTimestamp   = toBroadcastTimestamp_(broadcastDate, broadcastTime);
       const salesPerWeightedMin  = toNumber_(row[4]);
       const profitPerWeightedMin = toNumber_(row[5]);
 
-      if (!map[perfKey]) {
-        map[perfKey] = { salesPerWeightedMin, profitPerWeightedMin, broadcastDate, broadcastTime };
-      } else {
-        const existDate = toComparableDateStr_(map[perfKey].broadcastDate);
-        const newDate   = toComparableDateStr_(broadcastDate);
-        if (newDate > existDate) {
-          map[perfKey] = { salesPerWeightedMin, profitPerWeightedMin, broadcastDate, broadcastTime };
-        }
-      }
-    });
+      return {
+        perfKey,
+        pgmCodeName: String(row[3]).trim(),
+        salesPerWeightedMin,
+        profitPerWeightedMin,
+        broadcastDate,
+        broadcastTime,
+        broadcastTimeLabel,
+        broadcastDayDate: String(displayRow[6] || row[6] || '').trim(),
+        dayOfWeek: String(displayRow[7] || row[7] || '').trim(),
+        broadcastTimeRange,
+        multiChannel: String(displayRow[9] || row[9] || '').trim(),
+        dealType2: String(displayRow[10] || row[10] || '').trim(),
+        totalAchievementRate: toNumber_(row[11]),
+        mdName: String(displayRow[12] || row[12] || '').trim(),
+        broadcastTimestamp,
+        sourceRow
+      };
+    })
+    .filter(Boolean)
+    .filter(row => afterDateKey ? toComparableDateStr_(row.broadcastDate) > afterDateKey : true);
+}
 
+function buildPerfHistory_(performanceRows) {
+  const history = {};
+  (performanceRows || []).forEach(row => {
+    const perfKey = row.perfKey || '';
+    if (!perfKey) return;
+    if (!history[perfKey]) history[perfKey] = [];
+    history[perfKey].push(row);
+  });
+  Object.keys(history).forEach(key => {
+    history[key].sort((a, b) => {
+      if (a.broadcastTimestamp !== b.broadcastTimestamp) return a.broadcastTimestamp - b.broadcastTimestamp;
+      return (a.sourceRow || 0) - (b.sourceRow || 0);
+    });
+  });
+  return history;
+}
+
+function buildLatestPerfMap_(perfHistory) {
+  const map = {};
+  Object.keys(perfHistory || {}).forEach(perfKey => {
+    const rows = perfHistory[perfKey] || [];
+    if (rows.length > 0) map[perfKey] = rows[rows.length - 1];
+  });
   return map;
+}
+
+function buildPerfMap_() {
+  const performanceRows = buildPerformanceRows_();
+  return buildLatestPerfMap_(buildPerfHistory_(performanceRows));
 }
 
 /************************************

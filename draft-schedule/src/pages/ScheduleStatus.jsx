@@ -153,7 +153,7 @@ function exportTeamDetailRows(rows, selectedTeam) {
   XLSX.writeFile(wb, `편성현황_팀별상세_${teamName}_${new Date().toISOString().slice(0, 10)}.xlsx`)
 }
 
-function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs }) {
+function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs, performanceHistoryByKey }) {
   const [selectedTeam, setSelectedTeam] = useState('전체')
   const [sort, setSort] = useState({ key: '_default', dir: 'asc' })
   const [colWidths, setColWidths] = useState(() =>
@@ -162,13 +162,13 @@ function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs }
 
   const detailRows = useMemo(() => {
     const scheduled = scheduledRows.map(item => {
-      const metrics = getEffectiveMetrics(item, perfMap, manualInputs)
+      const metrics = getEffectiveMetrics(item, perfMap, manualInputs, performanceHistoryByKey)
       return {
         ...item,
         _status: '편성',
         _statusOrder: 0,
         _teamName: item._team || item.mdTeam || item.orgName || '미지정',
-        _gradeValue: item._grade || getGrade(getEffectiveProfit(item, perfMap, manualInputs)),
+        _gradeValue: item._grade || getGrade(getEffectiveProfit(item, perfMap, manualInputs, performanceHistoryByKey)),
         _salesPerMin: metrics.salesPerMin,
         _profitPerMin: metrics.profitPerMin,
         _displayMin: Number(item.weightedMin || 0),
@@ -197,7 +197,7 @@ function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs }
       if (profitCmp) return profitCmp
       return String(a.pgmCodeName || '').localeCompare(String(b.pgmCodeName || ''), 'ko', { numeric: true })
     })
-  }, [scheduledRows, unscheduledRows, perfMap, manualInputs])
+  }, [scheduledRows, unscheduledRows, perfMap, manualInputs, performanceHistoryByKey])
 
   const teamOptions = useMemo(() => {
     const teams = Array.from(new Set(detailRows.map(row => row._teamName).filter(Boolean)))
@@ -621,7 +621,7 @@ function GradeDonutChart({ items, selectedGrade, onGradeSelect }) {
 
 // ── 메인 페이지 ───────────────────────────────────────────────────────────
 export default function ScheduleStatus() {
-  const { scheduleBlocks, proposalItems, startDate, poolType, perfMap, manualInputs, currentVersionId } = useScheduleStore()
+  const { scheduleBlocks, proposalItems, startDate, poolType, perfMap, performanceHistoryByKey, manualInputs, currentVersionId } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const [tab, setTab]             = useState('all')
   const [selectedGrade, setSelectedGrade] = useState(null)
@@ -634,10 +634,10 @@ export default function ScheduleStatus() {
       .map(b => ({
         ...b,
         mdCategory: b.mdCategory || categoryMap[b.pgmCodeName] || '미분류',
-        _grade: getGrade(getEffectiveProfit(b, perfMap, manualInputs)),
+        _grade: getGrade(getEffectiveProfit(b, perfMap, manualInputs, performanceHistoryByKey)),
         _team:  b.mdTeam || '미지정',
       }))
-  , [scheduleBlocks, categoryMap, perfMap, manualInputs])
+  , [scheduleBlocks, categoryMap, perfMap, performanceHistoryByKey, manualInputs])
 
   // 경쟁 블록은 별도 (등급 없음)
   const competingBlocks = useMemo(() =>
@@ -723,16 +723,16 @@ export default function ScheduleStatus() {
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', margin: '10px 0 6px' }}>
             편성완료 {hasGradeFilter ? `(${selectedGrade}등급 ${filteredBlocks.length}건)` : `${enrichedBlocks.length}건`}
           </div>
-          <StatusScheduled rows={filteredBlocks} competing={competingBlocks} perfMap={perfMap} manualInputs={manualInputs} />
+          <StatusScheduled rows={filteredBlocks} competing={competingBlocks} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} />
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', margin: '14px 0 6px' }}>
             미편성 {hasGradeFilter ? `(${selectedGrade}등급 ${filteredItems.length}건)` : `${proposalItems.length}건`}
           </div>
           <StatusUnscheduled rows={filteredItems} perfMap={perfMap} manualInputs={manualInputs} />
         </>
       )}
-      {tab === 'scheduled'   && <StatusScheduled   rows={filteredBlocks} competing={competingBlocks} perfMap={perfMap} manualInputs={manualInputs} />}
+      {tab === 'scheduled'   && <StatusScheduled   rows={filteredBlocks} competing={competingBlocks} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} />}
       {tab === 'unscheduled' && <StatusUnscheduled rows={filteredItems}  perfMap={perfMap} manualInputs={manualInputs} />}
-      {tab === 'team'        && <TeamStatusTab scheduledRows={filteredBlocks} unscheduledRows={filteredItems} perfMap={perfMap} manualInputs={manualInputs} />}
+      {tab === 'team'        && <TeamStatusTab scheduledRows={filteredBlocks} unscheduledRows={filteredItems} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} />}
       {tab === 'logs'        && <StatusLogs logs={logs} startDate={startDate} poolType={poolType} versionId={currentVersionId} />}
     </div>
   )

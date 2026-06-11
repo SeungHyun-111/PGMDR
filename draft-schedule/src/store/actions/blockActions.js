@@ -30,6 +30,8 @@ export function createBlockActions(setState, getState) {
         description: `${before ? '블록 수정' : '블록 편성'}: ${normalizedPatch.pgmCodeName || before?.pgmCodeName || blockKey}`,
       })
       await update(ref(db, `${versionPath}/scheduleBlocks/${blockKey}`), normalizedPatch)
+      const nextPerfKey = normalizedPatch.perfKey || before?.perfKey || null
+      if (nextPerfKey) getState().ensurePerformanceKeys?.([nextPerfKey], { latest: true, history: true })
       if (!skipLog && cleanPatch.isDefault !== true) {
         getState()._writeLog(before ? '수정' : '편성', blockKey, before, { ...before, ...cleanPatch })
       }
@@ -227,6 +229,7 @@ export function createBlockActions(setState, getState) {
           [`scheduleBlocks/${slotId}`]: null,
           [`scheduleBlocks/${newKey}`]: stripEntityFields({ ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false }, true),
         })
+        if ((patch.perfKey || block.perfKey)) getState().ensurePerformanceKeys?.([patch.perfKey || block.perfKey], { latest: true, history: true })
 
       } else if (newChannel === 'ALL' && isSplit) {
         // ── CA/IP → ALL : 슬롯 합치기 ───────────────────
@@ -254,6 +257,7 @@ export function createBlockActions(setState, getState) {
           [`splitSlots/${slotId}`]: null,
           [`scheduleBlocks/${slotId}`]: stripEntityFields({ ...block, ...patch, blockKey: slotId, channel: 'ALL', weightedMin: slot.weightedMin, isDefault: false }, true),
         })
+        if ((patch.perfKey || block.perfKey)) getState().ensurePerformanceKeys?.([patch.perfKey || block.perfKey], { latest: true, history: true })
 
       } else if (newChannel !== 'ALL' && isSplit && origChannel !== newChannel) {
         // ── CA ↔ IP : 실제 half-slot key 이동 ─────────────
@@ -287,12 +291,14 @@ export function createBlockActions(setState, getState) {
           [`scheduleBlocks/${fromKey}`]: null,
           [`scheduleBlocks/${newKey}`]: stripEntityFields({ ...block, ...patch, blockKey: newKey, channel: newChannel, weightedMin: wm, isDefault: false }, true),
         })
+        if ((patch.perfKey || block.perfKey)) getState().ensurePerformanceKeys?.([patch.perfKey || block.perfKey], { latest: true, history: true })
 
       } else {
         // ── 구조 변경 없음 (이미 분리 상태에서 CA↔IP 등) ──
         await updateVersionPatch(getState, versionPath, '채널 변경 되돌리기', {
           [`scheduleBlocks/${fromKey}`]: { ...patch, channel: newChannel },
         })
+        if ((patch.perfKey || block.perfKey)) getState().ensurePerformanceKeys?.([patch.perfKey || block.perfKey], { latest: true, history: true })
       }
 
       getState()._writeLog('채널변경', fromKey, block, { ...block, ...patch, channel: newChannel })

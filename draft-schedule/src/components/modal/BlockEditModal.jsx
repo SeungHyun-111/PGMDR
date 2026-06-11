@@ -8,6 +8,7 @@ import { makePerfKey } from '../../hooks/usePerformanceMap'
 import { normalizeTeamName } from '../../utils/teamName'
 import { extractEntityFields } from '../../utils/mergeEntity'
 import { getManualInputKey } from '../../utils/grade'
+import { getScheduledBlockPerformance } from '../../utils/performanceHistory'
 import MemoCodeSelect from '../common/MemoCodeSelect'
 
 const inp = { background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '6px 9px', borderRadius: 5, fontSize: 12, width: '100%' }
@@ -22,7 +23,7 @@ function Field({ label, children }) {
 }
 
 export default function BlockEditModal({ block, onClose, saveBlock }) {
-  const { perfMap, manualInputs, saveManualInput, saveEntityProps, removeBlock, changeBlockChannel, weightedMinTargets, runUndoBatch } = useScheduleStore()
+  const { perfMap, manualInputs, performanceHistoryByKey, saveManualInput, saveEntityProps, removeBlock, changeBlockChannel, weightedMinTargets, runUndoBatch } = useScheduleStore()
   const blockKey = block.blockKey || block.slotId
 
   const initDealType = block.dealTypeConverted || block.dealType || ''
@@ -47,7 +48,12 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
   const teamNames = weightedMinTargets.map(t => t.teamName).filter(Boolean)
 
   const currentPerfKey = makePerfKey(form.dealTypeConverted || form.dealType, form.pgmCodeName)
-  const lastPerf = currentPerfKey ? (perfMap[currentPerfKey] || null) : null
+  const perfState = getScheduledBlockPerformance({ ...block, ...form, perfKey: currentPerfKey }, {
+    performanceHistoryByKey,
+    manualInputs,
+    fallbackPerfMap: perfMap,
+  })
+  const lastPerf = perfState.sameBroadcastPerf || perfState.lastPerf
 
   const manualKey = getManualInputKey(block)
   const manual = manualKey ? (manualInputs[manualKey] || {}) : {}

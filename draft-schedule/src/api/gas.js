@@ -1,4 +1,4 @@
-const MAIN_GAS_URL = 'https://script.google.com/macros/s/AKfycbzaGlpoXio4K9wr5G1D8nxUCbxZk2xGJa2DCrzHFy-QxkCLzkWt0j_e4Ik9jzMWUloC/exec'
+const MAIN_GAS_URL = 'https://script.google.com/macros/s/AKfycbzlnzcV5DkCNwAZcOrdtJnCfGpCLmu5-tA9eF8N2Rs4hS15N61p0h8m7BQqTVxwX7g3/exec'
 const OPS_GAS_URL = 'https://script.google.com/macros/s/AKfycbz9e0_2L6wX3Lm7uKWLfReZrm-LNRFxg8f_EeHVKwqaLZrx0neyHss9fORPhhvFppIA/exec'
 
 async function gasGet(url, params) {
@@ -16,7 +16,7 @@ async function gasGet(url, params) {
 }
 
 export const fetchInitData            = (startDate, poolType = 'A') => gasGet(MAIN_GAS_URL, { action: 'init',               startDate, poolType })
-export const fetchRefreshPerformance  = ()                           => gasGet(MAIN_GAS_URL, { action: 'refreshPerformance'                      })
+export const fetchRefreshPerformance  = ({ afterDate = '' } = {}) => gasGet(MAIN_GAS_URL, { action: 'refreshPerformance', afterDate             })
 export const fetchRefreshProposals    = (poolType = 'A')             => gasGet(MAIN_GAS_URL, { action: 'refreshProposals',   poolType            })
 export const fetchRefreshPreSchedule  = ()                           => gasGet(MAIN_GAS_URL, { action: 'refreshPreSchedule'                      })
 export const syncOpsVersion           = ({ startDate, endDate = '', poolType = 'A', userName = '', sheetName = 'PGM' }) =>

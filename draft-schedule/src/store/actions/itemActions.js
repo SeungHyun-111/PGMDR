@@ -56,6 +56,7 @@ export function createItemActions(setState, getState) {
           proposalLoaded:     true,
           isLoadingProposals: false,
         })
+        getState().ensurePerformanceKeys?.(items.map(item => item.perfKey).filter(Boolean), { latest: true })
       } catch (e) {
         setState({ error: e.message, isLoadingProposals: false })
       }
@@ -96,6 +97,8 @@ export function createItemActions(setState, getState) {
           proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
         }
       })
+      const nextPerfKey = buildProposalItem({ ...(stateItem || {}), ...patch }).perfKey
+      if (nextPerfKey) getState().ensurePerformanceKeys?.([nextPerfKey], { latest: true })
     },
 
     async addProposalItem(itemData) {
@@ -133,6 +136,8 @@ export function createItemActions(setState, getState) {
           proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
         }
       })
+      const nextPerfKey = buildProposalItem(newItem).perfKey
+      if (nextPerfKey) getState().ensurePerformanceKeys?.([nextPerfKey], { latest: true })
     },
 
     async deleteProposalItem(itemId, uniqueKey) {
@@ -203,6 +208,8 @@ export function createItemActions(setState, getState) {
           proposalItems: filterUnscheduledItems(allProposalItems, s.scheduledItemIds, s.scheduledUniqueKeys),
         }
       })
+      const nextPerfKey = buildProposalItem(newItem).perfKey
+      if (nextPerfKey) getState().ensurePerformanceKeys?.([nextPerfKey], { latest: true })
     },
 
     async scheduleItem(itemId, uniqueKey) {

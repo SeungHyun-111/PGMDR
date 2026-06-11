@@ -8,6 +8,7 @@ import { getDealTypeChar } from '../../constants/dealTypes'
 import { competitionItemKey, getCompetitionItems } from '../../utils/competition'
 import { genKey } from '../../utils/uniqueKey'
 import { resolveEntity } from '../../utils/mergeEntity'
+import { getScheduledBlockPerformance } from '../../utils/performanceHistory'
 
 function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, dimmed = false, highlighted = false, readOnly = false }) {
   const [hover, setHover]               = useState(false)
@@ -20,7 +21,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
   const [competitionSelect, setCompetitionSelect] = useState(null)
   const [annotationPopup, setAnnotationPopup] = useState(false)
   const [annotationText, setAnnotationText]   = useState('')
-  const { returnBlockToSidebar: returnBlockToSidebarRaw, releaseCompetition, perfMap, manualInputs, runUndoBatch, saveEntityProps, entityProps } = useScheduleStore()
+  const { returnBlockToSidebar: returnBlockToSidebarRaw, releaseCompetition, perfMap, manualInputs, performanceHistoryByKey, runUndoBatch, saveEntityProps, entityProps } = useScheduleStore()
   const returnBlockToSidebar = async (targetBlock) => {
     await runUndoBatch(`사이드바 반환 되돌리기: ${targetBlock.pgmCodeName || targetBlock.blockKey || targetBlock.slotId}`, async () => {
     await returnBlockToSidebarRaw(targetBlock)
@@ -137,7 +138,13 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
     ] : []),
   ]
 
-  const lastPerf = block.perfKey ? (perfMap[block.perfKey] || null) : null
+  const perfState = getScheduledBlockPerformance(block, {
+    performanceHistoryByKey,
+    manualInputs,
+    fallbackPerfMap: perfMap,
+  })
+  const lastPerf = perfState.lastPerf
+  const sameBroadcastPerf = perfState.sameBroadcastPerf
   const isDefaultPgmTeam = block.pgmCodeName === '[편성팀]' && block.memoCode === '[전사블록]'
   const manualKey = isDefaultPgmTeam ? 'sim_pgm_team' : block.uniqueKey
   const manual = manualKey ? (manualInputs[manualKey] || {}) : {}
@@ -208,7 +215,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
 
       {/* 툴팁: contextMenu/editModal/annotationPopup 없을 때만 표시 */}
       {hover && tooltipPos && !contextMenu && !editModal && !annotationPopup && createPortal(
-        <BlockTooltip block={block} lastPerf={lastPerf} manual={manual} pos={tooltipPos} competitionItems={competitionItems} />
+        <BlockTooltip block={block} lastPerf={lastPerf} sameBroadcastPerf={sameBroadcastPerf} manual={manual} pos={tooltipPos} competitionItems={competitionItems} />
         ,
         document.body
       )}
@@ -476,7 +483,7 @@ function ReturnSlotChoice({ value, onChange }) {
   )
 }
 
-function BlockTooltip({ block, lastPerf, manual, pos, competitionItems }) {
+function BlockTooltip({ block, lastPerf, sameBroadcastPerf, manual, pos, competitionItems }) {
   // 화면 오른쪽/아래 잘림 방지
   const tooltipW = 230
   const gap = 8
@@ -541,6 +548,21 @@ function BlockTooltip({ block, lastPerf, manual, pos, competitionItems }) {
               <span style={{ color: label === '첨삭' ? 'var(--yellow)' : 'var(--text)', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{val}</span>
             </div>
           ))}
+          {sameBroadcastPerf && (
+            <>
+              <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', marginBottom: 4 }}>해당 방송 실적 ({sameBroadcastPerf.broadcastDate})</div>
+              {[
+                ['취급/분', Number(sameBroadcastPerf.salesPerWeightedMin  || 0).toLocaleString(), 'var(--accent)'],
+                ['한익/분', Number(sameBroadcastPerf.profitPerWeightedMin || 0).toLocaleString(), 'var(--green)'],
+              ].map(([label, val, color]) => (
+                <div key={label} style={{ display: 'flex', gap: 8, fontSize: 10, marginBottom: 2 }}>
+                  <span style={{ color: 'var(--text3)', minWidth: 52, flexShrink: 0 }}>{label}</span>
+                  <span style={{ color, fontWeight: 700 }}>{val}</span>
+                </div>
+              ))}
+            </>
+          )}
           {lastPerf && (
             <>
               <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />

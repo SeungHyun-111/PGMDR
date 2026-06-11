@@ -7,6 +7,7 @@ import { extractEntityFields, applyEntityProps } from '../../utils/mergeEntity'
 import { getCompetitionItems } from '../../utils/competition'
 import { filterUnscheduledItems } from '../../utils/proposalVisibility'
 import { makePerfKey, normalizeDealType } from '../../hooks/usePerformanceMap'
+import { collectPerfKeys } from '../../utils/performanceHistory'
 import {
   VERSION_DRAFT,
   VERSION_OPS,
@@ -169,6 +170,10 @@ export function createSessionActions(setState, getState) {
         lastUpdated:        updatedSnap.exists()  ? updatedSnap.val()               : null,
         isLoaded: true, isLoading: false, proposalLoaded: true,
       })
+      getState().seedPerformanceFromPerfMap?.(perfMap)
+      getState().loadGlobalPerformanceData?.()
+      getState().ensurePerformanceKeys?.(collectPerfKeys(allProposalItems), { latest: true })
+      getState().ensurePerformanceKeys?.(collectPerfKeys(Object.values(normalizedBlocks || {})), { latest: true, history: true })
 
       // 기존 세션에서 perfMap이 인코딩 없이 저장돼 유실된 경우 자동 복구
       if (Object.keys(perfMap).length === 0) {
@@ -308,6 +313,7 @@ export function createSessionActions(setState, getState) {
         startDate: '', endDate: '', poolType: 'A',
         currentVersionId: VERSION_DRAFT, versionMeta: {}, isPublishingSales: false,
         pgmSlots: [], perfMap: {}, preScheduleRows: [],
+        latestPerfByKey: {}, performanceHistoryByKey: {}, performanceRows: {}, loadedPerfKeys: {}, performanceGlobalLoaded: false,
         weightedMinTargets: [], targetMetrics: null,
         scheduleBlocks: {}, _rawBlocks: {}, entityProps: {},
         splitSlots: {}, customSlots: {}, starred: {},
@@ -335,6 +341,7 @@ export function createSessionActions(setState, getState) {
 function shouldDefaultToViewerMode(versionId, versionMeta) {
   return versionId === VERSION_DRAFT && !!versionMeta?.[VERSION_SALES]?.publishedAt
 }
+
 
 function getFallbackEndDate(startDate) {
   if (!startDate) return ''

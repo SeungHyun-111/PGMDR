@@ -1,7 +1,7 @@
 import { getLastPerf } from '../../utils/entityKey'
 
-export default function ProductTooltip({ item, perfMap, entityProps, pos }) {
-  const lastPerf = getLastPerf(item, entityProps, perfMap)
+export default function ProductTooltip({ item, perfMap, latestPerfByKey, entityProps, pos }) {
+  const lastPerf = getLastPerf(item, entityProps, perfMap, latestPerfByKey)
 
   const rows = [
     ['신상품구분',  item.newProductType || '-'],

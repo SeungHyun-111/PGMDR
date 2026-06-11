@@ -10,28 +10,34 @@ import { getEffectivePgmSlots } from '../utils/effectiveSlots'
 import { timeToMin } from '../utils/weightedMin'
 import { getManualInputKey } from '../utils/grade'
 import { extractEntityFields } from '../utils/mergeEntity'
+import { getScheduledBlockPerformance } from '../utils/performanceHistory'
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
-function calcForecast(block, perfMap, manualInputs) {
-  const manualKey = getManualInputKey(block)
-  const manual = manualKey ? (manualInputs[manualKey] || {}) : {}
-  const lastPerf = block.perfKey ? (perfMap[block.perfKey] || null) : null
-
-  const manualSales  = manual.expectedSalesPerWeightedMin  ?? null
-  const manualProfit = manual.expectedProfitPerWeightedMin ?? null
-  const salesPerMin  = manualSales  ?? lastPerf?.salesPerWeightedMin  ?? null
-  const profitPerMin = manualProfit ?? lastPerf?.profitPerWeightedMin ?? null
+function calcForecast(block, perfMap, manualInputs, performanceHistoryByKey) {
+  const perfState = getScheduledBlockPerformance(block, {
+    performanceHistoryByKey,
+    manualInputs,
+    fallbackPerfMap: perfMap,
+  })
+  const lastPerf = perfState.lastPerf
+  const sameBroadcastPerf = perfState.sameBroadcastPerf
+  const manualSales  = perfState.manualSales
+  const manualProfit = perfState.manualProfit
+  const salesPerMin  = perfState.salesPerMin
+  const profitPerMin = perfState.profitPerMin
   const wm = Number(block.weightedMin || 0)
 
   return {
     lastPerf,
+    sameBroadcastPerf,
     salesPerMin, profitPerMin,
     manualSales, manualProfit,
     expectedSales:  (salesPerMin  ?? 0) * wm,
     expectedProfit: (profitPerMin ?? 0) * wm,
-    missingPerf: !lastPerf && (manualSales == null || manualProfit == null),
-    hasManual: manualSales != null || manualProfit != null,
+    missingPerf: perfState.missingPerf,
+    hasManual: perfState.hasManual,
+    perfSource: perfState.source,
   }
 }
 
@@ -322,7 +328,12 @@ function ReferenceLineLabel({ viewBox, text, color, lane = 'top' }) {
 // ── main ──────────────────────────────────────────────────────────────────
 
 export default function PerformanceForecast() {
-  const { scheduleBlocks, pgmSlots, splitSlots, customSlots, proposalItems, perfMap, manualInputs, saveManualInput, saveBlock, saveEntityProps, weightedMinTargets, targetMetrics } = useScheduleStore()
+  const {
+    scheduleBlocks, pgmSlots, splitSlots, customSlots, proposalItems,
+    perfMap, performanceHistoryByKey, manualInputs,
+    ensurePerformanceKeys,
+    saveManualInput, saveBlock, saveEntityProps, weightedMinTargets, targetMetrics,
+  } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const [groupBy, setGroupBy]           = useState('team')
   const [simSpm, setSimSpm]             = useState('')
@@ -334,6 +345,11 @@ export default function PerformanceForecast() {
   const [detailWidths, setDetailWidths] = useState({})
   const [missingWidths, setMissingWidths] = useState({})
   const simDebounceRef = useRef(null)
+
+  useEffect(() => {
+    const keys = [...new Set(Object.values(scheduleBlocks || {}).map(block => block?.perfKey).filter(Boolean))]
+    if (keys.length) ensurePerformanceKeys?.(keys, { latest: true, history: true })
+  }, [scheduleBlocks, ensurePerformanceKeys])
 
   const { teamTargetMap, companyTotal } = useMemo(() => {
     const { teamMap, companyTotal } = parseTargetMetrics(targetMetrics)
@@ -347,13 +363,13 @@ export default function PerformanceForecast() {
         ...block,
         mdCategory: block.mdCategory || categoryMap[block.pgmCodeName] || '미분류',
         mdTeam: block.mdTeam || block.orgName || '미지정',
-        ...calcForecast(block, perfMap, manualInputs),
+        ...calcForecast(block, perfMap, manualInputs, performanceHistoryByKey),
       }))
       .sort((a, b) => {
         if (a.dateKey !== b.dateKey) return (a.dateKey || '').localeCompare(b.dateKey || '')
         return timeToMin(a.timeText) - timeToMin(b.timeText)
       })
-  , [scheduleBlocks, perfMap, manualInputs, categoryMap, excludePgmTeam])
+  , [scheduleBlocks, perfMap, performanceHistoryByKey, manualInputs, categoryMap, excludePgmTeam])
 
   // 일자 선택 시 해당 일자만, 없으면 전체
   const displayRows = useMemo(() =>

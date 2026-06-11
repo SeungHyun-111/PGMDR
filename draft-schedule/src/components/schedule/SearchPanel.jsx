@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
+import { getScheduledBlockPerformance, getSidebarPerformance } from '../../utils/performanceHistory'
 
 const CH_ORDER = ['CA', 'IP', 'ALL']
 const CH_BG    = { CA: 'var(--ca)', IP: 'var(--ip)', ALL: 'var(--all)' }
@@ -16,18 +17,15 @@ function itemMatches(item, kw) {
     .join(' ').toLowerCase().includes(kw)
 }
 
-function groupBlocks(blocks, keyFn, perfMap, manualInputs, totalWm) {
+function groupBlocks(blocks, keyFn, perfMap, manualInputs, performanceHistoryByKey, totalWm) {
   const map = {}
   blocks.forEach(b => {
     const k  = keyFn(b)
     const wm = b.weightedMin || 0
     const dm = b.durationMin || 0
-    const isDefaultPgmTeam = b.pgmCodeName === '[편성팀]' && b.memoCode === '[전사블록]'
-    const manualKey = isDefaultPgmTeam ? 'sim_pgm_team' : b.uniqueKey
-    const m  = manualKey ? (manualInputs?.[manualKey] || {}) : {}
-    const p  = b.perfKey  ? (perfMap?.[b.perfKey]     || {}) : {}
-    const sp = Number(m.expectedSalesPerWeightedMin  ?? p.salesPerWeightedMin  ?? 0)
-    const pp = Number(m.expectedProfitPerWeightedMin ?? p.profitPerWeightedMin ?? 0)
+    const perf = getScheduledBlockPerformance(b, { performanceHistoryByKey, manualInputs, fallbackPerfMap: perfMap })
+    const sp = Number(perf.salesPerMin || 0)
+    const pp = Number(perf.profitPerMin || 0)
     if (!map[k]) map[k] = { count: 0, wm: 0, dm: 0, perfWm: 0, sales: 0, profit: 0, perfCount: 0 }
     map[k].count  += 1
     map[k].wm     += wm
@@ -90,7 +88,7 @@ function StatsTable({ rows, colType }) {
 }
 
 export default function SearchPanel({ isOpen, onToggle }) {
-  const { gridSearch, setGridSearch, scheduleBlocks, proposalItems, perfMap, manualInputs } = useScheduleStore()
+  const { gridSearch, setGridSearch, scheduleBlocks, proposalItems, perfMap, latestPerfByKey, performanceHistoryByKey, manualInputs } = useScheduleStore()
 
   const kw = gridSearch.trim().toLowerCase()
 
@@ -106,14 +104,14 @@ export default function SearchPanel({ isOpen, onToggle }) {
     const dtPresent = new Set(matchedBlocks.map(b => b.dealTypeConverted || b.dealType || '미지정'))
     const dtExtra   = [...dtPresent].filter(k => !DT_ORDER.includes(k))
     const dtOrder   = [...DT_ORDER.filter(k => dtPresent.has(k)), ...dtExtra]
-    const rawDt     = groupBlocks(matchedBlocks, b => b.dealTypeConverted || b.dealType || '미지정', perfMap, manualInputs, totalScheduledWm)
+    const rawDt     = groupBlocks(matchedBlocks, b => b.dealTypeConverted || b.dealType || '미지정', perfMap, manualInputs, performanceHistoryByKey, totalScheduledWm)
     const dealRows  = dtOrder.map(k => rawDt.find(r => r.key === k)).filter(Boolean)
 
-    const rawCh  = groupBlocks(matchedBlocks, b => CH_ORDER.includes(b.channel) ? b.channel : 'ALL', perfMap, manualInputs, totalScheduledWm)
+    const rawCh  = groupBlocks(matchedBlocks, b => CH_ORDER.includes(b.channel) ? b.channel : 'ALL', perfMap, manualInputs, performanceHistoryByKey, totalScheduledWm)
     const chRows = CH_ORDER.map(k => rawCh.find(r => r.key === k)).filter(Boolean)
 
     return { matchedBlocks, totalScheduledWm, dealRows, chRows, totalWm, totalDm, avgRate }
-  }, [scheduleBlocks, kw, perfMap, manualInputs])
+  }, [scheduleBlocks, kw, perfMap, manualInputs, performanceHistoryByKey])
 
   const matchedItems = useMemo(
     () => kw ? proposalItems.filter(i => itemMatches(i, kw)) : proposalItems,
@@ -179,7 +177,7 @@ export default function SearchPanel({ isOpen, onToggle }) {
           {matchedItems.length === 0
             ? <div style={{ fontSize: 10, color: 'var(--text3)', padding: '6px 4px' }}>-</div>
             : matchedItems.map(item => {
-                const perf = item.perfKey ? (perfMap[item.perfKey] || null) : null
+                const perf = getSidebarPerformance(item, { latestPerfByKey, fallbackPerfMap: perfMap })
                 return (
                   <div key={item.itemId} style={{ padding: '6px 8px', marginBottom: 4, background: 'var(--bg3)', borderRadius: 5, border: '1px solid var(--border)' }}>
                     <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text)', marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>

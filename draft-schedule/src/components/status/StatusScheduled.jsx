@@ -14,10 +14,10 @@ function GradeBadge({ grade }) {
 
 const GRADE_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 }
 const MIN_COL_WIDTH = 44
-const salesSort = (perfMap, manualInputs) => (a, b) =>
-  getEffectiveMetrics(a, perfMap, manualInputs).salesPerMin - getEffectiveMetrics(b, perfMap, manualInputs).salesPerMin
-const profitSort = (perfMap, manualInputs) => (a, b) =>
-  getEffectiveMetrics(a, perfMap, manualInputs).profitPerMin - getEffectiveMetrics(b, perfMap, manualInputs).profitPerMin
+const salesSort = (perfMap, manualInputs, performanceHistoryByKey) => (a, b) =>
+  getEffectiveMetrics(a, perfMap, manualInputs, performanceHistoryByKey).salesPerMin - getEffectiveMetrics(b, perfMap, manualInputs, performanceHistoryByKey).salesPerMin
+const profitSort = (perfMap, manualInputs, performanceHistoryByKey) => (a, b) =>
+  getEffectiveMetrics(a, perfMap, manualInputs, performanceHistoryByKey).profitPerMin - getEffectiveMetrics(b, perfMap, manualInputs, performanceHistoryByKey).profitPerMin
 const COLS = [
   { key: 'star', label: '★', w: 38, sort: null, align: 'center' },
   { key: '_grade', label: '등급', w: 58, sort: (a, b) => (GRADE_ORDER[a._grade] ?? 4) - (GRADE_ORDER[b._grade] ?? 4) },
@@ -37,7 +37,7 @@ const COLS = [
   { key: 'status', label: '상태', w: 76, sort: null },
 ]
 
-export default function StatusScheduled({ rows, competing = [], perfMap, manualInputs }) {
+export default function StatusScheduled({ rows, competing = [], perfMap, manualInputs, performanceHistoryByKey }) {
   const { starred, toggleStarred } = useScheduleStore()
   const [sortKey, setSortKey] = useState(null)
   const [sortDir, setSortDir] = useState('asc')
@@ -74,11 +74,11 @@ export default function StatusScheduled({ rows, competing = [], perfMap, manualI
   const sorted = useMemo(() => {
     const col = COLS.find(c => c.key === sortKey)
     if (!col?.sort) return rows
-    const sortFn = col.sort === 'sales' ? salesSort(perfMap, manualInputs)
-      : col.sort === 'profit' ? profitSort(perfMap, manualInputs)
+    const sortFn = col.sort === 'sales' ? salesSort(perfMap, manualInputs, performanceHistoryByKey)
+      : col.sort === 'profit' ? profitSort(perfMap, manualInputs, performanceHistoryByKey)
         : col.sort
     return [...rows].sort((a, b) => sortDir === 'asc' ? sortFn(a, b) : sortFn(b, a))
-  }, [rows, sortKey, sortDir, perfMap, manualInputs])
+  }, [rows, sortKey, sortDir, perfMap, manualInputs, performanceHistoryByKey])
 
   const allRows = useMemo(() => [...sorted, ...competing], [sorted, competing])
 
@@ -172,8 +172,8 @@ export default function StatusScheduled({ rows, competing = [], perfMap, manualI
           {allRows.map((block, i) => {
             const isStarred = !!starred[block.itemId]
             const isCompeting = block.isCompeting
-            const grade = block._grade || getGrade(getEffectiveProfit(block, perfMap, manualInputs))
-            const metrics = getEffectiveMetrics(block, perfMap, manualInputs)
+            const grade = block._grade || getGrade(getEffectiveProfit(block, perfMap, manualInputs, performanceHistoryByKey))
+            const metrics = getEffectiveMetrics(block, perfMap, manualInputs, performanceHistoryByKey)
             return (
               <tr key={block.blockKey || i}
                 style={{ borderBottom: '1px solid var(--border)', background: isStarred ? 'rgba(245,200,66,.05)' : i % 2 === 0 ? 'transparent' : 'var(--bg3)' }}>
