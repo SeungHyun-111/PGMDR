@@ -250,6 +250,17 @@ const PERF_WEIGHT_ROWS = [
   { table: '편성현황 팀별: 전체 테이블 미편성 행', shown: '행별 availableWeightedMin1 표시', denominator: '이 테이블 자체 평균 없음', correction: '미적용. 제안상품의 availableWeightedMin1 원본 사용', logic: '행 표시용. 실적없으면 취급/분/한익/분 0. 팀요약 평균에서는 미편성 전체가 제외' },
 ]
 
+function emphasizeNoPerfIncluded(text) {
+  const marker = '실적없는 블록 포함'
+  if (!String(text).includes(marker)) return text
+  return String(text).split(marker).map((part, idx) => (
+    <span key={`${part}-${idx}`}>
+      {idx > 0 && <span style={{ color: 'var(--red)', fontWeight: 800 }}>{marker}</span>}
+      {part}
+    </span>
+  ))
+}
+
 export default function HelpPage() {
   const { startDate, poolType } = useScheduleStore()
   const [refreshLogs, setRefreshLogs] = useState([])
@@ -298,10 +309,10 @@ export default function HelpPage() {
               {PERF_WEIGHT_ROWS.map(row => (
                 <tr key={row.table}>
                   <td style={{ ...tdS, fontWeight: 700, color: 'var(--text)', minWidth: 180 }}>{row.table}</td>
-                  <td style={{ ...tdS, color: 'var(--accent)', minWidth: 220 }}>{row.shown}</td>
-                  <td style={{ ...tdS, color: 'var(--green)', minWidth: 240 }}>{row.denominator}</td>
+                  <td style={{ ...tdS, color: 'var(--accent)', minWidth: 220 }}>{emphasizeNoPerfIncluded(row.shown)}</td>
+                  <td style={{ ...tdS, color: 'var(--green)', minWidth: 240 }}>{emphasizeNoPerfIncluded(row.denominator)}</td>
                   <td style={{ ...tdS, color: row.correction.startsWith('적용') ? 'var(--orange)' : 'var(--text2)', minWidth: 180, fontWeight: 700 }}>{row.correction}</td>
-                  <td style={{ ...tdS, color: 'var(--text2)', minWidth: 340 }}>{row.logic}</td>
+                  <td style={{ ...tdS, color: 'var(--text2)', minWidth: 340 }}>{emphasizeNoPerfIncluded(row.logic)}</td>
                 </tr>
               ))}
             </tbody>
