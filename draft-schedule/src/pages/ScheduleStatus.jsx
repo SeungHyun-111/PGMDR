@@ -479,15 +479,42 @@ const summaryTd = {
   fontVariantNumeric: 'tabular-nums',
 }
 
+function BasisBadge({ children, color = 'var(--accent)' }) {
+  return (
+    <span style={{
+      marginLeft: 8,
+      padding: '2px 7px',
+      borderRadius: 4,
+      border: `1px solid ${color}55`,
+      background: `${color}18`,
+      color,
+      fontSize: 10,
+      fontWeight: 800,
+      whiteSpace: 'nowrap',
+    }}>
+      {children}
+    </span>
+  )
+}
+
 // ── 원형 대 가로막대형 차트 ──────────────────────────────────────────────
-function GradeDonutChart({ items, selectedGrade, onGradeSelect }) {
+function GradeDonutChart({ items, selectedGrade, onGradeSelect, valueMode = 'count' }) {
   const [hoverIdx, setHoverIdx] = useState(null)
-  const total = items.length
+  const isWeighted = valueMode === 'weighted'
+  const getValue = item => isWeighted ? Number(item?.weightedMin || 0) : 1
+  const total = isWeighted
+    ? items.reduce((sum, item) => sum + getValue(item), 0)
+    : items.length
+  const unitLabel = isWeighted ? '분' : '건'
 
   // S→A→B→C→D 순서 유지, 값 0인 등급도 포함(회색 처리)
   const gradeData = useMemo(() =>
-    GRADES.map(g => ({ name: g, value: items.filter(i => i._grade === g).length, color: GRADE_META[g].color }))
-  , [items])
+    GRADES.map(g => ({
+      name: g,
+      value: items.filter(i => i._grade === g).reduce((sum, item) => sum + getValue(item), 0),
+      color: GRADE_META[g].color,
+    }))
+  , [items, valueMode])
 
   const filledGradeData = gradeData.filter(d => d.value > 0)
 
@@ -499,7 +526,7 @@ function GradeDonutChart({ items, selectedGrade, onGradeSelect }) {
       ? items.filter(i => i._grade === activeGrade)
       : items
     const acc = {}
-    source.forEach(i => { acc[i._team] = (acc[i._team] || 0) + 1 })
+    source.forEach(i => { acc[i._team] = (acc[i._team] || 0) + getValue(i) })
     return Object.entries(acc)
       .sort((a, b) => {
         if (a[0] === '편성팀') return 1
@@ -508,9 +535,11 @@ function GradeDonutChart({ items, selectedGrade, onGradeSelect }) {
       })
       .slice(0, 9)
       .map(([name, value]) => ({ name, value }))
-  }, [items, activeGrade])
+  }, [items, activeGrade, valueMode])
 
-  const activeCnt = activeGrade ? items.filter(i => i._grade === activeGrade).length : total
+  const activeCnt = activeGrade
+    ? items.filter(i => i._grade === activeGrade).reduce((sum, item) => sum + getValue(item), 0)
+    : total
   const barColor  = activeGrade ? GRADE_META[activeGrade].color : 'var(--accent)'
 
   const CHART_H = 240
@@ -522,7 +551,7 @@ function GradeDonutChart({ items, selectedGrade, onGradeSelect }) {
     return (
       <g>
         <text x={x} y={y - 4} textAnchor={anchor} fill={GRADE_META[name]?.color} fontSize={11} fontWeight={800}>{name}</text>
-        <text x={x} y={y + 9}  textAnchor={anchor} fill="#888" fontSize={9}>{value}건 {pct}%</text>
+        <text x={x} y={y + 9}  textAnchor={anchor} fill="#888" fontSize={9}>{fmtNum(value)}{unitLabel} {pct}%</text>
       </g>
     )
   }
@@ -559,11 +588,11 @@ function GradeDonutChart({ items, selectedGrade, onGradeSelect }) {
           {activeGrade ? (
             <>
               <div style={{ fontSize: 26, fontWeight: 900, color: GRADE_META[activeGrade].color, lineHeight: 1 }}>{activeGrade}</div>
-              <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>{activeCnt}건</div>
+              <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>{fmtNum(activeCnt)}{unitLabel}</div>
             </>
           ) : (
             <>
-              <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>{total}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--text)', lineHeight: 1 }}>{fmtNum(total)}</div>
               <div style={{ fontSize: 10, color: 'var(--text3)', marginTop: 3 }}>전체</div>
             </>
           )}
@@ -579,7 +608,7 @@ function GradeDonutChart({ items, selectedGrade, onGradeSelect }) {
           <span style={{ color: activeGrade ? GRADE_META[activeGrade].color : 'var(--text2)' }}>
             {activeGrade ? `${activeGrade}등급` : '전체'}
           </span>
-          <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: 10, marginLeft: 6 }}>팀별 분포 ({activeCnt}건)</span>
+          <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: 10, marginLeft: 6 }}>팀별 분포 ({fmtNum(activeCnt)}{unitLabel})</span>
           {!activeGrade && <span style={{ color: 'var(--text3)', fontWeight: 400, fontSize: 10, marginLeft: 6 }}>— 등급 클릭 시 해당 등급만 표시</span>}
         </div>
         <ResponsiveContainer width="100%" height={CHART_H}>
@@ -589,7 +618,7 @@ function GradeDonutChart({ items, selectedGrade, onGradeSelect }) {
             <YAxis type="category" dataKey="name" width={72}
               tick={{ fontSize: 10, fill: 'var(--text2)' }} axisLine={false} tickLine={false} />
             <Bar dataKey="value" fill={barColor} radius={[0, 4, 4, 0]} barSize={14} isAnimationActive={false}>
-              <LabelList dataKey="value" position="right" style={{ fontSize: 10, fill: 'var(--text3)', fontWeight: 600 }} />
+              <LabelList dataKey="value" position="right" formatter={v => fmtNum(v)} style={{ fontSize: 10, fill: 'var(--text3)', fontWeight: 600 }} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
@@ -597,13 +626,13 @@ function GradeDonutChart({ items, selectedGrade, onGradeSelect }) {
         {/* 등급 범례 클릭 필터 */}
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
           {GRADES.map(g => {
-            const cnt = items.filter(i => i._grade === g).length
+            const cnt = items.filter(i => i._grade === g).reduce((sum, item) => sum + getValue(item), 0)
             return (
               <button key={g} onClick={() => onGradeSelect(selectedGrade === g ? null : g)}
                 style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 9px', borderRadius: 12, cursor: 'pointer', border: `1px solid ${selectedGrade === g ? GRADE_META[g].color : 'var(--border)'}`, background: selectedGrade === g ? GRADE_META[g].bg : 'transparent', transition: 'all .12s' }}>
                 <span style={{ width: 7, height: 7, borderRadius: '50%', background: GRADE_META[g].color, flexShrink: 0, display: 'inline-block', opacity: cnt > 0 ? 1 : 0.3 }} />
                 <span style={{ fontSize: 11, fontWeight: 700, color: cnt > 0 ? GRADE_META[g].color : 'var(--text3)' }}>{g}</span>
-                <span style={{ fontSize: 10, color: 'var(--text3)' }}>{cnt}</span>
+                <span style={{ fontSize: 10, color: 'var(--text3)' }}>{fmtNum(cnt)}{unitLabel}</span>
               </button>
             )
           })}
@@ -709,11 +738,25 @@ export default function ScheduleStatus() {
 
       {!['logs', 'team'].includes(tab) && (
         <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', marginBottom: 14 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 10 }}>{chartTitle} <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 10 }}>— 한계이익/가중분 기준 · 등급 클릭 시 테이블 필터</span></div>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+            {chartTitle}
+            <BasisBadge color="var(--accent)">상품수 기준</BasisBadge>
+            <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 10 }}>— 한계이익/가중분 기준 · 등급 클릭 시 테이블 필터</span>
+          </div>
           <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text2)', margin: '-4px 0 10px' }}>
             등급 기준: S ≥50만 · A ≥45만 · B ≥40만 · C ≥35만 · D 미만
           </div>
           <GradeDonutChart items={chartItems} selectedGrade={selectedGrade} onGradeSelect={handleGradeSelect} />
+          {tab === 'scheduled' && (
+            <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                편성 상품 등급 분포
+                <BasisBadge color="var(--green)">편성 가중분 기준</BasisBadge>
+                <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 10 }}>— 가중분 기준 백분율</span>
+              </div>
+              <GradeDonutChart items={enrichedBlocks} selectedGrade={selectedGrade} onGradeSelect={handleGradeSelect} valueMode="weighted" />
+            </div>
+          )}
         </div>
       )}
 
