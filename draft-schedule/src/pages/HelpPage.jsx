@@ -232,6 +232,24 @@ function FlowDiagram() {
 const thS = { padding: '7px 10px', fontSize: 10, fontWeight: 700, color: 'var(--text3)', background: 'var(--bg3)', textAlign: 'left', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }
 const tdS = { padding: '7px 10px', fontSize: 10, borderBottom: '1px solid var(--border)', verticalAlign: 'top', lineHeight: 1.5 }
 
+const PERF_WEIGHT_ROWS = [
+  { table: '검색 패널: 거래형태별 실적', shown: '실적없는 블록 포함 sum(weightedMin)', denominator: '실적없는 블록 제외 sum(weightedMin where sp > 0 || pp > 0)', correction: '미적용. 원본 weightedMin 사용', logic: '취급/분 평균 = 실적있는 블록의 sum(weightedMin * sp) / 실적없는 블록 제외 가중분. 한익/분도 동일' },
+  { table: '검색 패널: 채널별 실적', shown: '실적없는 블록 포함 sum(weightedMin)', denominator: '실적없는 블록 제외 sum(weightedMin where sp > 0 || pp > 0)', correction: '미적용. 원본 weightedMin 사용', logic: '취급/분 평균 = 실적있는 블록의 sum(weightedMin * sp) / 실적없는 블록 제외 가중분. 한익/분도 동일' },
+  { table: '시뮬레이션: 전체 요약', shown: '실적없는 블록 포함 sum(effectiveWeightedMin)', denominator: '실적없는 블록 포함 sum(effectiveWeightedMin)', correction: '적용. 일반 팀 weightedMin=0이면 1, 편성팀은 0 유지', logic: '취급/분 평균 = 실적없는 블록은 sp=0으로 둔 전체 sum(effectiveWeightedMin * sp) / 실적없는 블록 포함 전체 가중분' },
+  { table: '시뮬레이션: 일자별', shown: '실적없는 블록 포함 일자별 sum(effectiveWeightedMin)', denominator: '실적없는 블록 포함 일자별 sum(effectiveWeightedMin)', correction: '적용. 일반 팀 0은 1, 편성팀은 0 유지', logic: '일자별 취급/분 = 실적없는 블록은 sp=0으로 둔 일자별 sum(effectiveWeightedMin * sp) / 실적없는 블록 포함 일자별 가중분' },
+  { table: '시뮬레이션: 팀별', shown: '실적없는 블록 포함 팀별 sum(effectiveWeightedMin)', denominator: '실적없는 블록 포함 팀별 sum(effectiveWeightedMin)', correction: '적용. 일반 팀 0은 1, 편성팀은 0 유지', logic: '팀별 취급/분 = 실적없는 블록은 sp=0으로 둔 팀별 sum(effectiveWeightedMin * sp) / 실적없는 블록 포함 팀별 가중분' },
+  { table: '시뮬레이션: 카테고리별', shown: '실적없는 블록 포함 카테고리별 sum(effectiveWeightedMin)', denominator: '실적없는 블록 포함 카테고리별 sum(effectiveWeightedMin)', correction: '적용. 일반 팀 0은 1, 편성팀은 0 유지', logic: '카테고리별 취급/분 = 실적없는 블록은 sp=0으로 둔 카테고리별 sum(effectiveWeightedMin * sp) / 실적없는 블록 포함 카테고리별 가중분' },
+  { table: '시뮬레이션: 직전실적 미확인', shown: '행별 effectiveWeightedMin 표시/계산 기준', denominator: '평균 없음', correction: '적용. 일반 팀 0은 1, 편성팀은 0 유지', logic: '실적없는 블록 목록 표시용. 이 블록들은 시뮬레이션 전체/일자별/팀별/카테고리별 평균에서는 sp=0, pp=0, 가중분 포함으로 계산됨' },
+  { table: '시뮬레이션: 편성별 실적 상세', shown: '행별 effectiveWeightedMin 표시/계산 기준', denominator: '이 테이블 자체 평균 없음', correction: '적용. 일반 팀 0은 1, 편성팀은 0 유지', logic: '행별 예상취급고 = effectiveWeightedMin * sp. 실적없으면 sp=0이라 예상취급고 0. 다른 시뮬레이션 평균에서는 가중분 포함' },
+  { table: '편성비중 하단: 채널별 실적', shown: '실적없는 블록 포함 sum(effectiveWeightedMin)', denominator: '실적없는 블록 제외 sum(effectiveWeightedMin where sp > 0 || pp > 0)', correction: '적용. 일반 팀 0은 1, 편성팀은 0 유지', logic: '취급/분 평균 = 실적있는 블록의 sum(effectiveWeightedMin * sp) / 실적없는 블록 제외 가중분. 한익/분도 동일' },
+  { table: '편성비중 하단: 거래형태별 실적', shown: '실적없는 블록 포함 sum(effectiveWeightedMin)', denominator: '실적없는 블록 제외 sum(effectiveWeightedMin where sp > 0 || pp > 0)', correction: '적용. 일반 팀 0은 1, 편성팀은 0 유지', logic: '취급/분 평균 = 실적있는 블록의 sum(effectiveWeightedMin * sp) / 실적없는 블록 제외 가중분. 한익/분도 동일' },
+  { table: '편성비중 하단: 영상구분별 실적', shown: '실적없는 블록 포함 sum(effectiveWeightedMin)', denominator: '실적없는 블록 제외 sum(effectiveWeightedMin where sp > 0 || pp > 0)', correction: '적용. 일반 팀 0은 1, 편성팀은 0 유지', logic: '취급/분 평균 = 실적있는 블록의 sum(effectiveWeightedMin * sp) / 실적없는 블록 제외 가중분. 한익/분도 동일' },
+  { table: '편성현황 팀별: 팀요약 편성완료', shown: '실적없는 편성완료 포함 sum(weightedMin)', denominator: '실적없는 편성완료 포함 sum(weightedMin)', correction: '미적용. 원본 weightedMin 사용', logic: '취급/분 평균 = 실적없는 편성완료는 sp=0으로 둔 sum(weightedMin * sp) / 실적없는 편성완료 포함 가중분' },
+  { table: '편성현황 팀별: 팀요약 미편성', shown: '실적없는 미편성 포함 가능가중분 sum(availableWeightedMin1)', denominator: '평균 분모에 사용 안 함', correction: '미적용. 제안상품의 availableWeightedMin1 원본 사용', logic: '미편성은 실적 평균에서 제외. 가능가중분은 표시용이고 팀요약 취급/분/한익/분 평균에 들어가지 않음' },
+  { table: '편성현황 팀별: 전체 테이블 편성완료 행', shown: '행별 weightedMin 표시', denominator: '이 테이블 자체 평균 없음', correction: '미적용. 원본 weightedMin 사용', logic: '행 표시용. 실적없으면 취급/분/한익/분 0. 팀요약 평균에서는 실적없는 편성완료도 가중분 포함' },
+  { table: '편성현황 팀별: 전체 테이블 미편성 행', shown: '행별 availableWeightedMin1 표시', denominator: '이 테이블 자체 평균 없음', correction: '미적용. 제안상품의 availableWeightedMin1 원본 사용', logic: '행 표시용. 실적없으면 취급/분/한익/분 0. 팀요약 평균에서는 미편성 전체가 제외' },
+]
+
 export default function HelpPage() {
   const { startDate, poolType } = useScheduleStore()
   const [refreshLogs, setRefreshLogs] = useState([])
@@ -259,6 +277,38 @@ export default function HelpPage() {
       <div style={{ fontSize: 12, color: 'var(--text3)', marginBottom: 28 }}>편성 작업판 기능 안내 · 시스템 구조 · GAS 컬럼 사전</div>
 
       {/* ── 1. 데이터 송수신 구조 ──────────────────────────────────────── */}
+      <Card style={{ marginBottom: 28 }}>
+        <SubTitle>실적/가중분 계산 기준 요약</SubTitle>
+        <div style={{ fontSize: 10, color: 'var(--text3)', lineHeight: 1.6, marginBottom: 10 }}>
+          편성된 블록의 최종 실적값은 실제실적 → 수기실적 → 직전실적 → 0 순서로 결정됩니다.
+          아래 표는 각 화면에서 노출되는 가중분과 평균 분모로 쓰는 가중분이 같은지, 그리고 0 가중분을 1로 보정하는지 정리한 것입니다.
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', minWidth: 1180, borderCollapse: 'collapse', fontSize: 10 }}>
+            <thead>
+              <tr>
+                <th style={thS}>화면/테이블</th>
+                <th style={thS}>노출되는 가중분</th>
+                <th style={thS}>분모 가중분</th>
+                <th style={thS}>0 가중분 1 보정</th>
+                <th style={thS}>로직</th>
+              </tr>
+            </thead>
+            <tbody>
+              {PERF_WEIGHT_ROWS.map(row => (
+                <tr key={row.table}>
+                  <td style={{ ...tdS, fontWeight: 700, color: 'var(--text)', minWidth: 180 }}>{row.table}</td>
+                  <td style={{ ...tdS, color: 'var(--accent)', minWidth: 220 }}>{row.shown}</td>
+                  <td style={{ ...tdS, color: 'var(--green)', minWidth: 240 }}>{row.denominator}</td>
+                  <td style={{ ...tdS, color: row.correction.startsWith('적용') ? 'var(--orange)' : 'var(--text2)', minWidth: 180, fontWeight: 700 }}>{row.correction}</td>
+                  <td style={{ ...tdS, color: 'var(--text2)', minWidth: 340 }}>{row.logic}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
       <div style={{ marginBottom: 36 }}>
         <SectionTitle>1. 데이터 송수신 구조</SectionTitle>
 
