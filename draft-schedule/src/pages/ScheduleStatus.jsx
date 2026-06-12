@@ -655,6 +655,7 @@ export default function ScheduleStatus() {
   const [tab, setTab]             = useState('all')
   const [selectedGrade, setSelectedGrade] = useState(null)
   const [logs, setLogs]           = useState([])
+  const [showWeightedGradeChart, setShowWeightedGradeChart] = useState(false)
 
   // 편성 블록 → 등급/팀 enrichment (경쟁 블록 제외)
   const enrichedBlocks = useMemo(() =>
@@ -749,12 +750,32 @@ export default function ScheduleStatus() {
           <GradeDonutChart items={chartItems} selectedGrade={selectedGrade} onGradeSelect={handleGradeSelect} />
           {tab === 'scheduled' && (
             <div style={{ marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-                편성 상품 등급 분포
-                <BasisBadge color="var(--green)">편성 가중분 기준</BasisBadge>
-                <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 10 }}>— 가중분 기준 백분율</span>
-              </div>
-              <GradeDonutChart items={enrichedBlocks} selectedGrade={selectedGrade} onGradeSelect={handleGradeSelect} valueMode="weighted" />
+              <button
+                onClick={() => setShowWeightedGradeChart(v => !v)}
+                style={{
+                  height: 28,
+                  padding: '0 11px',
+                  borderRadius: 5,
+                  border: '1px solid var(--border)',
+                  background: showWeightedGradeChart ? 'var(--bg4)' : 'var(--bg3)',
+                  color: showWeightedGradeChart ? 'var(--green)' : 'var(--text2)',
+                  fontSize: 11,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                }}
+              >
+                {showWeightedGradeChart ? '가중분 기준 접기' : '가중분 기준 펼치기'}
+              </button>
+              {showWeightedGradeChart && (
+                <div style={{ marginTop: 14 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                    편성 상품 등급 분포
+                    <BasisBadge color="var(--green)">편성 가중분 기준</BasisBadge>
+                    <span style={{ fontWeight: 400, color: 'var(--text3)', fontSize: 10 }}>— 가중분 기준 백분율</span>
+                  </div>
+                  <GradeDonutChart items={enrichedBlocks} selectedGrade={selectedGrade} onGradeSelect={handleGradeSelect} valueMode="weighted" />
+                </div>
+              )}
             </div>
           )}
         </div>
