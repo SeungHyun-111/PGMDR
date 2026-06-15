@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx'
-import { getGrade, getEffectiveProfit, getManualInputKey } from './grade'
+import { getGrade, getEffectiveProfit } from './grade'
 import { getEffectivePgmSlots } from './effectiveSlots'
 import { getBlockTeams, getCompetitionItems } from './competition'
 import { getResolvedEntity, getResolvedPerfKey } from './entityKey'
@@ -191,11 +191,15 @@ function getReportItem(block) {
   return getCompetitionItems(block)[0] || block
 }
 
-function getReportPerf(block, entityProps, perfMap) {
+function getReportPerf(block, entityProps, perfMap, performanceHistoryByKey, manualInputs) {
   const item = getReportItem(block)
   if (!item) return null
   const perfKey = getResolvedPerfKey(item, entityProps) || item.perfKey
-  return perfKey ? (perfMap?.[perfKey] || null) : null
+  if (!perfKey) return null
+  return getScheduledBlockPerformance(
+    { ...item, dateKey: block?.dateKey, timeText: block?.timeText, perfKey },
+    { performanceHistoryByKey, manualInputs, fallbackPerfMap: perfMap }
+  )
 }
 
 function getReportName(block) {
@@ -204,10 +208,11 @@ function getReportName(block) {
   return getCompetitionItems(block).map(item => item.pgmCodeName || '').filter(Boolean).join(' / ') || block.pgmCodeName || ''
 }
 
-function buildReportRow({ slot, block, channel, entityProps, perfMap }) {
+function buildReportRow({ slot, block, channel, entityProps, perfMap, performanceHistoryByKey, manualInputs }) {
   const item = getReportItem(block)
   const resolved = item ? getResolvedEntity(item, entityProps) : item
-  const perf = getReportPerf(block, entityProps, perfMap)
+  const perf = getReportPerf(block, entityProps, perfMap, performanceHistoryByKey, manualInputs)
+  const lastPerf = perf?.lastPerf || perf?.sameBroadcastPerf || null
   const isEmpty = !block || block.isDefault
   const product = reportProductParts(isEmpty ? '' : getReportName(block))
   const rowChannel = reportChannel(channel === 'ALL' ? block?.channel : channel)
@@ -222,18 +227,18 @@ function buildReportRow({ slot, block, channel, entityProps, perfMap }) {
     hasHash: String(block?.scheduleComment || '').includes('#'),
     durationMin: block?.durationMin ?? slot?.durationMin ?? '',
     weightedMin: block?.weightedMin ?? slot?.weightedMin ?? '',
-    prevDate: perf?.broadcastDate || '',
-    prevTime: perf?.broadcastTime || '',
-    salesPerMin: perf?.salesPerWeightedMin,
-    profitPerMin: perf?.profitPerWeightedMin,
-    hasPerf: !!perf,
+    prevDate: lastPerf?.broadcastDate || '',
+    prevTime: lastPerf?.broadcastTime || '',
+    salesPerMin: perf?.salesPerMin,
+    profitPerMin: perf?.profitPerMin,
+    hasPerf: !!perf && !perf.missingPerf,
     dealType: resolved?.dealTypeConverted || resolved?.dealType || block?.dealTypeConverted || block?.dealType || '',
     videoType: reportVideoMark(resolved?.newProductType || resolved?.videoStatus || block?.newProductType || block?.videoStatus || ''),
     isEmpty,
   }
 }
 
-function buildReportRowsByDate({ scheduleBlocks, pgmSlots, customSlots, splitSlots, entityProps, perfMap }) {
+function buildReportRowsByDate({ scheduleBlocks, pgmSlots, customSlots, splitSlots, entityProps, perfMap, performanceHistoryByKey, manualInputs }) {
   const effectiveSlots = getEffectivePgmSlots(pgmSlots, customSlots || {})
   effectiveSlots.sort((a, b) =>
     a.dateKey !== b.dateKey
@@ -252,6 +257,8 @@ function buildReportRowsByDate({ scheduleBlocks, pgmSlots, customSlots, splitSlo
           block: getReportBlock(scheduleBlocks, slot, channel, splitSlots),
           entityProps,
           perfMap,
+          performanceHistoryByKey,
+          manualInputs,
         }))
       })
     } else {
@@ -261,6 +268,8 @@ function buildReportRowsByDate({ scheduleBlocks, pgmSlots, customSlots, splitSlo
         block: getReportBlock(scheduleBlocks, slot, 'ALL', splitSlots),
         entityProps,
         perfMap,
+        performanceHistoryByKey,
+        manualInputs,
       }))
     }
   })
@@ -299,10 +308,10 @@ function calcReportLayout(maxRows, dateCount, pageWmm = 400, pageHmm = 285) {
 export function printReportSchedule(rows, opts = {}) {
   const {
     startDate = '', endDate = '', scheduleBlocks = {}, pgmSlots = [],
-    customSlots = {}, splitSlots = {}, perfMap = {}, entityProps = {}, profitThreshold = null,
+    customSlots = {}, splitSlots = {}, perfMap = {}, performanceHistoryByKey = {}, manualInputs = {}, entityProps = {}, profitThreshold = null,
   } = opts
 
-  const rowsByDate = buildReportRowsByDate({ scheduleBlocks, pgmSlots, customSlots, splitSlots, entityProps, perfMap })
+  const rowsByDate = buildReportRowsByDate({ scheduleBlocks, pgmSlots, customSlots, splitSlots, entityProps, perfMap, performanceHistoryByKey, manualInputs })
   const dates = Object.keys(rowsByDate).sort()
   const maxRows = getReportMaxRows(rowsByDate)
   const density = reportDensity(maxRows)
@@ -1214,7 +1223,7 @@ ${missingSection}
 // ── 편성비중 ──────────────────────────────────────────────────────────────
 // ScheduleRatio → RatioSummaryCards + RatioTable + RatioPgmCount 구조 복제
 
-function buildRatioSection({ scheduleBlocks, pgmSlots, weightedMinTargets, categoryMap, perfMap, manualInputs }) {
+function buildRatioSection({ scheduleBlocks, pgmSlots, weightedMinTargets, categoryMap, perfMap, performanceHistoryByKey, manualInputs }) {
   const totalSlotWeighted = (pgmSlots || []).reduce((s, sl) => s + (sl.weightedMin || 0), 0)
 
   const enrichedBlocks = {}
@@ -1337,13 +1346,13 @@ function buildRatioSection({ scheduleBlocks, pgmSlots, weightedMinTargets, categ
   const allBlocks = Object.values(enrichedBlocks).filter(b => b && !b.isDefault)
 
   function getExpectedForBlock(b) {
-    const key = b.perfKey
-    if (!key) return { sp: 0, pp: 0, hasPerf: false }
-    const manualKey = getManualInputKey(b)
-    const m  = manualKey ? ((manualInputs || {})[manualKey] || {}) : {}
-    const p  = (perfMap || {})[key]      || {}
-    const sp = Number(m.expectedSalesPerWeightedMin  ?? p.salesPerWeightedMin  ?? 0)
-    const pp = Number(m.expectedProfitPerWeightedMin ?? p.profitPerWeightedMin ?? 0)
+    const perf = getScheduledBlockPerformance(b, {
+      performanceHistoryByKey,
+      manualInputs,
+      fallbackPerfMap: perfMap,
+    })
+    const sp = Number(perf.salesPerMin || 0)
+    const pp = Number(perf.profitPerMin || 0)
     return { sp, pp, hasPerf: sp > 0 || pp > 0 }
   }
 

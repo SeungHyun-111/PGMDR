@@ -6,7 +6,7 @@ import HtmlSectionSelectModal from './HtmlSectionSelectModal'
 import useMemoCodes from '../../hooks/useMemoCodes'
 
 export default function ExportModal({ onClose }) {
-  const { scheduleBlocks, proposalItems, startDate, endDate, pgmSlots, customSlots, splitSlots, perfMap, performanceHistoryByKey, entityProps } = useScheduleStore()
+  const { scheduleBlocks, proposalItems, startDate, endDate, pgmSlots, customSlots, splitSlots, perfMap, performanceHistoryByKey, manualInputs, entityProps } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const { allMemoCodes } = useMemoCodes()
   const [showHtmlModal, setShowHtmlModal] = useState(false)
@@ -24,7 +24,7 @@ export default function ExportModal({ onClose }) {
     .filter(b => b && !b.isDefault)
     .map(block => ({ ...block, mdCategory: block.mdCategory || categoryMap[block.pgmCodeName] || '' }))
 
-  const opts = { startDate, endDate, scheduleBlocks, pgmSlots: pgmSlots || [], customSlots: customSlots || {}, splitSlots: splitSlots || {}, categoryMap, perfMap: perfMap || {}, performanceHistoryByKey: performanceHistoryByKey || {}, entityProps: entityProps || {}, memoCodes: allMemoCodes || [] }
+  const opts = { startDate, endDate, scheduleBlocks, pgmSlots: pgmSlots || [], customSlots: customSlots || {}, splitSlots: splitSlots || {}, categoryMap, perfMap: perfMap || {}, performanceHistoryByKey: performanceHistoryByKey || {}, manualInputs: manualInputs || {}, entityProps: entityProps || {}, memoCodes: allMemoCodes || [] }
   const parseThreshold = value => {
     const n = Number(String(value || '').replace(/,/g, ''))
     return Number.isFinite(n) && n > 0 ? n : null
