@@ -11,6 +11,7 @@ import { getEffectiveBlockWeightedMin, timeToMin } from '../utils/weightedMin'
 import { getManualInputKey } from '../utils/grade'
 import { extractEntityFields } from '../utils/mergeEntity'
 import { getScheduledBlockPerformance } from '../utils/performanceHistory'
+import useLocalStorageState from '../hooks/useLocalStorageState'
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -334,17 +335,19 @@ export default function PerformanceForecast() {
     perfMap, performanceHistoryByKey, manualInputs,
     ensurePerformanceKeys,
     saveManualInput, saveBlock, saveEntityProps, weightedMinTargets, targetMetrics,
+    startDate, poolType, currentVersionId,
   } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
-  const [groupBy, setGroupBy]           = useState('team')
+  const uiScope = `${startDate || 'no-session'}_${poolType || 'A'}_${currentVersionId || 'draft'}`
+  const [groupBy, setGroupBy]           = useLocalStorageState(`pgmdr.ui.${uiScope}.forecast.groupBy`, 'team')
   const [simSpm, setSimSpm]             = useState('')
   const [simPpm, setSimPpm]             = useState('')
-  const [excludePgmTeam, setExcludePgmTeam] = useState(false)
-  const [selectedDate, setSelectedDate] = useState(null)
-  const [detailSort,   setDetailSort]   = useState({ key: null, dir: 'asc' })
-  const [missingSort,  setMissingSort]  = useState({ key: null, dir: 'asc' })
-  const [detailWidths, setDetailWidths] = useState({})
-  const [missingWidths, setMissingWidths] = useState({})
+  const [excludePgmTeam, setExcludePgmTeam] = useLocalStorageState(`pgmdr.ui.${uiScope}.forecast.excludePgmTeam`, false)
+  const [selectedDate, setSelectedDate] = useLocalStorageState(`pgmdr.ui.${uiScope}.forecast.selectedDate`, null)
+  const [detailSort,   setDetailSort]   = useLocalStorageState(`pgmdr.ui.${uiScope}.forecast.detailSort`, { key: null, dir: 'asc' })
+  const [missingSort,  setMissingSort]  = useLocalStorageState(`pgmdr.ui.${uiScope}.forecast.missingSort`, { key: null, dir: 'asc' })
+  const [detailWidths, setDetailWidths] = useLocalStorageState(`pgmdr.ui.${uiScope}.forecast.detailWidths`, {})
+  const [missingWidths, setMissingWidths] = useLocalStorageState(`pgmdr.ui.${uiScope}.forecast.missingWidths`, {})
   const simDebounceRef = useRef(null)
 
   useEffect(() => {

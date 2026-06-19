@@ -12,6 +12,7 @@ import { applyEntityProps, resolveEntity } from '../utils/mergeEntity'
 import { getEffectiveBlockWeightedMin } from '../utils/weightedMin'
 import { db, ref, get } from '../api/firebase'
 import { VERSION_OPS, getVersionPath } from '../utils/sessionVersion'
+import useLocalStorageState from '../hooks/useLocalStorageState'
 
 const UNSCHEDULED_NAME = '미편성'
 const DEFAULT_TEAM_NAME = '편성팀'
@@ -75,9 +76,11 @@ export default function ScheduleRatio() {
     entityProps,
     startDate,
     poolType,
+    currentVersionId,
   } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
-  const [viewType, setViewType] = useState('team')
+  const uiScope = `${startDate || 'no-session'}_${poolType || 'A'}_${currentVersionId || 'draft'}`
+  const [viewType, setViewType] = useLocalStorageState(`pgmdr.ui.${uiScope}.ratio.viewType`, 'team')
   const [previousOpsVersion, setPreviousOpsVersion] = useState(null)
 
   useEffect(() => {

@@ -8,6 +8,7 @@ import { DEAL_TYPES } from '../../constants/dealTypes'
 import { CATEGORIES } from '../../constants/categories'
 import { genKey } from '../../utils/uniqueKey'
 import { makePerfKey, normalizeDealType } from '../../hooks/usePerformanceMap'
+import useLocalStorageState from '../../hooks/useLocalStorageState'
 
 const NEW_PRODUCT_TYPES = ['기존', '신상품', '재녹화', '재편집']
 
@@ -67,18 +68,19 @@ const memoCodePatch = (key, value, meta) => ({
 })
 
 export default function SidebarExpanded({ items, onClose }) {
-  const { perfMap, latestPerfByKey, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar, weightedMinTargets, entityProps, saveBlock, saveEntityProps, runUndoBatch } = useScheduleStore()
-  const [keyword, setKeyword]       = useState('')
-  const [teamFilter, setTeamFilter] = useState('전체')
-  const [starOnly, setStarOnly]     = useState(false)
-  const [sortKey, setSortKey]       = useState(null)
-  const [sortDir, setSortDir]       = useState('asc')
+  const { perfMap, latestPerfByKey, starred, toggleStarred, updateProposalItem, addProposalItem, deleteProposalItem, duplicateProposalItem, returnBlockToSidebar, weightedMinTargets, entityProps, saveBlock, saveEntityProps, runUndoBatch, startDate, poolType, currentVersionId } = useScheduleStore()
+  const uiScope = `${startDate || 'no-session'}_${poolType || 'A'}_${currentVersionId || 'draft'}`
+  const [keyword, setKeyword]       = useLocalStorageState(`pgmdr.ui.${uiScope}.sidebarExpanded.keyword`, '')
+  const [teamFilter, setTeamFilter] = useLocalStorageState(`pgmdr.ui.${uiScope}.sidebarExpanded.teamFilter`, '전체')
+  const [starOnly, setStarOnly]     = useLocalStorageState(`pgmdr.ui.${uiScope}.sidebarExpanded.starOnly`, false)
+  const [sortKey, setSortKey]       = useLocalStorageState(`pgmdr.ui.${uiScope}.sidebarExpanded.sortKey`, null)
+  const [sortDir, setSortDir]       = useLocalStorageState(`pgmdr.ui.${uiScope}.sidebarExpanded.sortDir`, 'asc')
   const [editing, setEditing]       = useState(null)
   const [editValue, setEditValue]   = useState('')
   const [addModal, setAddModal]     = useState(false)
   const [addForm, setAddForm]       = useState({})
   const [adding, setAdding]         = useState(false)
-  const [panelHeight, setPanelHeight] = useState(272)
+  const [panelHeight, setPanelHeight] = useLocalStorageState(`pgmdr.ui.${uiScope}.sidebarExpanded.panelHeight`, 272)
   const [blockDragOver, setBlockDragOver] = useState(null) // { insertBeforeId: string|null }
   const [pinnedReturn, setPinnedReturn]   = useState(null) // { itemId, insertBeforeId }
   const [highlightId, setHighlightId]     = useState(null)
@@ -86,7 +88,7 @@ export default function SidebarExpanded({ items, onClose }) {
   const [fillReturnSlot, setFillReturnSlot] = useState(false)
   const [deleteConfirm, setDeleteConfirm] = useState(null) // { itemId, name }
   const [ctxMenu, setCtxMenu]             = useState(null) // { x, y, itemId }
-  const [colWidths, setColWidths] = useState(() =>
+  const [colWidths, setColWidths] = useLocalStorageState(`pgmdr.ui.${uiScope}.sidebarExpanded.colWidths`, () =>
     Object.fromEntries(COLS.map(col => [col.key, col.w]))
   )
 

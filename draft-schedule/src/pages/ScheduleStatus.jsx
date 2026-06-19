@@ -9,6 +9,7 @@ import StatusUnscheduled from '../components/status/StatusUnscheduled'
 import StatusLogs from '../components/status/StatusLogs'
 import { GRADES, GRADE_META, getGrade, getEffectiveProfit, getEffectiveMetrics } from '../utils/grade'
 import { VERSION_DRAFT } from '../utils/sessionVersion'
+import useLocalStorageState from '../hooks/useLocalStorageState'
 
 const TEAM_COLORS = ['#818cf8','#34d399','#fb923c','#60a5fa','#f472b6','#a78bfa','#4ade80','#f87171','#fbbf24','#2dd4bf']
 const GRADE_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 }
@@ -153,10 +154,10 @@ function exportTeamDetailRows(rows, selectedTeam) {
   XLSX.writeFile(wb, `편성현황_팀별상세_${teamName}_${new Date().toISOString().slice(0, 10)}.xlsx`)
 }
 
-function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs, performanceHistoryByKey }) {
-  const [selectedTeam, setSelectedTeam] = useState('전체')
-  const [sort, setSort] = useState({ key: '_default', dir: 'asc' })
-  const [colWidths, setColWidths] = useState(() =>
+function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs, performanceHistoryByKey, uiScope }) {
+  const [selectedTeam, setSelectedTeam] = useLocalStorageState(`pgmdr.ui.${uiScope}.status.team.selectedTeam`, '전체')
+  const [sort, setSort] = useLocalStorageState(`pgmdr.ui.${uiScope}.status.team.sort`, { key: '_default', dir: 'asc' })
+  const [colWidths, setColWidths] = useLocalStorageState(`pgmdr.ui.${uiScope}.status.team.colWidths`, () =>
     Object.fromEntries(TEAM_DETAIL_COLS.map(col => [col.key, col.w]))
   )
 
@@ -652,10 +653,11 @@ function GradeDonutChart({ items, selectedGrade, onGradeSelect, valueMode = 'cou
 export default function ScheduleStatus() {
   const { scheduleBlocks, proposalItems, startDate, poolType, perfMap, performanceHistoryByKey, manualInputs, currentVersionId } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
-  const [tab, setTab]             = useState('all')
-  const [selectedGrade, setSelectedGrade] = useState(null)
+  const uiScope = `${startDate || 'no-session'}_${poolType || 'A'}_${currentVersionId || 'draft'}`
+  const [tab, setTab]             = useLocalStorageState(`pgmdr.ui.${uiScope}.status.tab`, 'all')
+  const [selectedGrade, setSelectedGrade] = useLocalStorageState(`pgmdr.ui.${uiScope}.status.selectedGrade`, null)
   const [logs, setLogs]           = useState([])
-  const [showWeightedGradeChart, setShowWeightedGradeChart] = useState(false)
+  const [showWeightedGradeChart, setShowWeightedGradeChart] = useLocalStorageState(`pgmdr.ui.${uiScope}.status.showWeightedGradeChart`, false)
 
   // 편성 블록 → 등급/팀 enrichment (경쟁 블록 제외)
   const enrichedBlocks = useMemo(() =>
@@ -796,7 +798,7 @@ export default function ScheduleStatus() {
       )}
       {tab === 'scheduled'   && <StatusScheduled   rows={filteredBlocks} competing={competingBlocks} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} />}
       {tab === 'unscheduled' && <StatusUnscheduled rows={filteredItems}  perfMap={perfMap} manualInputs={manualInputs} />}
-      {tab === 'team'        && <TeamStatusTab scheduledRows={filteredBlocks} unscheduledRows={filteredItems} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} />}
+      {tab === 'team'        && <TeamStatusTab scheduledRows={filteredBlocks} unscheduledRows={filteredItems} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} uiScope={uiScope} />}
       {tab === 'logs'        && <StatusLogs logs={logs} startDate={startDate} poolType={poolType} versionId={currentVersionId} />}
     </div>
   )

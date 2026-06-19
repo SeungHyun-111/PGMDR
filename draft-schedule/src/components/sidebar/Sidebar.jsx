@@ -8,6 +8,7 @@ import MemoCodeSelect from '../common/MemoCodeSelect'
 import { DEAL_TYPES } from '../../constants/dealTypes'
 import { CATEGORIES } from '../../constants/categories'
 import { genKey } from '../../utils/uniqueKey'
+import useLocalStorageState from '../../hooks/useLocalStorageState'
 
 const NEW_PRODUCT_TYPES = ['기존', '신상품', '재녹화', '재편집']
 const inp = { background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text)', padding: '5px 8px', borderRadius: 4, fontSize: 11, width: '100%', boxSizing: 'border-box' }
@@ -35,9 +36,10 @@ const memoCodePatch = (key, value, meta) => ({
 })
 
 export default function Sidebar({ isOpen, onToggle }) {
-  const { proposalItems, perfMap, starred, loadProposals, proposalLoaded, returnBlockToSidebar, addProposalItem, weightedMinTargets, saveBlock, runUndoBatch } = useScheduleStore()
+  const { proposalItems, perfMap, starred, loadProposals, proposalLoaded, returnBlockToSidebar, addProposalItem, weightedMinTargets, saveBlock, runUndoBatch, startDate, poolType, currentVersionId } = useScheduleStore()
+  const uiScope = `${startDate || 'no-session'}_${poolType || 'A'}_${currentVersionId || 'draft'}`
 
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useLocalStorageState(`pgmdr.ui.${uiScope}.draft.sidebar.filters`, {
     keyword: '',
     category: '전체',
     team: '전체',
@@ -58,7 +60,7 @@ export default function Sidebar({ isOpen, onToggle }) {
   const [adding, setAdding]     = useState(false)
 
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
-  const [bottomOpen, setBottomOpen] = useState(false)
+  const [bottomOpen, setBottomOpen] = useLocalStorageState(`pgmdr.ui.${uiScope}.draft.sidebarExpandedOpen`, false)
   const scrollRef = useRef(null)
 
   // 블록 → 사이드바 드롭 상태

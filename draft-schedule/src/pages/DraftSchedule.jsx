@@ -11,15 +11,17 @@ import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
 import { db, ref, get } from '../api/firebase'
 import { getCompetitionItems, makeCompetitionBlock, toCompetitionItem } from '../utils/competition'
 import { stripEntityFields } from '../utils/mergeEntity'
+import useLocalStorageState from '../hooks/useLocalStorageState'
 
 export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   const {
-    isLoaded, isLoading, error,
+    isLoaded, isLoading, error, startDate, poolType, currentVersionId,
     loadInitData, resetSession, saveBlock, scheduleItem, returnBlockToSidebar,
     isViewerMode,
   } = useScheduleStore()
 
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const uiScope = `${startDate || 'no-session'}_${poolType || 'A'}_${currentVersionId || 'draft'}`
+  const [sidebarOpen, setSidebarOpen] = useLocalStorageState(`pgmdr.ui.${uiScope}.draft.sidebarOpen`, true)
   const [sessionChecking, setSessionChecking] = useState(true)
   const { setGridSearch, searchPanelOpen, setSearchPanelOpen } = useScheduleStore()
 
