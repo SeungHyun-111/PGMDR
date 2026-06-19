@@ -166,9 +166,13 @@ export async function refreshKmaWeatherToFirebase(options = {}) {
   const forecast = await fetchKmaForecast(location)
   const runRef = push(ref(db, getRunsPath(location.locationKey)))
   const runId = runRef.key
+  const dailySnap = await get(ref(db, getDailyPath(location.locationKey)))
+  const existingDaily = dailySnap.exists() ? dailySnap.val() : {}
+  const rows = forecast.rows.map(row => mergeWithExistingDailyRow(row, existingDaily[row.dateKey]))
 
   const latest = {
     ...forecast,
+    rows,
     location,
     runId,
     updatedAt: fetchedAt,
@@ -182,12 +186,12 @@ export async function refreshKmaWeatherToFirebase(options = {}) {
       updatedAt: latest.updatedAt,
       updatedAtText: latest.updatedAtText,
       base: forecast.base,
-      rowCount: forecast.rows.length,
-      dateKeys: forecast.rows.map(row => row.dateKey),
+      rowCount: rows.length,
+      dateKeys: rows.map(row => row.dateKey),
     },
   }
 
-  forecast.rows.forEach(row => {
+  rows.forEach(row => {
     updates[`${getDailyPath(location.locationKey)}/${row.dateKey}`] = {
       ...row,
       locationKey: location.locationKey,
@@ -492,6 +496,15 @@ function getRunPath(locationKey, runId) {
 
 function valueOr(value, fallback = '') {
   return value === undefined || value === null || value === '' ? fallback : value
+}
+
+function mergeWithExistingDailyRow(row, existing) {
+  if (!existing) return row
+  return {
+    ...row,
+    minTemp: valueOr(row.minTemp, existing.minTemp),
+    maxTemp: valueOr(row.maxTemp, existing.maxTemp),
+  }
 }
 
 function ymdToDateKey(ymd) {

@@ -50,7 +50,7 @@ export default function App() {
   const { pendingUndo, requestUndo, cancelUndo, confirmUndo } = useScheduleStore()
 
   // Firebase presence 등록
-  usePresence()
+  usePresence(activeTab)
 
   // 드래그 중 전역 ⊘ 커서 제거: dragover preventDefault 없는 영역에서도 move 커서 유지
   useEffect(() => {
