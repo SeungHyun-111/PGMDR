@@ -1233,7 +1233,6 @@ function buildRatioSection({ scheduleBlocks, pgmSlots, weightedMinTargets, categ
 
   // 팀별 / 카테고리별 stats
   const statsTeam = calcRatioStats(enrichedBlocks, categoryMap, 'team')
-  const statsCat  = calcRatioStats(enrichedBlocks, categoryMap, 'category')
 
   const targetMap = {}
   ;(weightedMinTargets || []).forEach(t => {
@@ -1488,8 +1487,8 @@ function buildRatioSection({ scheduleBlocks, pgmSlots, weightedMinTargets, categ
       <span style="font-size:10px;color:#8b90ab">건</span>
     </div>
     <div style="padding:12px 16px;background:#f5f6fa;display:flex;flex-direction:column;gap:12px">
-      ${buildPivotTable('채널별', CH_ORDER, b => CH_ORDER.includes(b.channel) ? b.channel : 'ALL', chRenderer)}
       ${buildPivotTable('거래형태별', DT_ORDER, b => b.dealTypeConverted || b.dealType || '미지정', null)}
+      ${buildPivotTable('채널별', CH_ORDER, b => CH_ORDER.includes(b.channel) ? b.channel : 'ALL', chRenderer)}
       ${buildPivotTable('영상구분별', VS_ORDER, b => b.newProductType || '기존', null)}
     </div>
   </div>`
@@ -1498,10 +1497,6 @@ function buildRatioSection({ scheduleBlocks, pgmSlots, weightedMinTargets, categ
 <div class="sec" style="margin-bottom:16px">
   <div class="sec-title">팀별 편성비중</div>
   ${buildRatioTable(statsTeam, true)}
-</div>
-<div class="sec" style="margin-bottom:16px">
-  <div class="sec-title">카테고리별 편성비중</div>
-  ${buildRatioTable(statsCat, false)}
 </div>
 ${pgmCountSection}`
 }
