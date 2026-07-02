@@ -10,6 +10,7 @@ import StatusLogs from '../components/status/StatusLogs'
 import { GRADES, GRADE_META, getGrade, getEffectiveProfit, getEffectiveMetrics } from '../utils/grade'
 import { VERSION_DRAFT } from '../utils/sessionVersion'
 import useLocalStorageState from '../hooks/useLocalStorageState'
+import { competitionItemToBlock, getCompetitionItems } from '../utils/competition'
 
 const TEAM_COLORS = ['#818cf8','#34d399','#fb923c','#60a5fa','#f472b6','#a78bfa','#4ade80','#f87171','#fbbf24','#2dd4bf']
 const GRADE_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 }
@@ -154,7 +155,7 @@ function exportTeamDetailRows(rows, selectedTeam) {
   XLSX.writeFile(wb, `편성현황_팀별상세_${teamName}_${new Date().toISOString().slice(0, 10)}.xlsx`)
 }
 
-function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs, performanceHistoryByKey, uiScope }) {
+function TeamStatusTab({ scheduledRows, competingRows = [], unscheduledRows, perfMap, manualInputs, performanceHistoryByKey, uiScope }) {
   const [selectedTeam, setSelectedTeam] = useLocalStorageState(`pgmdr.ui.${uiScope}.status.team.selectedTeam`, '전체')
   const [sort, setSort] = useLocalStorageState(`pgmdr.ui.${uiScope}.status.team.sort`, { key: '_default', dir: 'asc' })
   const [colWidths, setColWidths] = useLocalStorageState(`pgmdr.ui.${uiScope}.status.team.colWidths`, () =>
@@ -175,6 +176,24 @@ function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs, 
         _displayMin: Number(item.weightedMin || 0),
       }
     })
+    const competing = competingRows.flatMap(block =>
+      getCompetitionItems(block).map((item, idx) => {
+        const row = competitionItemToBlock(item, block)
+        const metrics = getEffectiveMetrics(row, perfMap, manualInputs, performanceHistoryByKey)
+        return {
+          ...row,
+          isCompeting: true,
+          _status: '경쟁',
+          _statusOrder: 0,
+          _teamName: row.mdTeam || row.orgName || '미지정',
+          _gradeValue: '',
+          _salesPerMin: metrics.salesPerMin,
+          _profitPerMin: metrics.profitPerMin,
+          _displayMin: Number(block.weightedMin || row.weightedMin || 0),
+          blockKey: `${block.blockKey || block.slotId || 'competing'}_${item.uniqueKey || item.itemId || idx}`,
+        }
+      })
+    )
     const unscheduled = unscheduledRows.map(item => {
       const metrics = getEffectiveMetrics(item, perfMap, manualInputs)
       return {
@@ -189,7 +208,7 @@ function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs, 
       }
     })
 
-    return [...scheduled, ...unscheduled].sort((a, b) => {
+    return [...scheduled, ...competing, ...unscheduled].sort((a, b) => {
       const statusCmp = a._statusOrder - b._statusOrder
       if (statusCmp) return statusCmp
       const gradeCmp = (GRADE_ORDER[a._gradeValue] ?? 9) - (GRADE_ORDER[b._gradeValue] ?? 9)
@@ -198,7 +217,7 @@ function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs, 
       if (profitCmp) return profitCmp
       return String(a.pgmCodeName || '').localeCompare(String(b.pgmCodeName || ''), 'ko', { numeric: true })
     })
-  }, [scheduledRows, unscheduledRows, perfMap, manualInputs, performanceHistoryByKey])
+  }, [scheduledRows, competingRows, unscheduledRows, perfMap, manualInputs, performanceHistoryByKey])
 
   const teamOptions = useMemo(() => {
     const teams = Array.from(new Set(detailRows.map(row => row._teamName).filter(Boolean)))
@@ -243,7 +262,7 @@ function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs, 
       grades: Object.fromEntries(GRADES.map(g => [g, 0])),
     }
     visibleRows.forEach(row => {
-      if (row._status === '편성') {
+      if (row._status === '편성' || row._status === '경쟁') {
         base.scheduledCount += 1
         base.weightedMin += Number(row._displayMin || 0)
         base.salesSum += Number(row._salesPerMin || 0) * Number(row._displayMin || 0)
@@ -407,6 +426,7 @@ function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs, 
             {visibleRows.map((row, idx) => {
               const gradeMeta = GRADE_META[row._gradeValue] || GRADE_META.D
               const isScheduled = row._status === '편성'
+              const isCompeting = row._status === '경쟁'
               return (
                 <tr key={`${row._status}-${row.uniqueKey || row.itemId || row.blockKey || idx}`} style={{ borderBottom: '1px solid var(--border)', background: idx % 2 ? 'var(--bg3)' : 'transparent' }}>
                   <td style={teamCell}>
@@ -415,21 +435,23 @@ function TeamStatusTab({ scheduledRows, unscheduledRows, perfMap, manualInputs, 
                       padding: '2px 7px',
                       borderRadius: 4,
                       fontWeight: 800,
-                      background: isScheduled ? '#f0fdf4' : 'var(--bg4)',
-                      color: isScheduled ? 'var(--green)' : 'var(--text3)',
+                      background: isCompeting ? '#fef2f2' : isScheduled ? '#f0fdf4' : 'var(--bg4)',
+                      color: isCompeting ? 'var(--red)' : isScheduled ? 'var(--green)' : 'var(--text3)',
                     }}>
                       {row._status}
                     </span>
                   </td>
                   <td style={teamCell}>
-                    <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 4, background: gradeMeta.bg, color: gradeMeta.color, border: `1px solid ${gradeMeta.color}40` }}>{row._gradeValue}</span>
+                    {row._gradeValue ? (
+                      <span style={{ fontSize: 11, fontWeight: 800, padding: '2px 7px', borderRadius: 4, background: gradeMeta.bg, color: gradeMeta.color, border: `1px solid ${gradeMeta.color}40` }}>{row._gradeValue}</span>
+                    ) : '-'}
                   </td>
                   <td style={{ ...teamCell, color: 'var(--text2)', fontWeight: 700 }}>{row._teamName}</td>
                   <td style={teamCell}>{fmtDateWithDow(row.dateKey) || '-'}</td>
-                  <td style={{ ...teamCell, fontWeight: isScheduled ? 700 : 400 }}>{fmtTime(row.timeText) || '-'}</td>
+                  <td style={{ ...teamCell, fontWeight: isScheduled || isCompeting ? 700 : 400 }}>{fmtTime(row.timeText) || '-'}</td>
                   <td style={teamCell}>{row.channel || '-'}</td>
                   <td style={{ ...teamCell, color: 'var(--text3)', fontSize: 11 }}>{row.mdCategory || '-'}</td>
-                  <td style={{ ...teamCell, fontWeight: 700, color: 'var(--text)' }}>{row.pgmCodeName || '-'}</td>
+                  <td style={{ ...teamCell, fontWeight: 700, color: isCompeting ? 'var(--red)' : 'var(--text)' }}>{row.pgmCodeName || '-'}</td>
                   <td style={{ ...teamCell, color: 'var(--text3)' }}>{row.dealTypeConverted || row.dealType || '-'}</td>
                   <td style={teamCell}>{row.newProductType || '-'}</td>
                   <td style={{ ...teamCell, ...teamNum, color: 'var(--accent)', fontWeight: 800 }}>{fmtNum(row._displayMin)}</td>
@@ -798,7 +820,7 @@ export default function ScheduleStatus() {
       )}
       {tab === 'scheduled'   && <StatusScheduled   rows={filteredBlocks} competing={competingBlocks} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} />}
       {tab === 'unscheduled' && <StatusUnscheduled rows={filteredItems}  perfMap={perfMap} manualInputs={manualInputs} />}
-      {tab === 'team'        && <TeamStatusTab scheduledRows={filteredBlocks} unscheduledRows={filteredItems} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} uiScope={uiScope} />}
+      {tab === 'team'        && <TeamStatusTab scheduledRows={filteredBlocks} competingRows={competingBlocks} unscheduledRows={filteredItems} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} uiScope={uiScope} />}
       {tab === 'logs'        && <StatusLogs logs={logs} startDate={startDate} poolType={poolType} versionId={currentVersionId} />}
     </div>
   )
