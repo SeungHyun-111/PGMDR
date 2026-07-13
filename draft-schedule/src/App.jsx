@@ -141,13 +141,6 @@ export default function App() {
   const [userNameInput, setUserNameInput] = useState('')
 
   useEffect(() => {
-    if (!showUserPopup && isLoaded && !localStorage.getItem('topbar-coach-seen-v1')) {
-      const timer = setTimeout(() => openCoach(), 500)
-      return () => clearTimeout(timer)
-    }
-  }, [isLoaded, showUserPopup])
-
-  useEffect(() => {
     if (!coachOpen) return
     const mode = COACH_STEPS[coachStep]?.mode
     setMenuOpen(mode === 'menu')
