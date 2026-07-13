@@ -152,12 +152,12 @@ export function getScheduledBlockPerformance(block, {
   const hasAnyManual = manualSales != null || manualProfit != null
   const hasCompleteManual = manualSales != null && manualProfit != null
 
-  const salesPerMin = sameBroadcastPerf?.salesPerWeightedMin
-    ?? manualSales
+  const salesPerMin = manualSales
+    ?? sameBroadcastPerf?.salesPerWeightedMin
     ?? lastPerf?.salesPerWeightedMin
     ?? 0
-  const profitPerMin = sameBroadcastPerf?.profitPerWeightedMin
-    ?? manualProfit
+  const profitPerMin = manualProfit
+    ?? sameBroadcastPerf?.profitPerWeightedMin
     ?? lastPerf?.profitPerWeightedMin
     ?? 0
 
@@ -170,8 +170,8 @@ export function getScheduledBlockPerformance(block, {
     manualProfit,
     salesPerMin: Number(salesPerMin || 0),
     profitPerMin: Number(profitPerMin || 0),
-    source: sameBroadcastPerf ? 'broadcast'
-      : hasCompleteManual ? 'manual'
+    source: hasCompleteManual ? 'manual'
+      : sameBroadcastPerf ? 'broadcast'
         : lastPerf ? 'previous'
           : 'missing',
     missingPerf: !sameBroadcastPerf && !lastPerf && !hasCompleteManual,

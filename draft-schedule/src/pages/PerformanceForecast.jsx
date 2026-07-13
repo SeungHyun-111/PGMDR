@@ -12,6 +12,25 @@ import { getManualInputKey } from '../utils/grade'
 import { extractEntityFields } from '../utils/mergeEntity'
 import { getScheduledBlockPerformance } from '../utils/performanceHistory'
 import useLocalStorageState from '../hooks/useLocalStorageState'
+import CoachMark from '../components/common/CoachMark'
+
+const FORECAST_COACH_STEPS = [
+  { target: '[data-coach="forecast-page"]', title: '시뮬레이션 화면', description: '현재 편성된 블록을 기준으로 예상 취급고와 한계이익을 계산하는 화면입니다. 단순 합계가 아니라 가중분, 직전 실적, 수기 입력, 목표값을 함께 반영합니다.' },
+  { target: '[data-coach="forecast-header"]', title: '상단 기준 설정', description: '이곳에서 시뮬레이션 안내를 다시 열고, [편성팀] 전사블록을 계산에서 제외할지 정합니다. 제외하면 해당 블록은 rows 생성 단계에서 빠져 평균과 합계에 들어가지 않습니다.' },
+  { target: '[data-coach="forecast-formula"]', title: '가장 중요한 계산 기준', description: '이 페이지의 평균은 미입력 포함 방식입니다. 예상취급고 = 적용 취급/분 × 가중분, 예상한익 = 적용 한익/분 × 가중분, 분당 평균 = 총 예상액 ÷ 총 편성 가중분입니다. 실적 미입력은 적용 실적이 0이지만 가중분은 분모에 포함됩니다.' },
+  { target: '[data-coach="forecast-hero"]', title: '분당 예상 지표', description: '분당 취급고와 분당 한계이익의 대표 숫자입니다. 실적 적용 우선순위는 수기 입력값이 있으면 수기 입력, 그다음 동일 방송 실적, 직전 실적, 0 순서입니다. 미입력이 많으면 가중분은 그대로인데 예상액이 0으로 들어가 평균이 내려갑니다.' },
+  { target: '[data-coach="forecast-pgm-team"]', title: '전사블록 시뮬레이션', description: '[편성팀] [전사블록]은 실제 상품 실적이 없을 수 있어 별도 입력칸으로 분당 취급고와 분당 한익을 보정합니다. 입력값은 sim_pgm_team 수기값으로 저장되고 재진입 시 복원됩니다.' },
+  { target: '[data-coach="forecast-stats"]', title: '보조 요약', description: '총 예상취급고와 총 예상한익은 각 블록의 예상액을 합산합니다. 편성 슬롯은 실제 편성된 블록 수와 전체 슬롯 수를 비교하고, 전체 슬롯 수는 CA/IP 분할 슬롯을 2칸으로 계산합니다.' },
+  { target: '[data-coach="forecast-missing-stat"]', title: '미입력 실적 카운트', description: '직전 실적도 없고 수기 입력도 완성되지 않은 블록 수입니다. 이 블록들은 가중분은 총 편성 가중분에 들어가지만 취급/분·한익/분은 0으로 계산되어 평균을 낮춥니다.' },
+  { target: '[data-coach="forecast-volume"]', title: '볼륨 비중', description: '현재 편성표에 올라간 상품들을 팀명 또는 카테고리명으로 묶어서, 예상 취급고와 예상 한계이익을 어느 그룹이 얼마나 차지하는지 보여줍니다. 금액 기여도가 0인 그룹은 막대 안에서 보이지 않을 수 있습니다.' },
+  { target: '[data-coach="forecast-group-toggle"]', title: '팀별/카테고리별 전환', description: '팀별은 담당 조직 기준으로, 카테고리별은 상품 분류 기준으로 다시 묶어 봅니다. 각 그룹의 분당 평균은 그 그룹의 총 예상액을 그 그룹에 편성된 가중분으로 나눈 값입니다.' },
+  { target: '[data-coach="forecast-daily"]', title: '일자별 전사 관점', description: '날짜별로 편성된 모든 상품의 예상액을 합산한 뒤, 그 날짜에 편성된 가중분으로 나눈 분당 취급고와 분당 한익입니다. 전사블록 제외 옵션이 켜져 있으면 그 블록은 빠지고, 미입력 실적은 0원으로 들어가지만 가중분은 포함됩니다. 그래프 막대를 클릭하면 아래 요약, 팀별/카테고리별 관점, 미입력 표, 상세 표가 해당 일자만 보도록 필터링되고, 같은 막대를 다시 누르거나 전체 보기를 누르면 해제됩니다.' },
+  { target: '[data-coach="forecast-target"]', title: '목표선과 평균선', description: '평균선은 각 날짜의 분당값을 단순 평균낸 것이 아니라, 날짜별 가중분 규모를 반영해 다시 계산한 전체 평균입니다. 목표선은 전사 목표가 있을 때만 함께 표시됩니다.' },
+  { target: '[data-coach="forecast-group-charts"]', title: '팀별/카테고리별 관점', description: '현재 조건에 포함된 편성 블록을 팀명 또는 카테고리명으로 묶은 영역입니다. 전사블록 제외 옵션과 일자 선택이 적용된 뒤 남은 블록만 들어가고, 미입력 실적은 0원으로 계산되지만 해당 블록의 가중분은 그룹 평균 분모에 포함됩니다. 팀별 보기에서는 팀 목표가 있으면 팀 목표와 비교하고, 없으면 전사 목표, 그것도 없으면 현재 전체 편성 평균과 비교합니다.' },
+  { target: '[data-coach="forecast-missing-table"]', title: '미입력 실적 보정표', description: '실적이 없는 블록만 모아 보여줍니다. 여기서 예상취급/분과 예상한익/분을 직접 입력하면 이후 계산에서 0 대신 수기값이 적용됩니다.' },
+  { target: '[data-coach="forecast-detail-table"]', title: '편성별 상세 표', description: '모든 편성 블록의 계산 근거를 확인하는 표입니다. 편성코드명이나 거래형태를 수정하면 perfKey를 다시 산출해 실적 매칭 기준도 바뀝니다. 예상값 셀은 클릭해서 수기 보정할 수 있습니다.' },
+  { target: '[data-coach="forecast-help-button"]', title: '시뮬레이션 안내 다시 보기', description: '이 버튼으로 실적 예측 페이지 투어를 다시 시작합니다. 계산 기준이 헷갈릴 때 특히 이 투어를 다시 보면 됩니다.' },
+]
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
@@ -348,6 +367,8 @@ export default function PerformanceForecast() {
   const [missingSort,  setMissingSort]  = useLocalStorageState(`pgmdr.ui.${uiScope}.forecast.missingSort`, { key: null, dir: 'asc' })
   const [detailWidths, setDetailWidths] = useLocalStorageState(`pgmdr.ui.${uiScope}.forecast.detailWidths`, {})
   const [missingWidths, setMissingWidths] = useLocalStorageState(`pgmdr.ui.${uiScope}.forecast.missingWidths`, {})
+  const [forecastCoachOpen, setForecastCoachOpen] = useState(false)
+  const [forecastCoachStep, setForecastCoachStep] = useState(0)
   const simDebounceRef = useRef(null)
 
   useEffect(() => {
@@ -577,6 +598,13 @@ export default function PerformanceForecast() {
     }, 500)
   }, [saveManualInput])
 
+  const openForecastCoach = () => {
+    setForecastCoachStep(0)
+    setForecastCoachOpen(true)
+  }
+
+  const closeForecastCoach = () => setForecastCoachOpen(false)
+
   const groupToggle = (
     <div style={{ display: 'flex', gap: 4 }}>
       {['team', 'category'].map(v => (
@@ -675,12 +703,21 @@ export default function PerformanceForecast() {
   const td = { padding: '6px 10px', fontSize: 11, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis' }
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto' }}>
+    <div data-coach="forecast-page" style={{ height: '100%', overflowY: 'auto' }}>
     <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* ── 상단 컨트롤 ──────────────────────────────────────── */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div data-coach="forecast-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>시뮬레이션</span>
+        <button
+          data-coach="forecast-help-button"
+          onClick={openForecastCoach}
+          title="시뮬레이션 안내 다시 보기"
+          aria-label="시뮬레이션 안내 다시 보기"
+          style={{ width: 24, height: 24, borderRadius: '50%', border: '1px solid #fecdd3', background: '#fff1f2', color: '#be123c', cursor: 'pointer', fontSize: 12, fontWeight: 900, flexShrink: 0 }}
+        >
+          ?
+        </button>
         <label style={{ display: 'flex', alignItems: 'center', gap: 7, cursor: 'pointer', marginLeft: 'auto',
           fontSize: 11, color: excludePgmTeam ? 'var(--accent)' : 'var(--text3)', fontWeight: excludePgmTeam ? 700 : 400 }}>
           <div onClick={() => setExcludePgmTeam(v => !v)}
@@ -694,14 +731,14 @@ export default function PerformanceForecast() {
       </div>
 
       {/* ── HERO ──────────────────────────────────────────────── */}
-      <div style={{ padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>
+      <div data-coach="forecast-formula" style={{ padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>
         시뮬레이션 평균 기준: 미입력 포함(실적 = 0, 가중분 = 총 편성)
       </div>
       {(() => {
         const salesAchieve  = companyTotal?.salesPerMin  > 0 ? summary.salesPerMin  / companyTotal.salesPerMin  * 100 : null
         const profitAchieve = companyTotal?.profitPerMin > 0 ? summary.profitPerMin / companyTotal.profitPerMin * 100 : null
         return (
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div data-coach="forecast-hero" style={{ display: 'flex', gap: 12 }}>
             <HeroCard label="분당 취급고 (예상)" big={fmt(summary.salesPerMin)} small="원/분"
               sub={`총 ${fmtS(summary.sales)} 취급고 예상`} color="var(--accent)"
               pct={salesAchieve}
@@ -721,7 +758,7 @@ export default function PerformanceForecast() {
               const spmHolder = companyTotal?.salesPerMin  > 0 ? fmt(companyTotal.salesPerMin)  : '목표 없음'
               const ppmHolder = companyTotal?.profitPerMin > 0 ? fmt(companyTotal.profitPerMin) : '목표 없음'
               return (
-                <div style={{ flex: 1, minWidth: 180, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div data-coach="forecast-pgm-team" style={{ flex: 1, minWidth: 180, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '.5px' }}>전사블록 시뮬레이션</div>
 
                   {/* 편성팀 블록 현황 */}
@@ -770,15 +807,17 @@ export default function PerformanceForecast() {
         const profitPct = tgtProfit > 0 ? summary.profit / tgtProfit * 100 : null
         const pctColor  = p => p >= 100 ? 'var(--green)' : p >= 80 ? 'var(--yellow)' : 'var(--red)'
         return (
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div data-coach="forecast-stats" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <StatCard label="총 예상취급고" value={fmtS(summary.sales)} color="var(--accent)"
               sub={salesPct != null ? `목표 ${fmtS(tgtSales)} · ${Math.round(salesPct)}%` : undefined} />
             <StatCard label="총 예상한익" value={fmtS(summary.profit)} color="var(--green)"
               sub={profitPct != null ? `목표 ${fmtS(tgtProfit)} · ${Math.round(profitPct)}%` : undefined} />
             <StatCard label="편성 슬롯" value={`${summary.count} / ${summary.totalSlotCount}`} sub={`가중분 ${fmt(summary.wm)}`} />
             <StatCard label="실적 입력" value={`${summary.perfEnteredCount}건`} sub={`${Math.round(summary.perfRate)}%`} />
+            <div data-coach="forecast-missing-stat" style={{ flex: 1, minWidth: 120 }}>
             <StatCard label="미입력 실적" value={`${summary.missingCount}건`} warn={summary.missingCount > 0}
               color={summary.missingCount > 0 ? 'var(--red)' : 'var(--text)'} sub="직전 실적 없음" />
+            </div>
           </div>
         )
         void pctColor
@@ -819,12 +858,12 @@ export default function PerformanceForecast() {
         )
 
         return (
-          <div>
+          <div data-coach="forecast-volume">
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
               <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.3px' }}>
                 {groupBy === 'team' ? '팀별' : '카테고리별'} 볼륨 비중
               </span>
-              <div style={{ marginLeft: 'auto' }}>{groupToggle}</div>
+              <div data-coach="forecast-group-toggle" style={{ marginLeft: 'auto' }}>{groupToggle}</div>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 14px' }}>
@@ -843,7 +882,7 @@ export default function PerformanceForecast() {
       })()}
 
       {/* ── 전사 관점: 일자별 분당취급고 / 분당한익 ───────────── */}
-      <div>
+      <div data-coach="forecast-daily">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.3px' }}>전사 관점</span>
           {selectedDate ? (
@@ -860,7 +899,7 @@ export default function PerformanceForecast() {
             <span style={{ fontSize: 9, color: 'var(--text3)' }}>막대 클릭 시 해당 일자로 필터</span>
           )}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div data-coach="forecast-target" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
 
           <ChartCard title="전사 일자별 분당취급고" sub="미입력 포함(실적 = 0, 가중분 = 총 편성) · 평균선 / 전사목표선">
             {(() => {
@@ -946,7 +985,7 @@ export default function PerformanceForecast() {
       </div>
 
       {/* ── 팀/카테고리 관점: 분당취급고 vs 목표 / 분당한익 vs 목표 ── */}
-      <div>
+      <div data-coach="forecast-group-charts">
         <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, gap: 8 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text3)', letterSpacing: '.3px' }}>
             {groupBy === 'team' ? '팀별' : '카테고리별'} 관점
@@ -1051,7 +1090,7 @@ export default function PerformanceForecast() {
 
 
       {/* ── 미입력 실적 ───────────────────────────────────────── */}
-      <div style={{ background: 'rgba(220,38,38,.05)', border: '1px solid rgba(220,38,38,.3)', borderRadius: 10, overflow: 'hidden' }}>
+      <div data-coach="forecast-missing-table" style={{ background: 'rgba(220,38,38,.05)', border: '1px solid rgba(220,38,38,.3)', borderRadius: 10, overflow: 'hidden' }}>
         <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid rgba(220,38,38,.2)' }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--red)' }}>
             ⚠ 직전 실적 미확인 {missingRows.length}건
@@ -1104,7 +1143,7 @@ export default function PerformanceForecast() {
       </div>
 
       {/* ── 전체 상세 테이블 ──────────────────────────────────── */}
-      <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+      <div data-coach="forecast-detail-table" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
           <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>편성별 실적 상세</span>
           <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 8 }}>예상취급/분 · 예상한익/분 셀 클릭하여 수정 · 평균/합계: 미입력 포함(실적 = 0, 가중분 = 총 편성)</span>
@@ -1172,6 +1211,9 @@ export default function PerformanceForecast() {
       </div>
 
     </div>
+    {forecastCoachOpen && (
+      <CoachMark steps={FORECAST_COACH_STEPS} stepIndex={forecastCoachStep} onStepChange={setForecastCoachStep} onClose={closeForecastCoach} />
+    )}
     </div>
   )
 }

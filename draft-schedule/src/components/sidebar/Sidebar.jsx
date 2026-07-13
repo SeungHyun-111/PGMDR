@@ -35,7 +35,7 @@ const memoCodePatch = (key, value, meta) => ({
   [`${key}Code`]: meta?.code || '',
 })
 
-export default function Sidebar({ isOpen, onToggle }) {
+export default function Sidebar({ isOpen, onToggle, coachExpanded = false }) {
   const { proposalItems, perfMap, starred, loadProposals, proposalLoaded, returnBlockToSidebar, addProposalItem, weightedMinTargets, saveBlock, runUndoBatch, startDate, poolType, currentVersionId } = useScheduleStore()
   const uiScope = `${startDate || 'no-session'}_${poolType || 'A'}_${currentVersionId || 'draft'}`
 
@@ -73,6 +73,10 @@ export default function Sidebar({ isOpen, onToggle }) {
   useEffect(() => {
     if ((isOpen || bottomOpen) && !proposalLoaded) loadProposals()
   }, [isOpen, bottomOpen])
+
+  useEffect(() => {
+    if (coachExpanded) setBottomOpen(true)
+  }, [coachExpanded])
 
   useEffect(() => {
     setVisibleCount(PAGE_SIZE)
@@ -221,9 +225,9 @@ export default function Sidebar({ isOpen, onToggle }) {
 
   return (
     <>
-      <div style={{ width: 260, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div data-coach="draft-sidebar" style={{ width: 260, flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-        <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+        <div data-coach="draft-sidebar-header" style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
           <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)' }}>
             상품 풀 <span style={{ color: 'var(--text3)', fontWeight: 400 }}>{filteredItems.length}건</span>
           </span>
@@ -232,7 +236,7 @@ export default function Sidebar({ isOpen, onToggle }) {
               style={{ background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 4, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>
               + 추가
             </button>
-            <button onClick={handleExpand}
+            <button data-coach="draft-sidebar-expand-button" onClick={handleExpand}
               style={{ background: bottomOpen ? 'var(--accent)' : 'var(--bg4)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px', fontSize: 10, color: bottomOpen ? '#fff' : 'var(--text3)', cursor: 'pointer' }}>
               ⬆ 확장
             </button>
@@ -246,7 +250,7 @@ export default function Sidebar({ isOpen, onToggle }) {
         <style>{`
           @keyframes cardPop { 0%{box-shadow:0 0 0 3px var(--accent)} 100%{box-shadow:0 0 0 0 transparent} }
         `}</style>
-        <div ref={scrollRef} onScroll={handleScroll}
+        <div data-coach="draft-product-list" ref={scrollRef} onScroll={handleScroll}
           onDragOver={handleScrollDragOver}
           onDragLeave={handleScrollDragLeave}
           onDrop={handleScrollDrop}
@@ -258,7 +262,7 @@ export default function Sidebar({ isOpen, onToggle }) {
           ) : (
             <>
               {visibleItems.slice(0, visibleCount).map((item) => (
-                <div key={item.uniqueKey || item.itemId} style={highlightId === item.itemId ? { animation: 'cardPop .9s ease-out', borderRadius: 6 } : undefined}>
+                <div key={item.uniqueKey || item.itemId} data-coach="draft-product-card" style={highlightId === item.itemId ? { animation: 'cardPop .9s ease-out', borderRadius: 6 } : undefined}>
                   {blockDragOver?.insertBeforeId === item.itemId && (
                     <div style={{ height: 2, borderRadius: 1, background: 'var(--accent)', margin: '1px 0 3px' }} />
                   )}

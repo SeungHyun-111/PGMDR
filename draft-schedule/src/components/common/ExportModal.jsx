@@ -5,7 +5,7 @@ import { exportToExcel, printReportSchedule, printSchedule } from '../../utils/e
 import HtmlSectionSelectModal from './HtmlSectionSelectModal'
 import useMemoCodes from '../../hooks/useMemoCodes'
 
-export default function ExportModal({ onClose }) {
+export default function ExportModal({ onClose, coachView = null }) {
   const { scheduleBlocks, proposalItems, startDate, endDate, pgmSlots, customSlots, splitSlots, perfMap, performanceHistoryByKey, manualInputs, entityProps } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const { allMemoCodes } = useMemoCodes()
@@ -19,6 +19,15 @@ export default function ExportModal({ onClose }) {
   useEffect(() => {
     if (showReportOptions) setTimeout(() => thresholdInputRef.current?.focus(), 0)
   }, [showReportOptions])
+
+  useEffect(() => {
+    setShowHtmlModal(coachView === 'html')
+    if (coachView !== 'html') {
+      setShowPrintSelect(false)
+      setShowExcelSelect(false)
+      setShowReportOptions(false)
+    }
+  }, [coachView])
 
   const rows = Object.values(scheduleBlocks)
     .filter(b => b && !b.isDefault)
@@ -74,6 +83,7 @@ export default function ExportModal({ onClose }) {
       onClick={onClose}
     >
       <div
+        data-coach="export-modal"
         onClick={e => e.stopPropagation()}
         style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '24px 28px', minWidth: showReportOptions ? 430 : 360, display: 'flex', flexDirection: 'column', gap: 14, boxShadow: '0 18px 60px rgba(0,0,0,.24)' }}
       >
@@ -135,9 +145,9 @@ export default function ExportModal({ onClose }) {
         ) : (
           <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
             <button onClick={onClose} style={{ flex: 1, padding: '8px 0', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>취소</button>
-            <button onClick={() => setShowPrintSelect(true)} style={{ flex: 1, padding: '8px 0', background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>인쇄</button>
-            <button onClick={() => setShowHtmlModal(true)} style={{ flex: 1, padding: '8px 0', background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>HTML</button>
-            <button onClick={() => setShowExcelSelect(true)} style={{ flex: 2, padding: '8px 0', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Excel</button>
+            <button data-coach="export-print" onClick={() => setShowPrintSelect(true)} style={{ flex: 1, padding: '8px 0', background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>인쇄</button>
+            <button data-coach="export-html" onClick={() => setShowHtmlModal(true)} style={{ flex: 1, padding: '8px 0', background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>HTML</button>
+            <button data-coach="export-excel" onClick={() => setShowExcelSelect(true)} style={{ flex: 2, padding: '8px 0', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Excel</button>
           </div>
         )}
       </div>

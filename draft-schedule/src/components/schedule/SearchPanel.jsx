@@ -129,7 +129,7 @@ export default function SearchPanel({ isOpen, onToggle }) {
   if (!isOpen) return null
 
   return (
-    <div style={{ width: 'clamp(300px, 22vw, 440px)', flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div data-coach="draft-search-panel" style={{ width: 'clamp(300px, 22vw, 440px)', flexShrink: 0, background: 'var(--bg2)', borderLeft: '1px solid var(--border)', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
       {/* 헤더 */}
       <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -145,7 +145,7 @@ export default function SearchPanel({ isOpen, onToggle }) {
         {sectionLabel('편성 리스트', matchedBlocks.length)}
 
         {/* 단순분 / 가중률 요약 */}
-        <div style={{ margin: '4px 8px 6px', padding: '8px 12px', background: 'var(--bg3)', borderRadius: 6, border: '1px solid var(--border)', display: 'flex', gap: 16, alignItems: 'center' }}>
+        <div data-coach="draft-search-summary" style={{ margin: '4px 8px 6px', padding: '8px 12px', background: 'var(--bg3)', borderRadius: 6, border: '1px solid var(--border)', display: 'flex', gap: 16, alignItems: 'center' }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 9, color: 'var(--text3)', marginBottom: 2 }}>가중분</div>
             <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>{totalWm.toLocaleString()}</div>

@@ -20,7 +20,7 @@ export default function ChatPanel({ onClose }) {
   }
 
   return (
-    <div style={{ position: 'fixed', right: 16, bottom: 16, width: 320, height: 440, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,.2)', zIndex: 500 }}>
+    <div data-coach="chat-panel" style={{ position: 'fixed', right: 16, bottom: 16, width: 320, height: 440, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,.2)', zIndex: 500 }}>
 
       {/* 헤더 */}
       <div style={{ padding: '10px 14px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>

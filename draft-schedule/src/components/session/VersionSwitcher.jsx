@@ -30,7 +30,7 @@ const formatMetaTime = ts => {
   return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 }
 
-export default function VersionSwitcher({ onToast }) {
+export default function VersionSwitcher({ onToast, coachPreviewVersion = null }) {
   const [isSyncingOps, setIsSyncingOps] = useState(false)
   const {
     startDate,
@@ -45,7 +45,8 @@ export default function VersionSwitcher({ onToast }) {
 
   const salesPublishedAt = versionMeta?.[VERSION_SALES]?.publishedAt
   const opsPublishedAt = versionMeta?.[VERSION_OPS]?.publishedAt || versionMeta?.[VERSION_OPS]?.updatedAt
-  const actionMeta = currentVersionId === VERSION_DRAFT
+  const displayVersionId = coachPreviewVersion || currentVersionId
+  const actionMeta = displayVersionId === VERSION_DRAFT
     ? versionMeta?.[VERSION_SALES]
     : versionMeta?.[VERSION_OPS]
 
@@ -93,9 +94,9 @@ export default function VersionSwitcher({ onToast }) {
   }
 
   const getActionLabel = () => {
-    if (currentVersionId === VERSION_DRAFT) return isPublishingSales ? '확정 중...' : '초안 확정'
-    if (currentVersionId === VERSION_SALES) return '편성 확정'
-    if (currentVersionId === VERSION_OPS) return isSyncingOps ? '갱신 중...' : '버전 갱신'
+    if (displayVersionId === VERSION_DRAFT) return isPublishingSales ? '확정 중...' : '초안 확정'
+    if (displayVersionId === VERSION_SALES) return '편성 확정'
+    if (displayVersionId === VERSION_OPS) return isSyncingOps ? '갱신 중...' : '버전 갱신'
     return '버전 갱신'
   }
 
@@ -106,6 +107,7 @@ export default function VersionSwitcher({ onToast }) {
   }
 
   const isVersionDisabled = (versionId) => {
+    if (coachPreviewVersion) return false
     if (versionId === VERSION_SALES) return !salesPublishedAt
     return false
   }
@@ -123,14 +125,15 @@ export default function VersionSwitcher({ onToast }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 70 }}>
       <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden' }}>
         {SESSION_VERSIONS.map((v, i) => {
-          const active = currentVersionId === v.id
+          const active = displayVersionId === v.id
           const disabled = isVersionDisabled(v.id)
           const inactive = !active && !disabled
           const tone = VERSION_TONES[v.id] || VERSION_TONES[VERSION_DRAFT]
           return (
             <button
               key={v.id}
-              onClick={() => handleSelect(v.id)}
+              data-coach={v.id === VERSION_DRAFT ? 'version-draft' : v.id === VERSION_SALES ? 'version-sales' : 'version-ops'}
+              onClick={() => coachPreviewVersion ? null : handleSelect(v.id)}
               disabled={disabled}
               title={getVersionTitle(v.id)}
               style={{
@@ -152,14 +155,15 @@ export default function VersionSwitcher({ onToast }) {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
         <button
-          onClick={handleVersionAction}
-          disabled={isPublishingSales || isSyncingOps}
+          data-coach="version-action"
+          onClick={coachPreviewVersion ? undefined : handleVersionAction}
+          disabled={!!coachPreviewVersion || isPublishingSales || isSyncingOps}
           style={{
             background: ACTION_TONE.bg,
             border: `1px solid ${ACTION_TONE.border}`,
             borderRadius: 6,
             color: ACTION_TONE.color,
-            cursor: isPublishingSales || isSyncingOps ? 'default' : 'pointer',
+            cursor: coachPreviewVersion || isPublishingSales || isSyncingOps ? 'default' : 'pointer',
             fontSize: 11,
             fontWeight: 900,
             height: 26,

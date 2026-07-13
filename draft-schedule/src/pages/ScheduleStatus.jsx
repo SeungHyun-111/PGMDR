@@ -11,10 +11,80 @@ import { GRADES, GRADE_META, getGrade, getEffectiveProfit, getEffectiveMetrics }
 import { VERSION_DRAFT } from '../utils/sessionVersion'
 import useLocalStorageState from '../hooks/useLocalStorageState'
 import { competitionItemToBlock, getCompetitionItems } from '../utils/competition'
+import CoachMark from '../components/common/CoachMark'
 
 const TEAM_COLORS = ['#818cf8','#34d399','#fb923c','#60a5fa','#f472b6','#a78bfa','#4ade80','#f87171','#fbbf24','#2dd4bf']
 const GRADE_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 }
 const MIN_TEAM_COL_WIDTH = 44
+const STATUS_COACH_STEPS = [
+  {
+    target: '[data-coach="status-page"]',
+    title: '편성현황 화면',
+    description: '현재 버전의 편성 상품, 미편성 제안 상품, 팀별 상세, 변경이력을 한곳에서 확인하는 화면입니다. 기본 빈 슬롯은 제외하고 실제 상품/제안 상품 중심으로 등급과 실적 기준을 보여줍니다.',
+    tab: 'all',
+  },
+  {
+    target: '[data-coach="status-tabs"]',
+    title: '현황 탭 전환',
+    description: '전체는 편성완료와 미편성을 함께 보고, 편성완료는 실제 배치된 상품과 경쟁 슬롯을 봅니다. 미편성은 아직 편성표에 들어가지 않은 제안 상품, 팀별은 팀 기준 상세 현황, 변경이력은 현재 버전의 수정 로그입니다.',
+    tab: 'all',
+  },
+  {
+    target: '[data-coach="status-grade-chart"]',
+    title: '등급 분포 차트',
+    description: '등급은 한익/분 기준으로 S/A/B/C/D를 나눕니다. 전체 탭에서는 편성 상품과 미편성 제안 상품을 합쳐 “상품 건수” 기준으로 보고, 도넛의 등급을 클릭하면 아래 표도 같은 등급으로 필터링됩니다.',
+    tab: 'all',
+  },
+  {
+    target: '[data-coach="status-weighted-chart"]',
+    title: '편성 가중분 기준 차트',
+    description: '편성완료 탭에서는 건수 기준 차트와 별도로 가중분 기준 등급 분포를 펼칠 수 있습니다. 이 차트는 상품 수가 아니라 실제 편성 가중분 합계로 비중을 계산하므로, 짧은 고효율 상품과 긴 편성 상품의 영향 차이를 분리해서 볼 수 있습니다.',
+    tab: 'scheduled',
+    weightedChart: true,
+  },
+  {
+    target: '[data-coach="status-scheduled-table"]',
+    title: '편성완료 표',
+    description: '편성완료 표에는 기본 빈 슬롯을 제외한 실제 편성 상품이 들어갑니다. 경쟁 슬롯은 별도로 경쟁 상태로 붙어서 보이고, 일반 편성 상품처럼 확정 등급으로 섞지 않습니다. 취급/분과 한익/분은 수기입력, 직전 실적, 미입력 0 기준으로 표시됩니다.',
+    tab: 'scheduled',
+  },
+  {
+    target: '[data-coach="status-unscheduled-table"]',
+    title: '미편성 표',
+    description: '미편성 표는 제안 상품 풀에 남아 있는 상품 기준입니다. 편성표에 들어간 슬롯 가중분은 여기 계산에 포함되지 않고, 가용 가중분과 잔여편성 값은 제안 상품 쪽 필드 기준으로 보여줍니다. 실적 미입력은 등급/효율 계산에서 0으로 취급됩니다.',
+    tab: 'unscheduled',
+  },
+  {
+    target: '[data-coach="status-team-picker"]',
+    title: '팀별 선택',
+    description: '팀별 탭에서는 편성 상품, 경쟁 후보, 미편성 제안 상품을 팀 기준으로 합쳐 봅니다. 전체를 보면 모든 팀을 한 번에 보고, 특정 팀을 누르면 그 팀에 해당하는 편성/경쟁/미편성 상품만 남습니다.',
+    tab: 'team',
+  },
+  {
+    target: '[data-coach="status-team-summary"]',
+    title: '팀 요약',
+    description: '팀 요약의 편성 가중분은 편성 또는 경쟁 상태의 행만 더합니다. 가용 가중분은 미편성 제안 상품의 가용 가중분을 더합니다. 취급/분과 한익/분 평균은 행별 분당 실적을 단순 평균하는 방식이 아니라, 각 행의 표시 가중분을 곱해 합산한 뒤 전체 표시 가중분으로 나눕니다.',
+    tab: 'team',
+  },
+  {
+    target: '[data-coach="status-team-detail"]',
+    title: '팀별 상세와 Excel',
+    description: '상세 표는 편성/경쟁을 먼저, 미편성을 뒤에 두고 등급, 한익/분, 편성코드명 순으로 기본 정렬합니다. Excel 버튼은 현재 팀 필터와 현재 정렬/필터로 보이는 행을 내보냅니다.',
+    tab: 'team',
+  },
+  {
+    target: '[data-coach="status-logs"]',
+    title: '변경이력',
+    description: '변경이력은 현재 세션과 현재 버전에 기록된 로그만 보여줍니다. 편성표 수정 이력과 사이드바 상품 이력을 분리하고, 검색은 기존 상품명 기준으로 RTDB 전체 로그를 다시 조회해 찾습니다.',
+    tab: 'logs',
+  },
+  {
+    target: '[data-coach="status-help-button"]',
+    title: '편성현황 안내 다시 보기',
+    description: '이 빨간 도움말 버튼으로 편성현황 코치마크를 다시 시작합니다. 탭별 포함/미포함 기준이 헷갈릴 때 다시 보면 됩니다.',
+    tab: 'all',
+  },
+]
 const TEAM_DETAIL_COLS = [
   { key: '_status', label: '상태', w: 78, sort: (a, b) => a._statusOrder - b._statusOrder },
   { key: '_gradeValue', label: '등급', w: 58, sort: (a, b) => (GRADE_ORDER[a._gradeValue] ?? 9) - (GRADE_ORDER[b._gradeValue] ?? 9) },
@@ -319,7 +389,7 @@ function TeamStatusTab({ scheduledRows, competingRows = [], unscheduledRows, per
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
+      <div data-coach="status-team-picker" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: 12 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text2)', marginBottom: 8 }}>팀 선택</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           {teamOptions.map(team => {
@@ -348,7 +418,7 @@ function TeamStatusTab({ scheduledRows, competingRows = [], unscheduledRows, per
         </div>
       </div>
 
-      <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+      <div data-coach="status-team-summary" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
         <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--bg3)', fontSize: 11, fontWeight: 700, color: 'var(--text2)' }}>
           팀 요약 · {selectedTeam}
         </div>
@@ -382,7 +452,7 @@ function TeamStatusTab({ scheduledRows, competingRows = [], unscheduledRows, per
         </div>
       </div>
 
-      <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
+      <div data-coach="status-team-detail" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
         <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--bg3)', display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)' }}>
             상세 상품 {visibleRows.length.toLocaleString()}건 · 기본 정렬: 편성/미편성 → 등급 → 한익/분 → 편성코드명
@@ -680,6 +750,8 @@ export default function ScheduleStatus() {
   const [selectedGrade, setSelectedGrade] = useLocalStorageState(`pgmdr.ui.${uiScope}.status.selectedGrade`, null)
   const [logs, setLogs]           = useState([])
   const [showWeightedGradeChart, setShowWeightedGradeChart] = useLocalStorageState(`pgmdr.ui.${uiScope}.status.showWeightedGradeChart`, false)
+  const [statusCoachOpen, setStatusCoachOpen] = useState(false)
+  const [statusCoachStep, setStatusCoachStep] = useState(0)
 
   // 편성 블록 → 등급/팀 enrichment (경쟁 블록 제외)
   const enrichedBlocks = useMemo(() =>
@@ -730,6 +802,14 @@ export default function ScheduleStatus() {
     })
   }, [startDate, poolType, currentVersionId])
 
+  useEffect(() => {
+    if (!statusCoachOpen) return
+    const step = STATUS_COACH_STEPS[statusCoachStep]
+    if (!step) return
+    if (step.tab && tab !== step.tab) setTab(step.tab)
+    if (step.weightedChart && !showWeightedGradeChart) setShowWeightedGradeChart(true)
+  }, [statusCoachOpen, statusCoachStep, tab, setTab, showWeightedGradeChart, setShowWeightedGradeChart])
+
   const handleGradeSelect = g => { setSelectedGrade(prev => prev === g ? null : g) }
 
   const chartItems = tab === 'scheduled' ? enrichedBlocks : tab === 'unscheduled' ? enrichedItems : allItems
@@ -744,15 +824,31 @@ export default function ScheduleStatus() {
 
   const hasGradeFilter = !!selectedGrade
 
+  const openStatusCoach = () => {
+    setStatusCoachStep(0)
+    setStatusCoachOpen(true)
+  }
+
+  const closeStatusCoach = () => setStatusCoachOpen(false)
+
   return (
-    <div style={{ padding: 16, height: '100%', overflowY: 'auto' }}>
+    <div data-coach="status-page" style={{ padding: 16, height: '100%', overflowY: 'auto' }}>
       {/* 탭 + 등급 필터 초기화 */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+      <div data-coach="status-tabs" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
         <button style={btnStyle(tab === 'all')}          onClick={() => setTab('all')}>전체 {enrichedBlocks.length + enrichedItems.length}</button>
         <button style={btnStyle(tab === 'scheduled')}    onClick={() => setTab('scheduled')}>편성완료 {enrichedBlocks.length + competingBlocks.length}</button>
         <button style={btnStyle(tab === 'unscheduled')}  onClick={() => setTab('unscheduled')}>미편성 {proposalItems.length}</button>
         <button style={btnStyle(tab === 'team')}         onClick={() => setTab('team')}>팀별</button>
         <button style={btnStyle(tab === 'logs')}         onClick={() => setTab('logs')}>변경이력 {logs.length}</button>
+        <button
+          data-coach="status-help-button"
+          onClick={openStatusCoach}
+          title="편성현황 안내 다시 보기"
+          aria-label="편성현황 안내 다시 보기"
+          style={{ width: 24, height: 24, borderRadius: '50%', border: '1px solid #fecdd3', background: '#fff1f2', color: '#be123c', cursor: 'pointer', fontSize: 12, fontWeight: 900, flexShrink: 0 }}
+        >
+          ?
+        </button>
         {hasGradeFilter && (
           <button onClick={() => setSelectedGrade(null)}
             style={{ marginLeft: 'auto', padding: '5px 12px', borderRadius: 5, fontSize: 11, cursor: 'pointer', background: GRADE_META[selectedGrade].bg, border: `1px solid ${GRADE_META[selectedGrade].color}`, color: GRADE_META[selectedGrade].color, fontWeight: 700 }}>
@@ -762,7 +858,7 @@ export default function ScheduleStatus() {
       </div>
 
       {!['logs', 'team'].includes(tab) && (
-        <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', marginBottom: 14 }}>
+        <div data-coach="status-grade-chart" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 20px', marginBottom: 14 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
             {chartTitle}
             <BasisBadge color="var(--accent)">상품수 기준</BasisBadge>
@@ -791,7 +887,7 @@ export default function ScheduleStatus() {
                 {showWeightedGradeChart ? '가중분 기준 접기' : '가중분 기준 펼치기'}
               </button>
               {showWeightedGradeChart && (
-                <div style={{ marginTop: 14 }}>
+                <div data-coach="status-weighted-chart" style={{ marginTop: 14 }}>
                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
                     편성 상품 등급 분포
                     <BasisBadge color="var(--green)">편성 가중분 기준</BasisBadge>
@@ -811,17 +907,24 @@ export default function ScheduleStatus() {
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', margin: '10px 0 6px' }}>
             편성완료 {hasGradeFilter ? `(${selectedGrade}등급 ${filteredBlocks.length}건)` : `${enrichedBlocks.length}건`}
           </div>
-          <StatusScheduled rows={filteredBlocks} competing={competingBlocks} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} />
+          <div data-coach="status-scheduled-table">
+            <StatusScheduled rows={filteredBlocks} competing={competingBlocks} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} />
+          </div>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', margin: '14px 0 6px' }}>
             미편성 {hasGradeFilter ? `(${selectedGrade}등급 ${filteredItems.length}건)` : `${proposalItems.length}건`}
           </div>
-          <StatusUnscheduled rows={filteredItems} perfMap={perfMap} manualInputs={manualInputs} />
+          <div data-coach="status-unscheduled-table">
+            <StatusUnscheduled rows={filteredItems} perfMap={perfMap} manualInputs={manualInputs} />
+          </div>
         </>
       )}
-      {tab === 'scheduled'   && <StatusScheduled   rows={filteredBlocks} competing={competingBlocks} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} />}
-      {tab === 'unscheduled' && <StatusUnscheduled rows={filteredItems}  perfMap={perfMap} manualInputs={manualInputs} />}
+      {tab === 'scheduled'   && <div data-coach="status-scheduled-table"><StatusScheduled   rows={filteredBlocks} competing={competingBlocks} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} /></div>}
+      {tab === 'unscheduled' && <div data-coach="status-unscheduled-table"><StatusUnscheduled rows={filteredItems}  perfMap={perfMap} manualInputs={manualInputs} /></div>}
       {tab === 'team'        && <TeamStatusTab scheduledRows={filteredBlocks} competingRows={competingBlocks} unscheduledRows={filteredItems} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} uiScope={uiScope} />}
-      {tab === 'logs'        && <StatusLogs logs={logs} startDate={startDate} poolType={poolType} versionId={currentVersionId} />}
+      {tab === 'logs'        && <div data-coach="status-logs"><StatusLogs logs={logs} startDate={startDate} poolType={poolType} versionId={currentVersionId} /></div>}
+      {statusCoachOpen && (
+        <CoachMark steps={STATUS_COACH_STEPS} stepIndex={statusCoachStep} onStepChange={setStatusCoachStep} onClose={closeStatusCoach} />
+      )}
     </div>
   )
 }

@@ -24,7 +24,7 @@ export default function ProductFilters({ filters, setFilters }) {
   }
 
   return (
-    <div style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 5, flexShrink: 0 }}>
+    <div data-coach="draft-product-filters" style={{ padding: '8px 10px', borderBottom: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 5, flexShrink: 0 }}>
       <input
         placeholder="🔍 상품명 / 편성코드 검색"
         value={filters.keyword}

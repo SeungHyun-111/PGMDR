@@ -316,7 +316,7 @@ export default function SidebarExpanded({ items, onClose }) {
   }
 
   return (
-    <div style={{
+    <div data-coach="draft-sidebar-expanded" style={{
       position: 'fixed', bottom: 0, left: 0, right: 0, height: panelHeight,
       background: 'var(--bg2)',
       borderTop: '3px solid var(--accent)',

@@ -60,6 +60,7 @@ export default function HtmlSectionSelectModal({ onBack, onClose }) {
       onClick={onBack}
     >
       <div
+        data-coach="html-sections"
         onClick={e => e.stopPropagation()}
         style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '24px 28px', minWidth: 340, display: 'flex', flexDirection: 'column', gap: 14 }}
       >

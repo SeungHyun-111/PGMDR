@@ -312,6 +312,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
   return (
     <div
       style={{ position: 'absolute', top, left: 0, right: 0, height, borderBottom: '1px solid var(--border)' }}
+      data-coach="draft-slot-row"
       data-slot-id={slot.slotId}
       onDragEnd={() => setDropTarget(null)}
     >

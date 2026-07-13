@@ -28,7 +28,7 @@ function getLocationText(user) {
   return `${tab} / ${session} / ${version}`
 }
 
-export default function PresenceBar() {
+export default function PresenceBar({ forceOpen = false }) {
   const { userName } = useScheduleStore()
   const users = usePresenceUsers()
   const [open, setOpen] = useState(false)
@@ -37,6 +37,7 @@ export default function PresenceBar() {
 
   return (
     <div
+      data-coach="presence"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
       style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 4 }}
@@ -75,7 +76,7 @@ export default function PresenceBar() {
         {users.length}명 접속 중
       </span>
 
-      {open && (
+      {(open || forceOpen) && (
         <div style={{
           position: 'absolute',
           top: 30,

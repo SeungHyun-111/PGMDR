@@ -14,7 +14,7 @@ const HEADER_HEIGHT = 36
 const TOOLBAR_HEIGHT = 32
 const MIN_ROW_HEIGHT = 28
 
-export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
+export default function ScheduleGrid({ onBlockDrop, readOnly = false, onOpenCoach }) {
   const { pgmSlots, customSlots, scheduleBlocks, saveBlock, removeBlock, splitSlots, toggleSplitSlot, splitSlotTime, deleteSlotTime, gridSearch, setGridSearch, setSearchPanelOpen, isViewerMode, setViewerMode, runUndoBatch } = useScheduleStore()
   const viewerMode = readOnly || isViewerMode
   const containerRef = useRef(null)
@@ -219,15 +219,15 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
   if (!pgmSlots.length) return null
 
   return (
-    <div ref={containerRef} style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
+    <div ref={containerRef} data-coach="draft-grid" style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', position: 'relative' }}>
 
       {/* 툴바 */}
-      <div style={{ height: TOOLBAR_HEIGHT, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 8, borderBottom: '1px solid var(--border)', background: 'var(--bg2)', flexShrink: 0 }}>
-        <div style={{ fontSize: 11, color: 'var(--text3)' }}>
+      <div data-coach="draft-grid-toolbar" style={{ height: TOOLBAR_HEIGHT, display: 'flex', alignItems: 'center', padding: '0 12px', gap: 8, borderBottom: '1px solid var(--border)', background: 'var(--bg2)', flexShrink: 0 }}>
+        <div data-coach="draft-grid-count" style={{ fontSize: 11, color: 'var(--text3)' }}>
           총 {effectivePgmSlots.length}슬롯 · {dates.length}일
         </div>
 
-        <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)}
+        <select data-coach="draft-team-filter" value={teamFilter} onChange={e => setTeamFilter(e.target.value)}
           style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '2px 6px', borderRadius: 4, fontSize: 11, outline: 'none' }}>
           {blockTeams.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
@@ -238,7 +238,18 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
           </button>
         )}
 
+        <button
+          data-coach="draft-help-button"
+          onClick={onOpenCoach}
+          title="초안 편성 안내 다시 보기"
+          aria-label="초안 편성 안내 다시 보기"
+          style={{ marginLeft: 'auto', width: 24, height: 24, borderRadius: '50%', border: '1px solid #fecdd3', background: '#fff1f2', color: '#be123c', cursor: 'pointer', fontSize: 12, fontWeight: 900, flexShrink: 0 }}
+        >
+          ?
+        </button>
+
         <input
+          data-coach="draft-grid-search"
           value={gridSearch}
           onChange={e => {
             const v = e.target.value
@@ -247,7 +258,6 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
           }}
           placeholder="🔍 편성표 검색"
           style={{
-            marginLeft: 'auto',
             width: gridSearch ? 170 : 130,
             background: 'var(--bg3)', border: '1px solid var(--border)',
             color: 'var(--text)', padding: '5px 8px', borderRadius: 4,
@@ -255,6 +265,7 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
           }}
         />
         <label
+          data-coach="draft-viewer-mode"
           title="뷰어 모드에서는 편성표 편집과 드래그 작업이 잠깁니다."
           style={{
             display: 'flex',
@@ -312,7 +323,7 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
       </div>
 
       {/* 헤더 */}
-      <div style={{ display: 'flex', flexShrink: 0, height: HEADER_HEIGHT, borderBottom: '1px solid var(--border)', background: 'var(--bg2)', zIndex: 20 }}>
+      <div data-coach="draft-date-header" style={{ display: 'flex', flexShrink: 0, height: HEADER_HEIGHT, borderBottom: '1px solid var(--border)', background: 'var(--bg2)', zIndex: 20 }}>
         {dates.map((date, di) => {
           const weather = weatherByDate[date]
           return (
@@ -381,7 +392,7 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
       </div>
 
       {/* 바디 */}
-      <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex' }}>
+      <div data-coach="draft-schedule-body" style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', display: 'flex' }}>
         {dates.map((date, di) => {
           const slots = slotsByDate[date] || []
           let timeTop = 0
@@ -389,7 +400,7 @@ export default function ScheduleGrid({ onBlockDrop, readOnly = false }) {
             <div key={date} style={{ display: 'flex', flexShrink: 0, width: TIME_COL_WIDTH + colWidth, borderLeft: di === 0 ? 'none' : '2px solid var(--border2)', position: 'relative', height: totalHeight }}>
 
               {/* 시간축 */}
-              <div style={{ width: TIME_COL_WIDTH, flexShrink: 0, position: 'relative', height: totalHeight, borderRight: '1px solid var(--border2)' }}>
+              <div data-coach={di === 0 ? 'draft-time-axis' : undefined} style={{ width: TIME_COL_WIDTH, flexShrink: 0, position: 'relative', height: totalHeight, borderRight: '1px solid var(--border2)' }}>
                 {slots.map(slot => {
                   const rowH = getRowHeight(slot.slotId)
                   const currentTop = timeTop
