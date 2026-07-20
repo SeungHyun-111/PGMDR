@@ -9,6 +9,7 @@ import ExportModal from './components/common/ExportModal'
 import ChatPanel from './components/common/ChatPanel'
 import PresenceBar from './components/common/PresenceBar'
 import CoachMark from './components/common/CoachMark'
+import CompetitorSearch from './components/common/CompetitorSearch'
 import useScheduleStore from './store/useScheduleStore'
 import usePresence from './hooks/usePresence'
 import { applyTheme, getStoredTheme } from './styles/theme'
@@ -52,6 +53,7 @@ const COACH_STEPS = [
   { target: '[data-coach="export-excel"]', mode: 'export', title: 'Excel 내보내기', description: '구글 업로드용 또는 BO용 양식으로 Excel을 만듭니다. 후속 시스템에 넣을 파일이 필요할 때 가장 자주 쓰게 될 버튼입니다.' },
   { target: '[data-coach="chat-button"]', mode: 'chat', title: '채팅 버튼', description: '같은 작업판을 보는 사람들과 바로 이야기하는 통로입니다. 편성 변경 이유나 확인 요청을 화면을 벗어나지 않고 남길 수 있어요.' },
   { target: '[data-coach="chat-panel"]', mode: 'chat', title: '팀 채팅 패널', description: '메시지 목록과 입력창이 있는 패널입니다. Enter로 전송하고, 작업 중 논의한 내용을 짧게 남기는 용도로 설계했습니다.' },
+  { target: '[data-coach="competitor-search"]', title: '경쟁사 실적 검색', description: '모든 화면에서 사용할 수 있는 경쟁사 실적 검색입니다. 클릭하면 브랜드·상품 포함 검색창이 열리고, 버튼 자체를 드래그하면 원하는 위치로 옮길 수 있습니다. 편성표 페이지나 버전을 바꿔도 하나의 전역 버튼으로 계속 유지됩니다.' },
   { target: '[data-coach="profile"]', title: '내 프로필', description: '현재 작업자로 표시되는 이름입니다. 갱신 이력, 채팅, 접속자 상태에 함께 쓰이니 작업 전 이름이 맞는지 확인하면 좋습니다.' },
   { target: '[data-coach="theme"]', title: '모드 선택', description: '밝은 모드와 어두운 모드를 전환합니다. 장시간 편성할 때 눈이 편한 쪽으로 바꿔두면 꽤 체감이 납니다.' },
 ]
@@ -381,6 +383,7 @@ export default function App() {
       {coachOpen && (
         <CoachMark steps={COACH_STEPS} stepIndex={coachStep} onStepChange={setCoachStep} onClose={closeCoach} />
       )}
+      <CompetitorSearch />
     </div>
   )
 }
