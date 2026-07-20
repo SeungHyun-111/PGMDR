@@ -486,7 +486,16 @@ function CompanyResult({ company, rows }) {
         </div>
       </div>
       <div style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', minWidth: 1050, borderCollapse: 'collapse', fontSize: 11 }}>
+        <table style={{ width: '100%', minWidth: 1050, tableLayout: 'fixed', borderCollapse: 'collapse', fontSize: 11 }}>
+          <colgroup>
+            <col style={{ width: '15%' }} />
+            <col style={{ width: '6%' }} />
+            <col style={{ width: '12%' }} />
+            <col style={{ width: '39%' }} />
+            <col style={{ width: '8%' }} />
+            <col style={{ width: '10%' }} />
+            <col style={{ width: '10%' }} />
+          </colgroup>
           <thead>
             <tr style={{ background: 'var(--bg3)', color: 'var(--text2)' }}>
               {['방송일시', '채널', '브랜드', '상품명', '가중분', '매출액', '분당 매출액'].map((heading) => <th key={heading} style={{ padding: '9px 10px', textAlign: heading === '가중분' || heading.includes('매출액') ? 'right' : 'left', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{heading}</th>)}
@@ -498,7 +507,7 @@ function CompanyResult({ company, rows }) {
                 <td style={cellStyle}>{row.date || '-'} {String(row.time || '').padStart(5, '0')}</td>
                 <td style={cellStyle}>{row.channel || '-'}</td>
                 <td style={cellStyle}>{row.brand || '-'}</td>
-                <td style={{ ...cellStyle, maxWidth: 520 }}>{row.productName || row.dataProductName || '-'}</td>
+                <td title={row.productName || row.dataProductName || '-'} style={{ ...cellStyle, overflow: 'hidden', textOverflow: 'ellipsis' }}>{row.productName || row.dataProductName || '-'}</td>
                 <td style={numberCellStyle}>{integerFormatter.format(getWeightedMinutes(row))}</td>
                 <td style={numberCellStyle}>{formatWon(row.revenue)}</td>
                 <td style={numberCellStyle}>{formatWon(getPerMinuteRevenue(row))}/분</td>
