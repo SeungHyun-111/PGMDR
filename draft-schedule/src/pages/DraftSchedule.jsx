@@ -105,8 +105,9 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
     }
 
     // 항상 정규화된 값 사용 (드롭 시점 item 상태와 무관하게 일관성 보장)
+    const pgmCodeName = String(item.pgmCodeName || '').trim()
     const dealTypeConverted = normalizeDealType(item.dealTypeConverted || item.dealType || '')
-    const perfKey = makePerfKey(dealTypeConverted, item.pgmCodeName) || undefined
+    const perfKey = makePerfKey(dealTypeConverted, pgmCodeName) || undefined
     // perfKey가 없으면 undefined로 두어 Firebase에 null 저장 방지
 
     if (existingBlock && !existingBlock.isDefault && mode === 'replace') {
@@ -114,7 +115,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
     } else if (existingBlock && !existingBlock.isDefault) {
       const items = [
         ...getCompetitionItems(existingBlock),
-        toCompetitionItem({ ...item, dealType: dealTypeConverted, dealTypeConverted, perfKey }, weightedMin),
+        toCompetitionItem({ ...item, pgmCodeName, dealType: dealTypeConverted, dealTypeConverted, perfKey }, weightedMin),
       ]
       await saveBlock(blockKey, {
         ...makeCompetitionBlock({ slot, blockKey, channel, weightedMin, items }),
@@ -130,7 +131,7 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
       channel,
       itemId: item.itemId,
       ...(item.uniqueKey ? { uniqueKey: item.uniqueKey } : {}),
-      pgmCodeName: item.pgmCodeName,
+      pgmCodeName,
       pgmCode: item.pgmCode || '',
       mdTeam: item.mdTeam || '',
       orgName: item.mdTeam || '',

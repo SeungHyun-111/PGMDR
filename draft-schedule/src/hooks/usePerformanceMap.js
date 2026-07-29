@@ -31,8 +31,9 @@ export function normalizeDealType(dealType, unknownFallback = '[위]') {
 // perfKey는 정규화된 dealType + pgmCodeName의 조합만 허용
 // pgmCodeName 없으면 null → 실적 0으로 표시 (2안 fallback 없음)
 export function makePerfKey(dealType, pgmCodeName) {
-  if (!pgmCodeName) return null
-  return `${normalizeDealType(dealType)}${pgmCodeName}`
+  const cleanName = String(pgmCodeName || '').trim()
+  if (!cleanName) return null
+  return `${normalizeDealType(dealType)}${cleanName}`
 }
 
 export function getPerfDisplay(perf) {

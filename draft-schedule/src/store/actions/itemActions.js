@@ -20,6 +20,15 @@ function getNextProposalIndex(items = []) {
   return numericIndexes.length ? Math.max(...numericIndexes) + 1 : items.length
 }
 
+function trimStringFields(data = {}) {
+  return Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [
+      key,
+      typeof value === 'string' ? value.trim() : value,
+    ])
+  )
+}
+
 export function createItemActions(setState, getState) {
   return {
 
@@ -63,6 +72,7 @@ export function createItemActions(setState, getState) {
     },
 
     async updateProposalItem(itemId, fbIdx, patch, uniqueKey) {
+      patch = trimStringFields(patch)
       const { startDate, poolType, allProposalItems, proposalItems } = getState()
       // fbIdx가 없으면 현재 state 순서로 보정
       const matches = item => item && (uniqueKey ? item.uniqueKey === uniqueKey : item.itemId === itemId)
@@ -107,7 +117,7 @@ export function createItemActions(setState, getState) {
       const versionPath = getCurrentVersionPath(getState, weekKey)
       const fbIdx = getNextProposalIndex(allProposalItems)
       // _fbIdx는 내부 메타 — Firebase에는 저장하지 않음
-      const newItem = { ...itemData, itemId: `manual_${Date.now()}`, uniqueKey: genKey('1') }
+      const newItem = { ...trimStringFields(itemData), itemId: `manual_${Date.now()}`, uniqueKey: genKey('1') }
       const entityFields = extractEntityFields(buildProposalItem(newItem))
       await update(ref(db, versionPath), {
         [`proposalItems/${fbIdx}`]: newItem,
@@ -179,7 +189,7 @@ export function createItemActions(setState, getState) {
       const fbIdx = getNextProposalIndex(allProposalItems)
       const rest = { ...orig }
       delete rest._fbIdx
-      const newItem = { ...rest, itemId: `dup_${Date.now()}`, uniqueKey: genKey('1') }
+      const newItem = trimStringFields({ ...rest, itemId: `dup_${Date.now()}`, uniqueKey: genKey('1') })
       const entityFields = extractEntityFields(buildProposalItem(newItem))
       await update(ref(db, versionPath), {
         [`proposalItems/${fbIdx}`]: newItem,
@@ -287,6 +297,7 @@ export function createItemActions(setState, getState) {
 
     async saveEntityProps(uniqueKey, data) {
       if (!uniqueKey) return
+      data = trimStringFields(data)
       const { startDate, poolType } = getState()
       const weekKey = `${startDate}_${poolType}`
       const versionPath = getCurrentVersionPath(getState, weekKey)

@@ -8,10 +8,20 @@ import { competitionItemKey, competitionItemToBlock, getCompetitionItems, makeCo
 import { filterUnscheduledItems, upsertByItemId } from '../../utils/proposalVisibility'
 import { getCurrentVersionPath } from '../../utils/sessionVersion'
 
+function trimStringFields(data = {}) {
+  return Object.fromEntries(
+    Object.entries(data).map(([key, value]) => [
+      key,
+      typeof value === 'string' ? value.trim() : value,
+    ])
+  )
+}
+
 export function createBlockActions(setState, getState) {
   return {
 
     async saveBlock(blockKey, patch) {
+      patch = trimStringFields(patch)
       const { startDate, poolType, scheduleBlocks, weightedMinTargets } = getState()
       const weekKey = `${startDate}_${poolType}`
       const versionPath = getCurrentVersionPath(getState, weekKey)
@@ -186,11 +196,11 @@ export function createBlockActions(setState, getState) {
 
     async changeBlockChannel(block, newChannel, patch, options = {}) {
       const { startDate, poolType, splitSlots, pgmSlots, scheduleBlocks, weightedMinTargets } = getState()
-      patch = {
+      patch = trimStringFields({
         ...patch,
         ...(patch.mdTeam  !== undefined && { mdTeam:  normalizeTeamName(patch.mdTeam,  weightedMinTargets) }),
         ...(patch.orgName !== undefined && { orgName: normalizeTeamName(patch.orgName, weightedMinTargets) }),
-      }
+      })
       const weekKey = `${startDate}_${poolType}`
       const versionPath = getCurrentVersionPath(getState, weekKey)
       const slotId  = block.slotId

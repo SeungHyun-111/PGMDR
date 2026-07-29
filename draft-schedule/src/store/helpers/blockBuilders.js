@@ -46,9 +46,9 @@ export function makeDefaultBlock(slot, channel = 'ALL') {
 }
 
 export function buildProposalItem(row) {
-  const pgmCodeName = row.pgmCodeName || ''
+  const pgmCodeName = String(row.pgmCodeName || '').trim()
   // raw dealType(GAS 원본)을 우선 사용 - Firebase 캐시된 dealTypeConverted는 구버전 오염 가능
-  const raw = row.dealType || row.dealTypeConverted || ''
+  const raw = String(row.dealType || row.dealTypeConverted || '').trim()
   const dealTypeConverted = normalizeDealType(raw) // 미인식 값 포함 항상 정규화
   return {
     ...row,
@@ -81,7 +81,7 @@ export function buildPreScheduleBlocks(pgmSlots, preScheduleRows, existingBlocks
     const slot = slotMap[`${parsed.dateKey}_${normalizeTime(parsed.timeText)}`]
     if (!slot || existingBlocks[slot.slotId]) return
     const dealTypeConverted = normalizeDealType(pre.dealType)
-    const pgmCodeName = pre.pgmCodeName || ''
+    const pgmCodeName = String(pre.pgmCodeName || '').trim()
     blocks[slot.slotId] = {
       slotId: slot.slotId, blockKey: slot.slotId,
       dateKey: slot.dateKey, timeText: slot.timeText,
