@@ -11,7 +11,7 @@ import { splitWeightedMin } from '../utils/weightedMin'
 import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
 import { db, ref, get } from '../api/firebase'
 import { getCompetitionItems, makeCompetitionBlock, toCompetitionItem } from '../utils/competition'
-import { stripEntityFields } from '../utils/mergeEntity'
+import { extractEntityFields, stripEntityFields } from '../utils/mergeEntity'
 import useLocalStorageState from '../hooks/useLocalStorageState'
 
 const DRAFT_COACH_STEPS = [
@@ -40,7 +40,7 @@ const DRAFT_COACH_STEPS = [
 export default function DraftSchedule({ setupPopup, setSetupPopup }) {
   const {
     isLoaded, isLoading, error, startDate, poolType, currentVersionId,
-    loadInitData, resetSession, saveBlock, scheduleItem, returnBlockToSidebar,
+    loadInitData, resetSession, saveBlock, saveEntityProps, scheduleItem, returnBlockToSidebar,
     isViewerMode,
   } = useScheduleStore()
 
@@ -148,6 +148,10 @@ export default function DraftSchedule({ setupPopup, setSetupPopup }) {
       ...(perfKey ? { perfKey } : {}),
       isDefault: false,
       assignedAt: Date.now(),
+    }
+
+    if (newBlock.uniqueKey) {
+      await saveEntityProps(newBlock.uniqueKey, extractEntityFields(newBlock))
     }
 
     await saveBlock(blockKey, {

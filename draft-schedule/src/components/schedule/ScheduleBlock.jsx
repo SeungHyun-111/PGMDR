@@ -71,7 +71,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
     ? '경쟁'
     : ((block.mdTeam || block.orgName || '').replace('팀', '').slice(0, 2))
 
-  const dealChar = isCompeting ? '' : getDealTypeChar(block.dealType || block.dealTypeChar || '')
+  const dealChar = isCompeting ? '' : getDealTypeChar(dealType || block.dealTypeChar || '')
 
   const isPgmTeam = block.pgmCodeName === '[편성팀]'
 
