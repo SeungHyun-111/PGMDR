@@ -17,6 +17,16 @@ function trimStringFields(data = {}) {
   )
 }
 
+function compactUndefined(value) {
+  if (Array.isArray(value)) return value.map(compactUndefined)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([, v]) => v !== undefined)
+      .map(([k, v]) => [k, compactUndefined(v)])
+  )
+}
+
 export function createBlockActions(setState, getState) {
   return {
 
@@ -27,7 +37,8 @@ export function createBlockActions(setState, getState) {
       const versionPath = getCurrentVersionPath(getState, weekKey)
       const before = scheduleBlocks[blockKey] || null
       const skipLog = !!patch.__skipLog
-      const { __skipLog, ...cleanPatch } = patch
+      const cleanPatch = { ...patch }
+      delete cleanPatch.__skipLog
       const normalizedPatch = {
         ...cleanPatch,
         ...(cleanPatch.mdTeam  !== undefined && { mdTeam:  normalizeTeamName(cleanPatch.mdTeam,  weightedMinTargets) }),
@@ -44,6 +55,33 @@ export function createBlockActions(setState, getState) {
       if (nextPerfKey) getState().ensurePerformanceKeys?.([nextPerfKey], { latest: true, history: true })
       if (!skipLog && cleanPatch.isDefault !== true) {
         getState()._writeLog(before ? '수정' : '편성', blockKey, before, { ...before, ...cleanPatch })
+      }
+    },
+
+    async replaceBlock(blockKey, block) {
+      block = compactUndefined(trimStringFields(block))
+      const { startDate, poolType, scheduleBlocks, weightedMinTargets } = getState()
+      const weekKey = `${startDate}_${poolType}`
+      const versionPath = getCurrentVersionPath(getState, weekKey)
+      const before = scheduleBlocks[blockKey] || null
+      const skipLog = !!block.__skipLog
+      const cleanBlock = { ...block }
+      delete cleanBlock.__skipLog
+      const normalizedBlock = {
+        ...cleanBlock,
+        ...(cleanBlock.mdTeam  !== undefined && { mdTeam:  normalizeTeamName(cleanBlock.mdTeam,  weightedMinTargets) }),
+        ...(cleanBlock.orgName !== undefined && { orgName: normalizeTeamName(cleanBlock.orgName, weightedMinTargets) }),
+      }
+      getState().recordUndoChange('釉붾줉 援먯껜 ?섎룎由ш린', {
+        path: `${versionPath}/scheduleBlocks/${blockKey}`,
+        before,
+        after: normalizedBlock,
+        description: `釉붾줉 援먯껜: ${normalizedBlock.pgmCodeName || blockKey}`,
+      })
+      await set(ref(db, `${versionPath}/scheduleBlocks/${blockKey}`), normalizedBlock)
+      if (normalizedBlock.perfKey) getState().ensurePerformanceKeys?.([normalizedBlock.perfKey], { latest: true, history: true })
+      if (!skipLog && normalizedBlock.isDefault !== true) {
+        getState()._writeLog(before ? '?섏젙' : '?몄꽦', blockKey, before, normalizedBlock)
       }
     },
 

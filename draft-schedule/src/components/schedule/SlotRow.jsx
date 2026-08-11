@@ -73,7 +73,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
   }
 
   const moveBlock = async ({ blockKey, ch, mode }) => {
-    const { scheduleBlocks, returnBlockToSidebar, _writeLog } = useScheduleStore.getState()
+    const { scheduleBlocks, returnBlockToSidebar, replaceBlock, _writeLog } = useScheduleStore.getState()
     const draggedBlock = scheduleBlocks[blockKey]
     if (!draggedBlock) return
 
@@ -86,7 +86,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
 
     const fillSourceWithDefault = async () => {
       if (!dropConfirm?.fillSource) return
-      await saveBlock(blockKey, {
+      await replaceBlock(blockKey, {
         ...makeDefaultBlock(draggedBlock, sourceChannel),
         uniqueKey: genKey('0'),
         __skipLog: true,
@@ -100,7 +100,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
       ]
       const competitionBlock = makeCompetitionBlock({ slot, blockKey: newKey, channel: ch, weightedMin: targetWeightedMin, items })
       await removeBlock(blockKey, { skipLog: true, keepScheduled: true })
-      await saveBlock(newKey, {
+      await replaceBlock(newKey, {
         ...competitionBlock,
         __skipLog: true,
       })
@@ -134,8 +134,8 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
         channel: sourceChannel,
       }
 
-      await saveBlock(sourceKey, { ...swappedBlock, __skipLog: true })
-      await saveBlock(newKey, { ...movedBlock, __skipLog: true })
+      await replaceBlock(sourceKey, { ...swappedBlock, __skipLog: true })
+      await replaceBlock(newKey, { ...movedBlock, __skipLog: true })
 
       const sourceLabel = `${draggedBlock.dateKey || ''} ${draggedBlock.timeText || ''} ${draggedBlock.channel || ''}`.trim()
       const targetLabel = `${slot.dateKey} ${slot.timeText} ${ch}`.trim()
@@ -162,7 +162,7 @@ function SlotRow({ slot, top, height, isSplit, block, splitBlock_CA, splitBlock_
     }
 
     await removeBlock(blockKey, { skipLog: true, keepScheduled: true })
-    await saveBlock(newKey, {
+    await replaceBlock(newKey, {
       ...movedBlock,
       __skipLog: true,
     })
