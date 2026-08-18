@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { fetchCompetitorSearchMonths, matchesCompetitorSearch, searchCompetitorInfo } from '../../api/competitorSearch'
+import { compareCompetitorBroadcastDesc, fetchCompetitorSearchMonths, getBroadcastSortValue, matchesCompetitorSearch, searchCompetitorInfo } from '../../api/competitorSearch'
 import CoachMark from './CoachMark'
 
 const COMPANY_ORDER = ['K', 'SSG', 'SK']
@@ -76,6 +76,16 @@ function getPerMinuteRevenue(row) {
   return minutes > 0 ? Number(row?.revenue || 0) / minutes : 0
 }
 
+const SORT_COLUMNS = [
+  { key: 'broadcast', label: '방송일시', align: 'left', value: getBroadcastSortValue },
+  { key: 'channel', label: '채널', align: 'left', value: (row) => String(row?.channel || '') },
+  { key: 'brand', label: '브랜드', align: 'left', value: (row) => String(row?.brand || '') },
+  { key: 'product', label: '상품명', align: 'left', value: (row) => String(row?.productName || row?.dataProductName || '') },
+  { key: 'minutes', label: '가중분', align: 'right', value: getWeightedMinutes },
+  { key: 'revenue', label: '매출액', align: 'right', value: (row) => Number(row?.revenue || 0) },
+  { key: 'perMinute', label: '분당 매출액', align: 'right', value: getPerMinuteRevenue },
+]
+
 export default function CompetitorSearch() {
   const [isOpen, setIsOpen] = useState(false)
   const [months, setMonths] = useState([])
@@ -149,12 +159,14 @@ export default function CompetitorSearch() {
       type: criterion.type,
       searchText: criterion.text,
     })))
-    return monthlyResults.flat()
+    return monthlyResults.flat().sort(compareCompetitorBroadcastDesc)
   }
 
-  const filterByCriteria = (rows, nextCriteria) => rows.filter((row) => (
-    nextCriteria.every((criterion) => matchesCompetitorSearch(row, criterion.type, criterion.text))
-  ))
+  const filterByCriteria = (rows, nextCriteria) => rows
+    .filter((row) => (
+      nextCriteria.every((criterion) => matchesCompetitorSearch(row, criterion.type, criterion.text))
+    ))
+    .sort(compareCompetitorBroadcastDesc)
 
   const applyCriteria = async (nextCriteria) => {
     if (!nextCriteria.length) {
@@ -473,6 +485,31 @@ function CompanyResult({ company, rows }) {
   const totalMinutes = rows.reduce((sum, row) => sum + getWeightedMinutes(row), 0)
   const totalRevenue = rows.reduce((sum, row) => sum + Number(row.revenue || 0), 0)
   const totalPerMinute = totalMinutes > 0 ? totalRevenue / totalMinutes : 0
+  const [sort, setSort] = useState({ key: 'broadcast', direction: 'desc' })
+  const sortedRows = useMemo(() => {
+    const column = SORT_COLUMNS.find((item) => item.key === sort.key) || SORT_COLUMNS[0]
+    const direction = sort.direction === 'asc' ? 1 : -1
+    return [...rows]
+      .sort((a, b) => {
+        const aValue = column.value(a)
+        const bValue = column.value(b)
+        let compare = 0
+        if (typeof aValue === 'number' && typeof bValue === 'number') {
+          compare = aValue - bValue
+        } else {
+          compare = String(aValue).localeCompare(String(bValue), 'ko-KR', { numeric: true, sensitivity: 'base' })
+        }
+        if (compare) return compare * direction
+        return compareCompetitorBroadcastDesc(a, b)
+      })
+  }, [rows, sort])
+
+  const handleSort = (key) => {
+    setSort((current) => {
+      if (current.key !== key) return { key, direction: key === 'broadcast' ? 'desc' : 'asc' }
+      return { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
+    })
+  }
 
   return (
     <section style={{ marginBottom: 16, border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden', background: 'var(--bg2)' }}>
@@ -498,11 +535,42 @@ function CompanyResult({ company, rows }) {
           </colgroup>
           <thead>
             <tr style={{ background: 'var(--bg3)', color: 'var(--text2)' }}>
-              {['방송일시', '채널', '브랜드', '상품명', '가중분', '매출액', '분당 매출액'].map((heading) => <th key={heading} style={{ padding: '9px 10px', textAlign: heading === '가중분' || heading.includes('매출액') ? 'right' : 'left', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>{heading}</th>)}
+              {SORT_COLUMNS.map((column) => {
+                const isActive = sort.key === column.key
+                return (
+                  <th key={column.key} style={{ padding: 0, textAlign: column.align, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }}>
+                    <button
+                      type="button"
+                      onClick={() => handleSort(column.key)}
+                      aria-sort={isActive ? (sort.direction === 'asc' ? 'ascending' : 'descending') : 'none'}
+                      style={{
+                        width: '100%',
+                        minHeight: 34,
+                        padding: '9px 10px',
+                        border: 'none',
+                        background: 'transparent',
+                        color: isActive ? 'var(--accent)' : 'var(--text2)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: column.align === 'right' ? 'flex-end' : 'flex-start',
+                        gap: 4,
+                        fontSize: 11,
+                        fontWeight: 900,
+                      }}
+                    >
+                      <span>{column.label}</span>
+                      <span aria-hidden="true" style={{ width: 10, color: isActive ? 'var(--accent)' : 'var(--text3)' }}>
+                        {isActive ? (sort.direction === 'asc' ? '▲' : '▼') : '↕'}
+                      </span>
+                    </button>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
+            {sortedRows.map((row) => (
               <tr key={`${row.sourceMonth}_${company}_${row.sourceRowIndex}`} style={{ borderTop: '1px solid var(--border)' }}>
                 <td style={cellStyle}>{row.date || '-'} {String(row.time || '').padStart(5, '0')}</td>
                 <td style={cellStyle}>{row.channel || '-'}</td>

@@ -74,6 +74,19 @@ function parseDocumentId(documentId) {
   return { company: matched[1], rowIndex: matched[2] }
 }
 
+export function getBroadcastSortValue(row) {
+  const compactDate = String(row?.date || row?.sourceMonth || '').replace(/\D/g, '')
+  const hour = String(row?.hour ?? '').padStart(2, '0')
+  const minute = String(row?.minute ?? '').padStart(2, '0')
+  return Number(`${compactDate}${hour}${minute}`) || 0
+}
+
+export function compareCompetitorBroadcastDesc(a, b) {
+  const broadcastCompare = getBroadcastSortValue(b) - getBroadcastSortValue(a)
+  if (broadcastCompare) return broadcastCompare
+  return Number(b.sourceRowIndex || 0) - Number(a.sourceRowIndex || 0)
+}
+
 export function matchesCompetitorSearch(row, type, searchText) {
   const query = normalizeCompetitorSearchText(searchText)
   if (type === 'brand') {
@@ -113,11 +126,5 @@ export async function searchCompetitorInfo({ month, type, searchText }) {
 
   return rows
     .filter(Boolean)
-    .sort((a, b) => {
-      const dateCompare = String(a.date || '').localeCompare(String(b.date || ''))
-      if (dateCompare) return dateCompare
-      const hourCompare = Number(a.hour || 0) - Number(b.hour || 0)
-      if (hourCompare) return hourCompare
-      return Number(a.minute || 0) - Number(b.minute || 0)
-    })
+    .sort(compareCompetitorBroadcastDesc)
 }
