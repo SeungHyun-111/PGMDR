@@ -283,7 +283,7 @@ export default function App() {
         >
           <PixelDriftText
             text="SK스토아 편성팀"
-            colors={['#1d4ed8', '#2563eb', '#3b82f6']}
+            colors={['#111827', '#f97316', '#fb923c']}
             particleSize={10}
             particleCount={50}
             fontSize={27}
