@@ -344,7 +344,19 @@ export default function App() {
             {busy ? '확인 중' : '입장'}
           </button>
         </form>
-        {error && <div style={{ marginTop: 10, fontSize: 12, color: '#fca5a5' }}>{error}</div>}
+        <div
+          aria-live="polite"
+          style={{
+            height: 20,
+            marginTop: 10,
+            fontSize: 12,
+            lineHeight: '20px',
+            color: '#fca5a5',
+            opacity: error ? 1 : 0,
+          }}
+        >
+          {error || '비밀번호 확인 메시지'}
+        </div>
       </section>
     </main>
   )
