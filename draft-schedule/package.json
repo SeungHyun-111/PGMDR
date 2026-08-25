@@ -17,6 +17,7 @@
     "@paper-design/shaders-react": "^0.0.61",
     "dayjs": "^1.11.20",
     "firebase": "^12.13.0",
+    "gsap": "^3.15.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
     "recharts": "^3.8.1",
