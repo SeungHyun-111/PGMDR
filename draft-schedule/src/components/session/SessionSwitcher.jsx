@@ -3,6 +3,7 @@ import { db, ref, get } from '../../api/firebase'
 import SessionDeleteModal from './SessionDeleteModal'
 import useScheduleStore from '../../store/useScheduleStore'
 import { sessionEntriesToSortedList } from '../../utils/sessionSort'
+import PulsatingBorder from '../effects/PulsatingBorder'
 
 const fmtDate = ts => {
   if (!ts) return ''
@@ -57,14 +58,41 @@ export default function SessionSwitcher({ currentWeekKey }) {
   return (
     <>
       <div ref={ref_} style={{ position: 'relative' }}>
-        <button onClick={() => setOpen(v => !v)}
-          style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 10px', fontSize: 11, color: 'var(--text2)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
+        <div style={{ position: 'relative', width: 'fit-content', height: 26, overflow: 'visible' }}>
+          <PulsatingBorder
+            colors={['#2563eb', '#22c55e', '#f43f5e']}
+            radius={24}
+            thickness={5}
+            softness={58}
+            intensity={42}
+            bloom={42}
+            spread={10}
+            speed={0.85}
+            spotSize={54}
+            style={{ position: 'absolute', inset: 0 }}
+          />
+          <button onClick={() => setOpen(v => !v)}
+          style={{ position: 'relative', zIndex: 1, height: 26, background: 'var(--bg3)', border: '1px solid transparent', borderRadius: 6, padding: '4px 10px', fontSize: 11, color: 'var(--text2)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
           <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--accent)' }}>{currentWeekKey}</span>
           <span style={{ fontSize: 9, color: 'var(--text3)' }}>▼</span>
-        </button>
+          </button>
+        </div>
 
         {open && (
-          <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '6px 0', minWidth: 260, boxShadow: '0 8px 24px rgba(0,0,0,.14)', zIndex: 300 }}>
+          <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, minWidth: 260, zIndex: 300 }}>
+            <PulsatingBorder
+              colors={['#2563eb', '#14b8a6', '#f43f5e']}
+              radius={18}
+              thickness={3}
+              softness={52}
+              intensity={28}
+              bloom={35}
+              spread={8}
+              speed={0.75}
+              spotSize={46}
+              style={{ position: 'absolute', inset: 0 }}
+            />
+            <div style={{ position: 'relative', zIndex: 1, background: 'var(--bg2)', border: '1px solid transparent', borderRadius: 8, padding: '6px 0', minWidth: 260, boxShadow: '0 8px 24px rgba(0,0,0,.14)', overflow: 'hidden' }}>
             <div style={{ padding: '4px 12px 6px', fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '.5px' }}>세션 선택</div>
             {sessions.length === 0 ? (
               <div style={{ padding: '8px 14px', fontSize: 11, color: 'var(--text3)' }}>세션 없음</div>
@@ -86,6 +114,7 @@ export default function SessionSwitcher({ currentWeekKey }) {
                 </button>
               </div>
             ))}
+            </div>
           </div>
         )}
       </div>

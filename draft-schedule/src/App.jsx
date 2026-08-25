@@ -17,6 +17,7 @@ import SessionSwitcher from './components/session/SessionSwitcher'
 import VersionSwitcher from './components/session/VersionSwitcher'
 import { VERSION_DRAFT, VERSION_OPS, VERSION_SALES, getVersionLabel } from './utils/sessionVersion'
 import { refreshKmaWeatherIfStale } from './api/weather'
+import ElectricCursor from './components/effects/ElectricCursor'
 
 const TABS = [
   { id: 'draft',    label: '초안 편성' },
@@ -214,6 +215,15 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+      <ElectricCursor
+        label={false}
+        color="#FCCA46"
+        thickness={1}
+        glowIntensity={4}
+        trailLength={8}
+        intensity={62}
+        style={{ position: 'fixed', inset: 0, zIndex: 2147483647 }}
+      />
 
       {/* 사용자 이름 팝업 */}
       {showUserPopup && (
