@@ -18,6 +18,7 @@ import VersionSwitcher from './components/session/VersionSwitcher'
 import { VERSION_DRAFT, VERSION_OPS, VERSION_SALES, getVersionLabel } from './utils/sessionVersion'
 import { refreshKmaWeatherIfStale } from './api/weather'
 import ElectricCursor from './components/effects/ElectricCursor'
+import PixelDriftText from './components/effects/PixelDriftText'
 
 const TABS = [
   { id: 'draft',    label: '초안 편성' },
@@ -265,6 +266,37 @@ export default function App() {
               cursor: 'pointer', fontSize: 12, fontWeight: activeTab === tab.id ? 600 : 400
             }}>{tab.label}</button>
           ))}
+        </div>
+
+        <div
+          aria-label="SK스토아 편성팀"
+          style={{
+            flex: 1,
+            minWidth: 260,
+            height: 42,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+            pointerEvents: 'auto',
+          }}
+        >
+          <PixelDriftText
+            text="SK스토아 편성팀"
+            colors={['#1d4ed8', '#2563eb', '#3b82f6']}
+            particleSize={10}
+            particleCount={50}
+            fontSize={27}
+            autoFit
+            mode="onEnter"
+            replay={false}
+            position="above"
+            mouseEnabled
+            mouseRadius={36}
+            mouseForce={18}
+            transition={{ type: 'tween', duration: 0.45, ease: 'easeOut' }}
+            style={{ width: 'min(520px, 100%)', height: 42 }}
+          />
         </div>
 
         <div data-coach="utilities" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
