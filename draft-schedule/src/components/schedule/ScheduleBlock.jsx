@@ -75,7 +75,10 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
 
   const isPgmTeam = block.pgmCodeName === '[편성팀]'
 
+  const isPreScheduleMemo = block.memoCode2 === '[선편성]'
+
   const bgColor = isCompeting ? '#8b0000'
+    : isPreScheduleMemo ? '#374151'
     : isPgmTeam  ? 'var(--bg3)'
     : isGreenBg  ? '#166534'
     : isDirect   ? '#1d4ed8'
@@ -83,13 +86,14 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
     : 'var(--bg2)'
 
   const borderColor = isCompeting ? '#ff4444'
+    : isPreScheduleMemo ? '#111827'
     : isPgmTeam  ? 'var(--text3)'
     : isGreenBg  ? 'rgba(34,197,94,.5)'
     : isDirect   ? 'rgba(59,130,246,.5)'
     : isPurple   ? 'rgba(139,92,246,.5)'
     : 'var(--border)'
 
-  const isColored = isCompeting || isDirect || isPurple || isGreenBg
+  const isColored = isCompeting || isPreScheduleMemo || isDirect || isPurple || isGreenBg
   const textColor = isColored ? '#fff' : 'var(--text)'
   const fontSize  = height > 30 ? 10 : 9
   const badgeSz   = Math.max(7, fontSize - 1)
@@ -126,10 +130,23 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
     setAnnotationPopup(false)
   }
 
+  const togglePreSchedule = async () => {
+    if (readOnly) return
+    const nextOn = !isPreScheduleMemo
+    const patch = nextOn
+      ? { memoCode2: '[선편성]', memoCode2Code: '037' }
+      : { memoCode2: '', memoCode2Code: '' }
+    await runUndoBatch(`${nextOn ? '[선편성] 지정' : '[선편성] 해제'} 되돌리기: ${block.pgmCodeName || block.blockKey || block.slotId}`, async () => {
+      if (block.uniqueKey) await saveEntityProps(block.uniqueKey, patch)
+      else await saveBlock(block.blockKey || block.slotId, patch)
+    })
+  }
+
   const menuItems = readOnly ? [] : [
     { label: '수정', action: () => setEditModal(true) },
     { label: hasAnnotation ? '첨삭 수정' : '첨삭 추가', action: () => { setAnnotationText(block.annotation || ''); setAnnotationPopup(true) } },
     ...(!isCompeting ? [
+      { label: isPreScheduleMemo ? '[선편성] 해제' : '[선편성]', action: togglePreSchedule },
       { label: '사이드바로 반환', action: () => setReturnConfirm(true) },
       { label: '삭제', action: () => removeBlock(block.blockKey || block.slotId), danger: true },
     ] : []),
