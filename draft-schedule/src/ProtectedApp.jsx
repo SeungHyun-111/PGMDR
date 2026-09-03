@@ -17,7 +17,6 @@ import SessionSwitcher from './components/session/SessionSwitcher'
 import VersionSwitcher from './components/session/VersionSwitcher'
 import { VERSION_DRAFT, VERSION_OPS, VERSION_SALES, getVersionLabel } from './utils/sessionVersion'
 import { refreshKmaWeatherIfStale } from './api/weather'
-import ElectricCursor from './components/effects/ElectricCursor'
 import PixelDriftText from './components/effects/PixelDriftText'
 
 const TABS = [
@@ -216,13 +215,6 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      <ElectricCursor
-        label={false}
-        color="#FF4FD8"
-        accentColor="#4FF8FF"
-        style={{ position: 'fixed', inset: 0, zIndex: 2147483647 }}
-      />
-
       {/* 사용자 이름 팝업 */}
       {showUserPopup && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
