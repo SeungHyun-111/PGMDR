@@ -19,7 +19,23 @@ export default function ElectricCursor({
     let idle = 0
     const set = (prop, value) => box.style.setProperty(prop, value)
 
+    const onLeave = () => {
+      box.classList.remove('is-active', 'is-near')
+      set('--speed', '0')
+      has = false
+    }
+
     const onMove = e => {
+      if (
+        e.clientX < 0 ||
+        e.clientY < 0 ||
+        e.clientX > window.innerWidth ||
+        e.clientY > window.innerHeight
+      ) {
+        onLeave()
+        return
+      }
+
       const r = box.getBoundingClientRect()
       const x = e.clientX - r.left
       const y = e.clientY - r.top
@@ -44,19 +60,21 @@ export default function ElectricCursor({
       idle = window.setTimeout(() => set('--speed', '0'), 120)
     }
 
-    const onLeave = () => {
-      box.classList.remove('is-active', 'is-near')
-      set('--speed', '0')
-      has = false
-    }
-
     window.addEventListener('pointermove', onMove, { passive: true })
+    window.addEventListener('pointerout', onLeave)
+    window.addEventListener('blur', onLeave)
+    window.addEventListener('pointercancel', onLeave)
     document.documentElement.addEventListener('pointerleave', onLeave)
+    document.addEventListener('visibilitychange', onLeave)
 
     return () => {
       window.clearTimeout(idle)
       window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerout', onLeave)
+      window.removeEventListener('blur', onLeave)
+      window.removeEventListener('pointercancel', onLeave)
       document.documentElement.removeEventListener('pointerleave', onLeave)
+      document.removeEventListener('visibilitychange', onLeave)
     }
   }, [])
 

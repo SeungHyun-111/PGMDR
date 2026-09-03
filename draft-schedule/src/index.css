@@ -108,6 +108,11 @@ body * {
               top 0.16s cubic-bezier(0.22, 1, 0.36, 1);
   pointer-events: none;
   will-change: left, top;
+  opacity: 0;
+}
+
+.cur.is-active .cursor {
+  opacity: 1;
 }
 
 .cur-neon .cursor {
