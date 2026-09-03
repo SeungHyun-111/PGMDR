@@ -218,11 +218,8 @@ export default function App() {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <ElectricCursor
         label={false}
-        color="#FCCA46"
-        thickness={1}
-        glowIntensity={4}
-        trailLength={8}
-        intensity={62}
+        color="#FF4FD8"
+        accentColor="#4FF8FF"
         style={{ position: 'fixed', inset: 0, zIndex: 2147483647 }}
       />
 
