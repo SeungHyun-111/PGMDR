@@ -123,7 +123,7 @@ export function getSameBroadcastPerf(perfKey, blockTimestamp, historyByKey) {
 export function getLastPerfBefore(perfKey, blockTimestamp, historyByKey) {
   if (!perfKey || !blockTimestamp) return null
   const history = historyByKey?.[perfKey] || []
-  return findLastBy(history, entry => entry.broadcastTimestamp <= blockTimestamp && entry.lateNightPgmYn !== 'Y')
+  return findLastBy(history, entry => entry.broadcastTimestamp < blockTimestamp && entry.lateNightPgmYn !== 'Y')
 }
 
 export function getLatestPerf(perfKey, latestPerfByKey, fallbackPerfMap) {
@@ -157,12 +157,12 @@ export function getScheduledBlockPerformance(block, {
   const hasAnyManual = manualSales != null || manualProfit != null
   const hasCompleteManual = manualSales != null && manualProfit != null
 
-  const salesPerMin = manualSales
-    ?? sameBroadcastPerf?.salesPerWeightedMin
+  const salesPerMin = sameBroadcastPerf?.salesPerWeightedMin
+    ?? manualSales
     ?? lastPerf?.salesPerWeightedMin
     ?? 0
-  const profitPerMin = manualProfit
-    ?? sameBroadcastPerf?.profitPerWeightedMin
+  const profitPerMin = sameBroadcastPerf?.profitPerWeightedMin
+    ?? manualProfit
     ?? lastPerf?.profitPerWeightedMin
     ?? 0
 
@@ -175,8 +175,8 @@ export function getScheduledBlockPerformance(block, {
     manualProfit,
     salesPerMin: Number(salesPerMin || 0),
     profitPerMin: Number(profitPerMin || 0),
-    source: hasCompleteManual ? 'manual'
-      : sameBroadcastPerf ? 'broadcast'
+    source: sameBroadcastPerf ? 'broadcast'
+      : hasCompleteManual ? 'manual'
         : lastPerf ? 'previous'
           : 'missing',
     missingPerf: !sameBroadcastPerf && !lastPerf && !hasCompleteManual,

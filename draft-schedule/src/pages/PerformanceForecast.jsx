@@ -18,7 +18,7 @@ const FORECAST_COACH_STEPS = [
   { target: '[data-coach="forecast-page"]', title: '시뮬레이션 화면', description: '현재 편성된 블록을 기준으로 예상 취급고와 한계이익을 계산하는 화면입니다. 단순 합계가 아니라 가중분, 직전 실적, 수기 입력, 목표값을 함께 반영합니다.' },
   { target: '[data-coach="forecast-header"]', title: '상단 기준 설정', description: '이곳에서 시뮬레이션 안내를 다시 열고, [편성팀] 전사블록을 계산에서 제외할지 정합니다. 제외하면 해당 블록은 rows 생성 단계에서 빠져 평균과 합계에 들어가지 않습니다.' },
   { target: '[data-coach="forecast-formula"]', title: '가장 중요한 계산 기준', description: '이 페이지의 평균은 미입력 포함 방식입니다. 예상취급고 = 적용 취급/분 × 가중분, 예상한익 = 적용 한익/분 × 가중분, 분당 평균 = 총 예상액 ÷ 총 편성 가중분입니다. 실적 미입력은 적용 실적이 0이지만 가중분은 분모에 포함됩니다.' },
-  { target: '[data-coach="forecast-hero"]', title: '분당 예상 지표', description: '분당 취급고와 분당 한계이익의 대표 숫자입니다. 실적 적용 우선순위는 수기 입력값이 있으면 수기 입력, 그다음 동일 방송 실적, 직전 실적, 0 순서입니다. 미입력이 많으면 가중분은 그대로인데 예상액이 0으로 들어가 평균이 내려갑니다.' },
+  { target: '[data-coach="forecast-hero"]', title: '분당 예상 지표', description: '분당 취급고와 분당 한계이익의 대표 숫자입니다. 실적 적용 우선순위는 동일 방송 실적, 수기 입력, 직전 실적, 0 순서입니다. 미입력이 많으면 가중분은 그대로인데 예상액이 0으로 들어가 평균이 내려갑니다.' },
   { target: '[data-coach="forecast-pgm-team"]', title: '전사블록 시뮬레이션', description: '[편성팀] [전사블록]은 실제 상품 실적이 없을 수 있어 별도 입력칸으로 분당 취급고와 분당 한익을 보정합니다. 입력값은 sim_pgm_team 수기값으로 저장되고 재진입 시 복원됩니다.' },
   { target: '[data-coach="forecast-stats"]', title: '보조 요약', description: '총 예상취급고와 총 예상한익은 각 블록의 예상액을 합산합니다. 편성 슬롯은 실제 편성된 블록 수와 전체 슬롯 수를 비교하고, 전체 슬롯 수는 CA/IP 분할 슬롯을 2칸으로 계산합니다.' },
   { target: '[data-coach="forecast-missing-stat"]', title: '미입력 실적 카운트', description: '직전 실적도 없고 수기 입력도 완성되지 않은 블록 수입니다. 이 블록들은 가중분은 총 편성 가중분에 들어가지만 취급/분·한익/분은 0으로 계산되어 평균을 낮춥니다.' },

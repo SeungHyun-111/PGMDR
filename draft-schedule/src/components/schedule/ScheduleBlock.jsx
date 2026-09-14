@@ -507,7 +507,8 @@ function BlockTooltip({ block, lastPerf, sameBroadcastPerf, manual, pos, competi
   const margin = 8
   const hasManual = manual && (manual.expectedSalesPerWeightedMin != null || manual.expectedProfitPerWeightedMin != null)
   const compItems = competitionItems || getCompetitionItems(block)
-  const approxH  = block.isCompeting ? Math.min(360, 60 + compItems.length * 62) : (block.annotation ? 290 : 220) + (hasManual ? 60 : 0)
+  const perfSectionCount = [sameBroadcastPerf, hasManual, lastPerf].filter(Boolean).length
+  const approxH  = block.isCompeting ? Math.min(360, 60 + compItems.length * 62) : (block.annotation ? 290 : 220) + (perfSectionCount * 60)
   const viewportW = window.innerWidth || 0
   const viewportH = window.innerHeight || 0
   const preferRight = (pos.right || 0) + gap + tooltipW <= viewportW - margin
@@ -568,7 +569,7 @@ function BlockTooltip({ block, lastPerf, sameBroadcastPerf, manual, pos, competi
           {sameBroadcastPerf && (
             <>
               <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', marginBottom: 4 }}>해당 방송 실적 ({sameBroadcastPerf.broadcastDate})</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--green)', marginBottom: 4 }}>해당PGM실적 ({sameBroadcastPerf.broadcastDate} {sameBroadcastPerf.broadcastTime || ''})</div>
               {[
                 ['취급/분', Number(sameBroadcastPerf.salesPerWeightedMin  || 0).toLocaleString(), 'var(--accent)'],
                 ['한익/분', Number(sameBroadcastPerf.profitPerWeightedMin || 0).toLocaleString(), 'var(--green)'],
@@ -580,25 +581,10 @@ function BlockTooltip({ block, lastPerf, sameBroadcastPerf, manual, pos, competi
               ))}
             </>
           )}
-          {lastPerf && (
-            <>
-              <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', marginBottom: 4 }}>직전 실적 ({lastPerf.broadcastDate})</div>
-              {[
-                ['취급/분', Number(lastPerf.salesPerWeightedMin  || 0).toLocaleString(), 'var(--accent)'],
-                ['한익/분', Number(lastPerf.profitPerWeightedMin || 0).toLocaleString(), 'var(--green)'],
-              ].map(([label, val, color]) => (
-                <div key={label} style={{ display: 'flex', gap: 8, fontSize: 10, marginBottom: 2 }}>
-                  <span style={{ color: 'var(--text3)', minWidth: 52, flexShrink: 0 }}>{label}</span>
-                  <span style={{ color, fontWeight: 700 }}>{val}</span>
-                </div>
-              ))}
-            </>
-          )}
           {hasManual && (
             <>
               <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>수기 입력값</div>
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--accent)', marginBottom: 4 }}>수기실적</div>
               {[
                 ['취급/분', manual.expectedSalesPerWeightedMin,  'var(--accent)'],
                 ['한익/분', manual.expectedProfitPerWeightedMin, 'var(--green)'],
@@ -606,6 +592,21 @@ function BlockTooltip({ block, lastPerf, sameBroadcastPerf, manual, pos, competi
                 <div key={label} style={{ display: 'flex', gap: 8, fontSize: 10, marginBottom: 2 }}>
                   <span style={{ color: 'var(--text3)', minWidth: 52, flexShrink: 0 }}>{label}</span>
                   <span style={{ color, fontWeight: 700 }}>{Number(val).toLocaleString()}</span>
+                </div>
+              ))}
+            </>
+          )}
+          {lastPerf && (
+            <>
+              <div style={{ borderTop: '1px solid var(--border)', margin: '6px 0' }} />
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text3)', marginBottom: 4 }}>직전실적 ({lastPerf.broadcastDate} {lastPerf.broadcastTime || ''})</div>
+              {[
+                ['취급/분', Number(lastPerf.salesPerWeightedMin  || 0).toLocaleString(), 'var(--accent)'],
+                ['한익/분', Number(lastPerf.profitPerWeightedMin || 0).toLocaleString(), 'var(--green)'],
+              ].map(([label, val, color]) => (
+                <div key={label} style={{ display: 'flex', gap: 8, fontSize: 10, marginBottom: 2 }}>
+                  <span style={{ color: 'var(--text3)', minWidth: 52, flexShrink: 0 }}>{label}</span>
+                  <span style={{ color, fontWeight: 700 }}>{val}</span>
                 </div>
               ))}
             </>
