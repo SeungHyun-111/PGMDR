@@ -289,12 +289,14 @@ const tableScrollStyle = {
   overflow: 'auto',
   background: 'var(--bg2)',
   border: '1px solid var(--border)',
+  position: 'relative',
 }
 
 const tableStyle = {
   width: TABLE_WIDTH,
   minWidth: '100%',
-  borderCollapse: 'collapse',
+  borderCollapse: 'separate',
+  borderSpacing: 0,
   tableLayout: 'fixed',
   background: 'var(--bg2)',
   fontSize: 12,
@@ -303,18 +305,21 @@ const tableStyle = {
 const thStyle = {
   position: 'sticky',
   top: 0,
-  zIndex: 2,
+  zIndex: 10,
   height: 30,
   padding: '0 8px',
   border: '1px solid var(--border2)',
   borderTop: '2px solid var(--text)',
-  background: 'var(--bg2)',
+  background: 'var(--bg)',
   color: 'var(--text)',
   fontWeight: 900,
   whiteSpace: 'nowrap',
+  boxShadow: '0 2px 0 var(--border2), 0 8px 12px rgba(0,0,0,.08)',
 }
 
 const tdStyle = {
+  position: 'relative',
+  zIndex: 0,
   height: 32,
   padding: '0 8px',
   border: '1px solid var(--border)',
@@ -335,6 +340,8 @@ const reviewTdStyle = {
 }
 
 const textareaStyle = {
+  position: 'relative',
+  zIndex: 0,
   width: '100%',
   minHeight: 28,
   height: 'auto',
