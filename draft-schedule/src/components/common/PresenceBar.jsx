@@ -12,6 +12,7 @@ const TAB_LABELS = {
   ratio: '편성 비중',
   status: '편성 현황',
   settings: '설정',
+  newReview: '신상품/재녹화 리뷰',
   help: '도움말',
 }
 

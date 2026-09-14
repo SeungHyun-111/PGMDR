@@ -80,13 +80,18 @@ export function createRefreshActions(setState, getState) {
             perfMap: encoded,
           })
         }
-        await writeGlobalPerformanceData(rawData, rawPerfMap)
+        await writeGlobalPerformanceData(rawData, rawPerfMap, userName)
         await update(ref(db, `sessions/${weekKey}/lastUpdated`), { performance: now, performanceBy: userName || '' })
         getState().seedPerformanceFromPerfMap?.(perfMap)
         getState().invalidatePerformanceKeys?.()
         getState().loadGlobalPerformanceData?.({ force: true })
         setState(s => ({
           perfMap: nextPerfMap,
+          performanceMeta: {
+            ...(s.performanceMeta || {}),
+            updatedAt: now,
+            updatedBy: userName || '',
+          },
           ...buildPerformanceStateFromRaw(rawData, rawPerfMap, s),
           isLoadingPerformance: false,
           lastUpdated: { ...s.lastUpdated, performance: now, performanceBy: userName || '' },
@@ -156,7 +161,7 @@ export function createRefreshActions(setState, getState) {
           proposalItems: proposalItemsRaw,
           perfMap: encodePerfMap(gasData.perfMap || {}),
         })
-        await writeGlobalPerformanceData(gasData, gasData.perfMap || {})
+        await writeGlobalPerformanceData(gasData, gasData.perfMap || {}, userName)
         await update(ref(db, versionPath), {
           pgmSlots: pgmSlotsNew,
           proposalItems: proposalItemsRaw,
@@ -193,6 +198,11 @@ export function createRefreshActions(setState, getState) {
         setState(s => ({
           pgmSlots:        pgmSlotsNew,
           perfMap,
+          performanceMeta: {
+            ...(s.performanceMeta || {}),
+            updatedAt: now,
+            updatedBy: userName || '',
+          },
           ...buildPerformanceStateFromRaw(gasData, gasData.perfMap || {}, s),
           preScheduleRows: gasData.preScheduleRows || [],
           allProposalItems: proposalItems,
@@ -257,7 +267,7 @@ export function createRefreshActions(setState, getState) {
   }
 }
 
-async function writeGlobalPerformanceData(rawData, rawPerfMap) {
+async function writeGlobalPerformanceData(rawData, rawPerfMap, userName = '') {
   const updates = {}
   const performanceRows = getPerformanceRowsSource(rawData, rawPerfMap)
   const normalizedRows = normalizePerformanceRows(performanceRows)
@@ -280,6 +290,7 @@ async function writeGlobalPerformanceData(rawData, rawPerfMap) {
         latestTime: latestEntry.broadcastTime || '',
         latestPerfKey: latestEntry.perfKey || '',
         updatedAt: Date.now(),
+        updatedBy: userName || '',
       }
     }
     await update(ref(db), updates)
@@ -291,7 +302,7 @@ async function getGlobalPerformanceCursor() {
   if (metaSnap.exists()) {
     const meta = metaSnap.val() || {}
     return {
-      latestDate: meta.latestDate || '',
+      latestDate: getPreviousDate(meta.latestDate || ''),
     }
   }
 
@@ -304,8 +315,20 @@ async function getGlobalPerformanceCursor() {
       : {})
   const latestEntry = getLatestEntry(rows)
   return {
-    latestDate: latestEntry?.broadcastDate || '',
+    latestDate: getPreviousDate(latestEntry?.broadcastDate || ''),
   }
+}
+
+function getPreviousDate(value) {
+  const dateText = String(value || '').trim()
+  const match = dateText.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return dateText
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  date.setDate(date.getDate() - 1)
+  const yyyy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yyyy}-${mm}-${dd}`
 }
 
 function getLatestEntry(rows = []) {

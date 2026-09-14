@@ -13,6 +13,7 @@ const GLOBAL_HISTORY_PATH = 'performanceHistory'
 const GLOBAL_LATEST_PATH = 'latestPerfMap'
 const GLOBAL_ENTRIES_PATH = 'performanceEntries'
 const LEGACY_ROWS_PATH = 'performanceRows'
+const GLOBAL_META_PATH = 'performanceMeta'
 
 export function createPerformanceHistoryActions(setState, getState) {
   return {
@@ -23,11 +24,12 @@ export function createPerformanceHistoryActions(setState, getState) {
 
       setState({ isLoadingPerformanceKeys: true })
       try {
-        const [entriesSnap, legacyRowsSnap, latestSnap, historySnap] = await Promise.all([
+        const [entriesSnap, legacyRowsSnap, latestSnap, historySnap, metaSnap] = await Promise.all([
           get(ref(db, GLOBAL_ENTRIES_PATH)),
           get(ref(db, LEGACY_ROWS_PATH)),
           get(ref(db, GLOBAL_LATEST_PATH)),
           get(ref(db, GLOBAL_HISTORY_PATH)),
+          get(ref(db, GLOBAL_META_PATH)),
         ])
         const performanceRows = entriesSnap.exists()
           ? entriesSnap.val()
@@ -42,6 +44,7 @@ export function createPerformanceHistoryActions(setState, getState) {
           : decodeLatestMap(latestSnap.exists() ? latestSnap.val() : {})
         setState({
           performanceRows,
+          performanceMeta: metaSnap.exists() ? metaSnap.val() : null,
           latestPerfByKey,
           performanceHistoryByKey,
           performanceGlobalLoaded: true,

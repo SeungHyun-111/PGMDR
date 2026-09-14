@@ -4,6 +4,7 @@ const PerformanceForecast = lazy(() => import('./pages/PerformanceForecast'))
 const ScheduleRatio       = lazy(() => import('./pages/ScheduleRatio'))
 const ScheduleStatus      = lazy(() => import('./pages/ScheduleStatus'))
 const SettingsPage        = lazy(() => import('./pages/SettingsPage'))
+const NewProductReview    = lazy(() => import('./pages/NewProductReview'))
 const HelpPage            = lazy(() => import('./pages/HelpPage'))
 import ExportModal from './components/common/ExportModal'
 import ChatPanel from './components/common/ChatPanel'
@@ -25,6 +26,7 @@ const TABS = [
   { id: 'ratio',    label: '편성비중' },
   { id: 'status',   label: '편성현황' },
   { id: 'settings', label: '설정' },
+  { id: 'newReview', label: '신상품/재녹화 리뷰' },
   { id: 'help',     label: '설명서' },
 ]
 
@@ -83,7 +85,7 @@ export default function App() {
     isLoaded, startDate, endDate, poolType,
     isLoadingProposals, isLoadingPerformance, isLoadingPreSchedule, isLoadingGasAll,
     refreshPerformance, refreshProposals, refreshPreSchedule, refreshAllGasData,
-    lastUpdated, userName, setUserName, currentVersionId
+    lastUpdated, performanceMeta, userName, setUserName, currentVersionId
   } = useScheduleStore()
   const { pendingUndo, requestUndo, cancelUndo, confirmUndo } = useScheduleStore()
 
@@ -206,6 +208,11 @@ export default function App() {
   const formatUpdatedHistory = (ts, by) => `${formatUpdated(ts)} · ${by || '-'}`
 
   const isRefreshing = isLoadingProposals || isLoadingPerformance || isLoadingPreSchedule || isLoadingGasAll
+  const historyUpdated = {
+    ...(lastUpdated || {}),
+    performance: performanceMeta?.updatedAt || lastUpdated?.performance,
+    performanceBy: performanceMeta?.updatedBy || lastUpdated?.performanceBy || '전역',
+  }
   const currentVersionLabel = getVersionLabel(currentVersionId)
   const versionTone = currentVersionId === VERSION_SALES
     ? { bg: '#fff7ed', border: '#fdba74', color: '#c2410c' }
@@ -372,10 +379,10 @@ export default function App() {
         <div style={{ height: 34, display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg2)', flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
           <div data-coach="history" style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, color: 'var(--text3)', fontSize: 10, whiteSpace: 'nowrap' }}>
             <span style={{ fontWeight: 900, color: 'var(--text2)' }}>갱신이력</span>
-            <span>PGM {formatUpdatedHistory(lastUpdated?.pgm, lastUpdated?.pgmBy)}</span>
-            <span>제안상품 {formatUpdatedHistory(lastUpdated?.proposal, lastUpdated?.proposalBy)}</span>
-            <span>실적 {formatUpdatedHistory(lastUpdated?.performance, lastUpdated?.performanceBy)}</span>
-            <span>선편 {formatUpdatedHistory(lastUpdated?.preSchedule, lastUpdated?.preScheduleBy)}</span>
+            <span>PGM {formatUpdatedHistory(historyUpdated?.pgm, historyUpdated?.pgmBy)}</span>
+            <span>제안상품 {formatUpdatedHistory(historyUpdated?.proposal, historyUpdated?.proposalBy)}</span>
+            <span>실적 {formatUpdatedHistory(historyUpdated?.performance, historyUpdated?.performanceBy)}</span>
+            <span>선편 {formatUpdatedHistory(historyUpdated?.preSchedule, historyUpdated?.preScheduleBy)}</span>
           </div>
           <div data-coach="versions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
             <VersionSwitcher onToast={showToast} coachPreviewVersion={coachVersion} />
@@ -391,6 +398,7 @@ export default function App() {
           {activeTab === 'ratio'    && <ScheduleRatio />}
           {activeTab === 'status'   && <ScheduleStatus />}
           {activeTab === 'settings' && <SettingsPage />}
+          {activeTab === 'newReview' && <NewProductReview />}
           {activeTab === 'help'     && <HelpPage />}
         </Suspense>
       </div>
