@@ -123,7 +123,7 @@ export function getSameBroadcastPerf(perfKey, blockTimestamp, historyByKey) {
 export function getLastPerfBefore(perfKey, blockTimestamp, historyByKey) {
   if (!perfKey || !blockTimestamp) return null
   const history = historyByKey?.[perfKey] || []
-  return findLastBy(history, entry => entry.broadcastTimestamp <= blockTimestamp)
+  return findLastBy(history, entry => entry.broadcastTimestamp <= blockTimestamp && entry.lateNightPgmYn !== 'Y')
 }
 
 export function getLatestPerf(perfKey, latestPerfByKey, fallbackPerfMap) {
@@ -145,7 +145,12 @@ export function getScheduledBlockPerformance(block, {
   const sameBroadcastPerf = getSameBroadcastPerf(perfKey, blockTimestamp, performanceHistoryByKey)
   const previousPerf = getLastPerfBefore(perfKey, blockTimestamp, performanceHistoryByKey)
   const legacyPerf = normalizePerfEntry(fallbackPerfMap?.[perfKey], perfKey)
-  const legacyPreviousPerf = legacyPerf && blockTimestamp && legacyPerf.broadcastTimestamp <= blockTimestamp ? legacyPerf : null
+  const legacyPreviousPerf = legacyPerf
+    && blockTimestamp
+    && legacyPerf.broadcastTimestamp <= blockTimestamp
+    && legacyPerf.lateNightPgmYn !== 'Y'
+    ? legacyPerf
+    : null
   const lastPerf = previousPerf || legacyPreviousPerf
   const manualSales = normalizeManualNumber(manual.expectedSalesPerWeightedMin)
   const manualProfit = normalizeManualNumber(manual.expectedProfitPerWeightedMin)

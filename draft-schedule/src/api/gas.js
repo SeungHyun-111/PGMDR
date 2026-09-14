@@ -1,3 +1,5 @@
+import mdNameTeamMap from '../data/md-name-team-map.json'
+
 const MAIN_GAS_URL = 'https://script.google.com/macros/s/AKfycbzlnzcV5DkCNwAZcOrdtJnCfGpCLmu5-tA9eF8N2Rs4hS15N61p0h8m7BQqTVxwX7g3/exec'
 const OPS_GAS_URL = 'https://script.google.com/macros/s/AKfycbz9e0_2L6wX3Lm7uKWLfReZrm-LNRFxg8f_EeHVKwqaLZrx0neyHss9fORPhhvFppIA/exec'
 const REVIEW_PERFORMANCE_GAS_URL = 'https://script.google.com/macros/s/AKfycbzown3_TLEz75-NGQHpuXpdPkeg2jbuinjtDWxA8OFliwBy8p3cDqVwjXmttwErbFVY/exec'
@@ -130,8 +132,10 @@ function normalizeReviewPerformanceRow(values = [], meta = {}, index = 0) {
   return {
     ...record,
     dealTypeConverted,
+    mdTeam: record.mdTeam || getTeamByMdName(record.mdName),
     perfKey: record.pgmCodeName ? `${dealTypeConverted}${record.pgmCodeName}` : '',
     broadcastTimestamp,
+    lateNightPgmYn: getLateNightPgmYn(record.broadcastTime),
     sourceRow,
     profitPerWeightedMin: record.contributionProfitPerWeightedMin,
     totalAchievementRate: calculateTotalAchievementRate(record),
@@ -178,6 +182,18 @@ function toBroadcastTimestamp(dateText, timeText) {
   const dateKey = String(dateText || '').replace(/\D/g, '')
   const timeKey = String(timeText || '00:00').replace(/\D/g, '').padEnd(4, '0').slice(0, 4)
   return Number(`${dateKey}${timeKey}`) || 0
+}
+
+function getLateNightPgmYn(timeText) {
+  const [hourText, minuteText = '0'] = normalizeTime(timeText).split(':')
+  const hour = Number(hourText)
+  const minute = Number(minuteText)
+  const startMinute = hour * 60 + minute
+  return startMinute >= 41 && startMinute <= 299 ? 'Y' : 'N'
+}
+
+function getTeamByMdName(mdName) {
+  return mdNameTeamMap[String(mdName || '').trim()] || ''
 }
 
 function normalizeDealType(value) {
