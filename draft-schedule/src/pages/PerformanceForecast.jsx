@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useCallback, useEffect, Fragment } from 'react'
+﻿import { useMemo, useState, useRef, useCallback, useEffect } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid,
   ResponsiveContainer, ReferenceLine, Cell, LabelList,
@@ -6,13 +6,23 @@ import {
 import useScheduleStore from '../store/useScheduleStore'
 import useCategoryMap from '../hooks/useCategoryMap'
 import { makePerfKey, normalizeDealType } from '../hooks/usePerformanceMap'
-import { getEffectivePgmSlots } from '../utils/effectiveSlots'
-import { getEffectiveBlockWeightedMin, timeToMin } from '../utils/weightedMin'
+import { timeToMin } from '../utils/weightedMin'
 import { getManualInputKey } from '../utils/grade'
 import { extractEntityFields } from '../utils/mergeEntity'
-import { getScheduledBlockPerformance } from '../utils/performanceHistory'
+import {
+  buildDailyForecast,
+  buildDailyTeamForecast,
+  buildForecastGroups,
+  buildForecastSummary,
+  enrichForecastGroups,
+  resolveForecastMetrics,
+  weightedAveragePerMin,
+} from '../domain/performance/forecast'
+import { parseTargetMetrics } from '../domain/performance/targets'
 import useLocalStorageState from '../hooks/useLocalStorageState'
 import CoachMark from '../components/common/CoachMark'
+import { ChartCard, HeroCard, StatCard } from '../components/forecast/ForecastCards'
+import { ChartTip, DailyTeamTip } from '../components/forecast/ForecastTooltips'
 
 const FORECAST_COACH_STEPS = [
   { target: '[data-coach="forecast-page"]', title: '시뮬레이션 화면', description: '현재 편성된 블록을 기준으로 예상 취급고와 한계이익을 계산하는 화면입니다. 단순 합계가 아니라 가중분, 직전 실적, 수기 입력, 목표값을 함께 반영합니다.' },
@@ -34,74 +44,6 @@ const FORECAST_COACH_STEPS = [
 
 // ── helpers ───────────────────────────────────────────────────────────────
 
-function calcForecast(block, perfMap, manualInputs, performanceHistoryByKey) {
-  const perfState = getScheduledBlockPerformance(block, {
-    performanceHistoryByKey,
-    manualInputs,
-    fallbackPerfMap: perfMap,
-  })
-  const lastPerf = perfState.lastPerf
-  const sameBroadcastPerf = perfState.sameBroadcastPerf
-  const manualSales  = perfState.manualSales
-  const manualProfit = perfState.manualProfit
-  const salesPerMin  = perfState.salesPerMin
-  const profitPerMin = perfState.profitPerMin
-  const wm = getEffectiveBlockWeightedMin(block)
-
-  return {
-    lastPerf,
-    sameBroadcastPerf,
-    salesPerMin, profitPerMin,
-    manualSales, manualProfit,
-    weightedMin: wm,
-    expectedSales:  (salesPerMin  ?? 0) * wm,
-    expectedProfit: (profitPerMin ?? 0) * wm,
-    missingPerf: perfState.missingPerf,
-    hasManual: perfState.hasManual,
-    perfSource: perfState.source,
-  }
-}
-
-// targetMetrics 구조: { month, sales: [{name, isCompanyTotal, value}], profit: [...] }
-// → { teamName → { salesPerMin, profitPerMin } } + companyTotal 별도 반환
-function parseTargetMetrics(raw) {
-  if (!raw) return { teamMap: {}, companyTotal: null }
-
-  // GAS 실제 구조: { sales: [...], profit: [...] }
-  if (raw.sales && raw.profit) {
-    const salesList  = Array.isArray(raw.sales)  ? raw.sales  : []
-    const profitList = Array.isArray(raw.profit) ? raw.profit : []
-
-    const salesMap  = {}
-    salesList.forEach(r => { salesMap[(r.name || '').trim()] = r.value || 0 })
-    const profitMap = {}
-    profitList.forEach(r => { profitMap[(r.name || '').trim()] = r.value || 0 })
-
-    // 전사합계
-    const totalSales  = salesList.find(r => r.isCompanyTotal)
-    const totalProfit = profitList.find(r => r.isCompanyTotal)
-    const companyTotal = (totalSales || totalProfit) ? {
-      salesPerMin:  totalSales?.value  || 0,
-      profitPerMin: totalProfit?.value || 0,
-    } : null
-
-    // 팀별 맵 (양방향 팀/팀명 등록)
-    const teamMap = {}
-    const allNames = new Set([...Object.keys(salesMap), ...Object.keys(profitMap)])
-    allNames.forEach(name => {
-      if (!name) return
-      const entry = { salesPerMin: salesMap[name] || 0, profitPerMin: profitMap[name] || 0 }
-      teamMap[name] = entry
-      const alt = name.endsWith('팀') ? name.slice(0, -1) : name + '팀'
-      teamMap[alt] = entry
-    })
-
-    return { teamMap, companyTotal }
-  }
-
-  return { teamMap: {}, companyTotal: null }
-}
-
 const fmt  = v => Math.round(Number(v || 0)).toLocaleString()
 const fmtS = v => {
   const n = Math.round(Number(v || 0))
@@ -111,56 +53,6 @@ const fmtS = v => {
 }
 
 // ── chart tooltip ─────────────────────────────────────────────────────────
-
-function ChartTip({ active, payload, label }) {
-  if (!active || !payload?.length) return null
-  return (
-    <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', fontSize: 11, boxShadow: '0 4px 16px rgba(0,0,0,.18)' }}>
-      <div style={{ fontWeight: 700, color: 'var(--text)', marginBottom: 6 }}>{label}</div>
-      {payload.map((p, i) => (
-        <div key={i} style={{ color: p.fill || p.color, marginBottom: 2 }}>{p.name}: <strong>{Math.round(p.value || 0).toLocaleString()}</strong></div>
-      ))}
-    </div>
-  )
-}
-
-// ── daily chart tooltip (팀별 비중+효율) ──────────────────────────────────
-
-function DailyTeamTip({ active, payload, dailyTeamData, metric }) {
-  if (!active || !payload?.length) return null
-  const dateKey = payload[0]?.payload?.date
-  const teamsMap = dateKey && dailyTeamData[dateKey]
-  if (!teamsMap) return null
-  const teams = Object.values(teamsMap).sort((a, b) => {
-    if (a.name === '편성팀') return 1
-    if (b.name === '편성팀') return -1
-    return metric === 'sales' ? b.salesPerMin - a.salesPerMin : b.profitPerMin - a.profitPerMin
-  })
-  const color = metric === 'sales' ? 'var(--accent)' : 'var(--green)'
-  return (
-    <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', fontSize: 11, boxShadow: '0 4px 16px rgba(0,0,0,.18)', minWidth: 220 }}>
-      <div style={{ fontWeight: 700, color: 'var(--text)', marginBottom: 8 }}>{dateKey}</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '2px 10px', alignItems: 'center' }}>
-        <span style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700 }}>팀</span>
-        <span style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, textAlign: 'right' }}>
-          {metric === 'sales' ? '취급효율' : '한익효율'}
-        </span>
-        <span style={{ fontSize: 9, color: 'var(--text3)', fontWeight: 700, textAlign: 'right' }}>비중</span>
-        {teams.map(t => (
-          <Fragment key={t.name}>
-            <span style={{ color: 'var(--text2)' }}>{t.name}</span>
-            <span style={{ color, fontWeight: 700, textAlign: 'right' }}>
-              {(metric === 'sales' ? t.salesPerMin : t.profitPerMin).toLocaleString()}
-            </span>
-            <span style={{ color: 'var(--text3)', textAlign: 'right' }}>
-              {(metric === 'sales' ? t.salesShare : t.profitShare).toFixed(1)}%
-            </span>
-          </Fragment>
-        ))}
-      </div>
-    </div>
-  )
-}
 
 // ── constants ─────────────────────────────────────────────────────────────
 
@@ -238,63 +130,6 @@ function EditCell({ value, uniqueKey, field, onSave, dim }) {
         borderBottom: uniqueKey ? '1px dashed var(--border)' : 'none', fontSize: 11 }}>
       {display ?? (uniqueKey ? '입력' : '-')}
     </span>
-  )
-}
-
-// ── efficiency bar ─────────────────────────────────────────────────────────
-
-function EffBar({ pct, color, height = 6 }) {
-  const clamp = Math.min(Math.max(pct || 0, 0), 100)
-  const c = clamp >= 90 ? '#16a34a' : clamp >= 65 ? '#d97706' : '#dc2626'
-  return (
-    <div style={{ height, background: 'var(--bg4)', borderRadius: height / 2, overflow: 'hidden', flex: 1 }}>
-      <div style={{ width: `${clamp}%`, height: '100%', background: color || c, borderRadius: height / 2, transition: 'width .4s' }} />
-    </div>
-  )
-}
-
-// ── hero metric card ───────────────────────────────────────────────────────
-
-function HeroCard({ label, big, small, sub, color, pct, note }) {
-  return (
-    <div style={{ flex: 1, minWidth: 180, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '16px 18px' }}>
-      <div style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '.5px', marginBottom: 8 }}>{label}</div>
-      <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, marginBottom: 4 }}>
-        <span style={{ fontSize: 28, fontWeight: 800, color, lineHeight: 1 }}>{big}</span>
-        {small && <span style={{ fontSize: 12, color: 'var(--text2)', fontWeight: 600 }}>{small}</span>}
-      </div>
-      {sub && <div style={{ fontSize: 10, color: 'var(--text3)', marginBottom: 8 }}>{sub}</div>}
-      {pct != null && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
-          <EffBar pct={pct} color={color} height={5} />
-          <span style={{ fontSize: 10, color: 'var(--text3)', minWidth: 34, textAlign: 'right' }}>{Math.round(pct)}%</span>
-        </div>
-      )}
-      {note && <div style={{ fontSize: 9, color: 'var(--text3)', marginTop: 4 }}>{note}</div>}
-    </div>
-  )
-}
-
-function StatCard({ label, value, sub, color, warn }) {
-  return (
-    <div style={{ flex: 1, minWidth: 120, background: 'var(--bg2)', border: `1px solid ${warn ? 'rgba(220,38,38,.5)' : 'var(--border)'}`, borderRadius: 10, padding: '12px 14px' }}>
-      <div style={{ fontSize: 10, color: warn ? 'var(--red)' : 'var(--text3)', fontWeight: 600, marginBottom: 4 }}>{label}</div>
-      <div style={{ fontSize: 18, fontWeight: 700, color: color || 'var(--text)' }}>{value}</div>
-      {sub && <div style={{ fontSize: 9, color: 'var(--text3)', marginTop: 2 }}>{sub}</div>}
-    </div>
-  )
-}
-
-function ChartCard({ title, sub, right, children }) {
-  return (
-    <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 18px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{title}</span>
-        {sub && <span style={{ fontSize: 10, color: 'var(--text2)', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 4, padding: '2px 6px', marginLeft: 8, fontWeight: 700 }}>{sub}</span>}
-        {right && <div style={{ marginLeft: 'auto' }}>{right}</div>}
-      </div>
-      {children}
-    </div>
   )
 }
 
@@ -388,7 +223,7 @@ export default function PerformanceForecast() {
         ...block,
         mdCategory: block.mdCategory || categoryMap[block.pgmCodeName] || '미분류',
         mdTeam: block.mdTeam || block.orgName || '미지정',
-        ...calcForecast(block, perfMap, manualInputs, performanceHistoryByKey),
+        ...resolveForecastMetrics(block, { perfMap, manualInputs, performanceHistoryByKey }),
       }))
       .sort((a, b) => {
         if (a.dateKey !== b.dateKey) return (a.dateKey || '').localeCompare(b.dateKey || '')
@@ -401,124 +236,25 @@ export default function PerformanceForecast() {
     selectedDate ? rows.filter(r => r.dateKey === selectedDate) : rows
   , [rows, selectedDate])
 
-  const summary = useMemo(() => {
-    const s = displayRows.reduce((acc, r) => ({
-      sales:  acc.sales  + r.expectedSales,
-      profit: acc.profit + r.expectedProfit,
-      wm:     acc.wm     + Number(r.weightedMin || 0),
-    }), { sales: 0, profit: 0, wm: 0 })
-
-    // 엑셀 내보내기와 동일한 방식: getEffectivePgmSlots → 분할 슬롯 2칸으로 카운트
-    const effectiveSlots = getEffectivePgmSlots(pgmSlots, customSlots)
-    const totalSlotWm    = effectiveSlots.reduce((a, sl) => a + (sl.weightedMin || 0), 0)
-    const totalSlotCount = effectiveSlots.reduce((sum, sl) => sum + (splitSlots[sl.slotId] ? 2 : 1), 0)
-    const validCount     = displayRows.length
-
-    return {
-      ...s,
-      salesPerMin:  s.wm > 0 ? s.sales  / s.wm : 0,
-      profitPerMin: s.wm > 0 ? s.profit / s.wm : 0,
-      missingCount: displayRows.filter(r => r.missingPerf).length,
-      perfEnteredCount: displayRows.filter(r => !r.missingPerf).length,
-      count: validCount,
-      totalSlotCount,
-      totalSlotWm,
-      scheduleRate: totalSlotWm > 0 ? (s.wm / totalSlotWm * 100) : 0,
-      perfRate: displayRows.length > 0 ? (displayRows.filter(r => !r.missingPerf).length / displayRows.length * 100) : 0,
-    }
-  }, [displayRows, pgmSlots, customSlots, splitSlots])
+  const summary = useMemo(() =>
+    buildForecastSummary(displayRows, { pgmSlots, customSlots, splitSlots })
+  , [displayRows, pgmSlots, customSlots, splitSlots])
 
   // ── 전사 일자별 데이터 ────────────────────────────────────────────────
-  const dailyData = useMemo(() => {
-    const map = {}
-    rows.forEach(r => {
-      const d = r.dateKey || '?'
-      if (!map[d]) map[d] = { date: d, label: d.slice(5).replace('-', '/'), sales: 0, profit: 0, wm: 0 }
-      map[d].sales  += r.expectedSales
-      map[d].profit += r.expectedProfit
-      map[d].wm     += Number(r.weightedMin || 0)
-    })
-    return Object.values(map)
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .map(d => ({
-        ...d,
-        salesPerMin:  d.wm > 0 ? Math.round(d.sales  / d.wm) : 0,
-        profitPerMin: d.wm > 0 ? Math.round(d.profit / d.wm) : 0,
-      }))
-  }, [rows])
-
-  const avgDailySalesMin  = useMemo(() => {
-    const totalWm = dailyData.reduce((s, d) => s + d.wm, 0)
-    return totalWm > 0 ? Math.round(dailyData.reduce((s, d) => s + d.salesPerMin * d.wm, 0) / totalWm) : 0
-  }, [dailyData])
-
-  const avgDailyProfitMin = useMemo(() => {
-    const totalWm = dailyData.reduce((s, d) => s + d.wm, 0)
-    return totalWm > 0 ? Math.round(dailyData.reduce((s, d) => s + d.profitPerMin * d.wm, 0) / totalWm) : 0
-  }, [dailyData])
+  const dailyData = useMemo(() => buildDailyForecast(rows), [rows])
+  const avgDailySalesMin = useMemo(() => weightedAveragePerMin(dailyData, 'salesPerMin'), [dailyData])
+  const avgDailyProfitMin = useMemo(() => weightedAveragePerMin(dailyData, 'profitPerMin'), [dailyData])
 
   // ── 일자별 팀 분해 데이터 (툴팁용) ───────────────────────────────────
-  const dailyTeamData = useMemo(() => {
-    const map = {}
-    rows.forEach(r => {
-      const d = r.dateKey || '?'
-      const t = r.mdTeam || '미지정'
-      if (!map[d]) map[d] = {}
-      if (!map[d][t]) map[d][t] = { name: t, sales: 0, profit: 0, wm: 0 }
-      map[d][t].sales  += r.expectedSales
-      map[d][t].profit += r.expectedProfit
-      map[d][t].wm     += Number(r.weightedMin || 0)
-    })
-    Object.values(map).forEach(teams => {
-      const totalSales  = Object.values(teams).reduce((s, t) => s + t.sales,  0)
-      const totalProfit = Object.values(teams).reduce((s, t) => s + t.profit, 0)
-      Object.values(teams).forEach(t => {
-        t.salesPerMin  = t.wm > 0 ? Math.round(t.sales  / t.wm) : 0
-        t.profitPerMin = t.wm > 0 ? Math.round(t.profit / t.wm) : 0
-        t.salesShare   = totalSales  > 0 ? t.sales  / totalSales  * 100 : 0
-        t.profitShare  = totalProfit > 0 ? t.profit / totalProfit * 100 : 0
-      })
-    })
-    return map
-  }, [rows])
+  const dailyTeamData = useMemo(() => buildDailyTeamForecast(rows), [rows])
 
   // ── 팀/카테고리별 데이터 ──────────────────────────────────────────────
-  const groupData = useMemo(() => {
-    const map = {}
-    displayRows.forEach(r => {
-      const key = groupBy === 'team' ? r.mdTeam : r.mdCategory
-      if (!map[key]) map[key] = { name: key, sales: 0, profit: 0, wm: 0, count: 0, missing: 0 }
-      map[key].sales  += r.expectedSales
-      map[key].profit += r.expectedProfit
-      map[key].wm     += Number(r.weightedMin || 0)
-      map[key].count  += 1
-      if (r.missingPerf) map[key].missing += 1
-    })
-
-    const wmTargetMap = {}
-    if (groupBy === 'team') {
-      weightedMinTargets.forEach(t => {
-        const n = (t.teamName || '').trim()
-        if (n) { wmTargetMap[n] = t.weeklyTarget; wmTargetMap[n.endsWith('팀') ? n.slice(0, -1) : n + '팀'] = t.weeklyTarget }
-      })
-    }
-
-    const list = Object.values(map).map(g => {
-      const tgt = teamTargetMap[g.name] || {}
-      return {
-        ...g,
-        salesPerMin:       g.wm > 0 ? Math.round(g.sales  / g.wm) : 0,
-        profitPerMin:      g.wm > 0 ? Math.round(g.profit / g.wm) : 0,
-        targetSalesPerMin: tgt.salesPerMin  || 0,
-        targetProfitPerMin:tgt.profitPerMin || 0,
-        targetWm:  wmTargetMap[g.name] || 0,
-        wmShare: summary.wm > 0 ? g.wm / summary.wm * 100 : 0,
-      }
-    }).sort((a, b) => b.salesPerMin - a.salesPerMin)
-
-    const maxSpm = Math.max(...list.map(g => g.salesPerMin), 1)
-    return list.map((g, i) => ({ ...g, rank: i + 1, effPct: g.salesPerMin / maxSpm * 100 }))
-  }, [displayRows, groupBy, weightedMinTargets, teamTargetMap, summary.wm])
+  const groupData = useMemo(() => buildForecastGroups(displayRows, {
+    groupBy,
+    weightedMinTargets,
+    teamTargetMap,
+    totalWm: summary.wm,
+  }), [displayRows, groupBy, weightedMinTargets, teamTargetMap, summary.wm])
 
   const avgGroupSalesPerMin  = groupData.length > 0
     ? Math.round(groupData.reduce((s, g) => s + g.salesPerMin  * g.wm, 0) / Math.max(summary.wm, 1)) : 0
@@ -535,11 +271,11 @@ export default function PerformanceForecast() {
   // 팀/카테고리별 목표가 없는 항목(편성팀, 미분류 등)은 전사 평균으로 대체
   // 팀 목표 없으면 전사 목표(companyTotal)로 fallback, 그것도 없으면 편성 평균
   const enrichedGroupData = useMemo(() =>
-    groupData.map(g => ({
-      ...g,
-      effectiveTargetSalesPerMin:  g.targetSalesPerMin  > 0 ? g.targetSalesPerMin  : (companyTotal?.salesPerMin  || avgGroupSalesPerMin),
-      effectiveTargetProfitPerMin: g.targetProfitPerMin > 0 ? g.targetProfitPerMin : (companyTotal?.profitPerMin || avgGroupProfitPerMin),
-    }))
+    enrichForecastGroups(groupData, {
+      companyTotal,
+      avgSalesPerMin: avgGroupSalesPerMin,
+      avgProfitPerMin: avgGroupProfitPerMin,
+    })
   , [groupData, avgGroupSalesPerMin, avgGroupProfitPerMin, companyTotal])
 
   // 탭 전환 후 재마운트 시 저장된 시뮬레이션 값 복원
@@ -1217,3 +953,4 @@ export default function PerformanceForecast() {
     </div>
   )
 }
+

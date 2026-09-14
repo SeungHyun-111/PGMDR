@@ -7,14 +7,14 @@ import { db, ref, get } from '../api/firebase'
 import StatusScheduled from '../components/status/StatusScheduled'
 import StatusUnscheduled from '../components/status/StatusUnscheduled'
 import StatusLogs from '../components/status/StatusLogs'
-import { GRADES, GRADE_META, getGrade, getEffectiveProfit, getEffectiveMetrics } from '../utils/grade'
+import { GRADES, GRADE_META, getGrade, getEffectiveProfit } from '../utils/grade'
 import { VERSION_DRAFT } from '../utils/sessionVersion'
 import useLocalStorageState from '../hooks/useLocalStorageState'
-import { competitionItemToBlock, getCompetitionItems } from '../utils/competition'
+import { getCompetitionItems } from '../utils/competition'
+import { buildTeamStatusRows } from '../domain/status/teamStatus'
 import CoachMark from '../components/common/CoachMark'
 
 const TEAM_COLORS = ['#818cf8','#34d399','#fb923c','#60a5fa','#f472b6','#a78bfa','#4ade80','#f87171','#fbbf24','#2dd4bf']
-const GRADE_ORDER = { S: 0, A: 1, B: 2, C: 3, D: 4 }
 const MIN_TEAM_COL_WIDTH = 44
 const STATUS_COACH_STEPS = [
   {
@@ -232,62 +232,14 @@ function TeamStatusTab({ scheduledRows, competingRows = [], unscheduledRows, per
     Object.fromEntries(TEAM_DETAIL_COLS.map(col => [col.key, col.w]))
   )
 
-  const detailRows = useMemo(() => {
-    const scheduled = scheduledRows.map(item => {
-      const metrics = getEffectiveMetrics(item, perfMap, manualInputs, performanceHistoryByKey)
-      return {
-        ...item,
-        _status: '편성',
-        _statusOrder: 0,
-        _teamName: item._team || item.mdTeam || item.orgName || '미지정',
-        _gradeValue: item._grade || getGrade(getEffectiveProfit(item, perfMap, manualInputs, performanceHistoryByKey)),
-        _salesPerMin: metrics.salesPerMin,
-        _profitPerMin: metrics.profitPerMin,
-        _displayMin: Number(item.weightedMin || 0),
-      }
-    })
-    const competing = competingRows.flatMap(block =>
-      getCompetitionItems(block).map((item, idx) => {
-        const row = competitionItemToBlock(item, block)
-        const metrics = getEffectiveMetrics(row, perfMap, manualInputs, performanceHistoryByKey)
-        return {
-          ...row,
-          isCompeting: true,
-          _status: '경쟁',
-          _statusOrder: 0,
-          _teamName: row.mdTeam || row.orgName || '미지정',
-          _gradeValue: '',
-          _salesPerMin: metrics.salesPerMin,
-          _profitPerMin: metrics.profitPerMin,
-          _displayMin: Number(block.weightedMin || row.weightedMin || 0),
-          blockKey: `${block.blockKey || block.slotId || 'competing'}_${item.uniqueKey || item.itemId || idx}`,
-        }
-      })
-    )
-    const unscheduled = unscheduledRows.map(item => {
-      const metrics = getEffectiveMetrics(item, perfMap, manualInputs)
-      return {
-        ...item,
-        _status: '미편성',
-        _statusOrder: 1,
-        _teamName: item._team || item.mdTeam || item.team || '미지정',
-        _gradeValue: item._grade || getGrade(getEffectiveProfit(item, perfMap, manualInputs)),
-        _salesPerMin: metrics.salesPerMin,
-        _profitPerMin: metrics.profitPerMin,
-        _displayMin: Number(item.availableWeightedMin1 || 0),
-      }
-    })
-
-    return [...scheduled, ...competing, ...unscheduled].sort((a, b) => {
-      const statusCmp = a._statusOrder - b._statusOrder
-      if (statusCmp) return statusCmp
-      const gradeCmp = (GRADE_ORDER[a._gradeValue] ?? 9) - (GRADE_ORDER[b._gradeValue] ?? 9)
-      if (gradeCmp) return gradeCmp
-      const profitCmp = (b._profitPerMin || 0) - (a._profitPerMin || 0)
-      if (profitCmp) return profitCmp
-      return String(a.pgmCodeName || '').localeCompare(String(b.pgmCodeName || ''), 'ko', { numeric: true })
-    })
-  }, [scheduledRows, competingRows, unscheduledRows, perfMap, manualInputs, performanceHistoryByKey])
+  const detailRows = useMemo(() => buildTeamStatusRows({
+    scheduledRows,
+    competingRows,
+    unscheduledRows,
+    perfMap,
+    manualInputs,
+    performanceHistoryByKey,
+  }), [scheduledRows, competingRows, unscheduledRows, perfMap, manualInputs, performanceHistoryByKey])
 
   const teamOptions = useMemo(() => {
     const teams = Array.from(new Set(detailRows.map(row => row._teamName).filter(Boolean)))
