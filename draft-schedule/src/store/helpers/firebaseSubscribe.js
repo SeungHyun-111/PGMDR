@@ -84,6 +84,7 @@ export function subscribeRealtimePaths(weekKey, versionId, setState, getState) {
       })
     },
     [`${versionPath}/manualInputs`]:     snap => setState({ manualInputs:     snap.exists() ? snap.val() : {} }),
+    [`${versionPath}/opsOverlay`]:       snap => setState({ opsOverlay:       snap.exists() ? snap.val() : {} }),
   }
   Object.entries(paths).forEach(([path, handler]) => subscribePath(path, handler))
 }

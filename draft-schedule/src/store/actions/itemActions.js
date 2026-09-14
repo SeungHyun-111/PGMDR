@@ -4,7 +4,8 @@ import { genKey } from '../../utils/uniqueKey'
 import { normalizeItemsTeamNames } from '../../utils/teamName'
 import { applyEntityProps, extractEntityFields } from '../../utils/mergeEntity'
 import { filterUnscheduledItems, upsertByItemId } from '../../utils/proposalVisibility'
-import { getCurrentVersionPath } from '../../utils/sessionVersion'
+import { getCurrentVersionPath, VERSION_OPS } from '../../utils/sessionVersion'
+import { OPS_ENTITY_FIELDS, OPS_MANUAL_FIELDS } from '../../domain/ops/opsOverlay'
 
 function toProposalEntries(raw = []) {
   if (Array.isArray(raw)) {
@@ -298,12 +299,22 @@ export function createItemActions(setState, getState) {
     async saveEntityProps(uniqueKey, data) {
       if (!uniqueKey) return
       data = trimStringFields(data)
-      const { startDate, poolType } = getState()
+      const { startDate, poolType, currentVersionId } = getState()
       const weekKey = `${startDate}_${poolType}`
       const versionPath = getCurrentVersionPath(getState, weekKey)
       const before = getState().entityProps?.[uniqueKey] || null
       const after = { ...(before || {}), ...data }
-      await update(ref(db, `${versionPath}/entityProps/${uniqueKey}`), data)
+      const updates = Object.fromEntries(
+        Object.entries(data).map(([key, value]) => [`entityProps/${uniqueKey}/${key}`, value])
+      )
+      if (currentVersionId === VERSION_OPS) {
+        OPS_ENTITY_FIELDS.forEach(field => {
+          if (Object.prototype.hasOwnProperty.call(data, field)) {
+            updates[`opsOverlay/dirtyByUniqueKey/${uniqueKey}/${field}`] = true
+          }
+        })
+      }
+      await update(ref(db, versionPath), updates)
       getState().recordUndoChange('상품 속성 수정 되돌리기', {
         path: `${versionPath}/entityProps/${uniqueKey}`,
         before,
@@ -313,12 +324,22 @@ export function createItemActions(setState, getState) {
     },
 
     async saveManualInput(uniqueKey, data) {
-      const { startDate, poolType } = getState()
+      const { startDate, poolType, currentVersionId } = getState()
       const weekKey = `${startDate}_${poolType}`
       const versionPath = getCurrentVersionPath(getState, weekKey)
       const before = getState().manualInputs?.[uniqueKey] || null
       const after = { ...(before || {}), ...data }
-      await update(ref(db, `${versionPath}/manualInputs/${uniqueKey}`), data)
+      const updates = Object.fromEntries(
+        Object.entries(data).map(([key, value]) => [`manualInputs/${uniqueKey}/${key}`, value])
+      )
+      if (currentVersionId === VERSION_OPS) {
+        OPS_MANUAL_FIELDS.forEach(field => {
+          if (Object.prototype.hasOwnProperty.call(data, field)) {
+            updates[`opsOverlay/dirtyByUniqueKey/${uniqueKey}/manual/${field}`] = true
+          }
+        })
+      }
+      await update(ref(db, versionPath), updates)
       getState().recordUndoChange('수기 입력 수정 되돌리기', {
         path: `${versionPath}/manualInputs/${uniqueKey}`,
         before,

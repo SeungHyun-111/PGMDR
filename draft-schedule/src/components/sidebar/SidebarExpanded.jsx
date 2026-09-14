@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react'
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react'
 import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
 import { buildDragGhost } from './ProductCard'
 import ConfirmActionModal from '../common/ConfirmActionModal'
@@ -80,6 +80,7 @@ export default function SidebarExpanded({ items, onClose }) {
   const [addModal, setAddModal]     = useState(false)
   const [addForm, setAddForm]       = useState({})
   const [adding, setAdding]         = useState(false)
+  const addModalBackdropMouseDownRef = useRef(false)
   const [panelHeight, setPanelHeight] = useLocalStorageState(`pgmdr.ui.${uiScope}.sidebarExpanded.panelHeight`, 272)
   const [blockDragOver, setBlockDragOver] = useState(null) // { insertBeforeId: string|null }
   const [pinnedReturn, setPinnedReturn]   = useState(null) // { itemId, insertBeforeId }
@@ -652,7 +653,11 @@ export default function SidebarExpanded({ items, onClose }) {
       {/* 아이템 추가 모달 */}
       {addModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
-          onClick={e => { if (e.target === e.currentTarget) setAddModal(false) }}>
+          onMouseDown={e => { addModalBackdropMouseDownRef.current = e.target === e.currentTarget }}
+          onClick={e => {
+            if (addModalBackdropMouseDownRef.current && e.target === e.currentTarget) setAddModal(false)
+            addModalBackdropMouseDownRef.current = false
+          }}>
           <div style={{ background: 'var(--bg2)', border: '1px solid var(--border2)', borderRadius: 10, padding: '22px 26px', width: 480, maxHeight: '80vh', overflowY: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,.4)' }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)', marginBottom: 4 }}>제안상품 추가</div>
             <div style={{ fontSize: 11, color: 'var(--text3)', marginBottom: 16 }}>GAS 새로고침 시 원본으로 초기화됩니다.</div>

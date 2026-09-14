@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
+import { OPS_CONFLICT_KEEP_CURRENT, OPS_CONFLICT_USE_SOURCE } from '../../domain/ops/opsOverlay'
 import { SESSION_VERSIONS, VERSION_DRAFT, VERSION_OPS, VERSION_SALES, getVersionLabel } from '../../utils/sessionVersion'
 
 const btnBase = {
@@ -32,6 +33,7 @@ const formatMetaTime = ts => {
 
 export default function VersionSwitcher({ onToast, coachPreviewVersion = null }) {
   const [isSyncingOps, setIsSyncingOps] = useState(false)
+  const [conflictChoices, setConflictChoices] = useState({})
   const {
     startDate,
     poolType,
@@ -39,6 +41,8 @@ export default function VersionSwitcher({ onToast, coachPreviewVersion = null })
     versionMeta,
     setSessionVersion,
     syncOpsVersionFromGas,
+    resolveOpsSyncConflicts,
+    opsSyncConflicts,
     publishSalesVersion,
     isPublishingSales,
   } = useScheduleStore()
@@ -69,7 +73,7 @@ export default function VersionSwitcher({ onToast, coachPreviewVersion = null })
       : '현재 담당 작성본으로 영업팀 공유본을 생성할까요?'
     if (!window.confirm(msg)) return
     await publishSalesVersion()
-    onToast?.(salesPublishedAt ? '초안 확정 완료' : '초안 확정 완료')
+    onToast?.('초안 확정 완료')
   }
 
   const handleOpsPrepare = () => {
@@ -84,8 +88,9 @@ export default function VersionSwitcher({ onToast, coachPreviewVersion = null })
     if (!window.confirm('Google 편성운영 시트에서 현재 편성운영 버전을 갱신할까요?')) return
     setIsSyncingOps(true)
     try {
-      await syncOpsVersionFromGas()
-      onToast?.('편성운영 갱신 완료')
+      const result = await syncOpsVersionFromGas()
+      const conflictCount = result?.conflicts?.length || 0
+      onToast?.(conflictCount ? `편성운영 갱신 완료 · 충돌 ${conflictCount}건` : '편성운영 갱신 완료')
     } catch (e) {
       alert(e?.message || '편성운영 갱신에 실패했습니다.')
     } finally {
@@ -120,6 +125,24 @@ export default function VersionSwitcher({ onToast, coachPreviewVersion = null })
 
   const actionTimeText = formatMetaTime(actionMeta?.publishedAt || actionMeta?.updatedAt)
   const actionUserText = actionMeta?.publishedBy || actionMeta?.updatedBy || '-'
+  const fieldConflicts = (opsSyncConflicts || []).filter(conflict => conflict.type === 'field')
+  const ambiguousConflicts = (opsSyncConflicts || []).filter(conflict => conflict.type === 'ambiguous')
+
+  const chooseAll = async (choice) => {
+    const resolutions = Object.fromEntries(fieldConflicts.map(conflict => [conflict.id, choice]))
+    await resolveOpsSyncConflicts(resolutions)
+    setConflictChoices({})
+    onToast?.(choice === OPS_CONFLICT_USE_SOURCE ? '신규값 적용 완료' : '현재값 유지 완료')
+  }
+
+  const applyChoices = async () => {
+    const resolutions = Object.fromEntries(
+      fieldConflicts.map(conflict => [conflict.id, conflictChoices[conflict.id] || OPS_CONFLICT_KEEP_CURRENT])
+    )
+    await resolveOpsSyncConflicts(resolutions)
+    setConflictChoices({})
+    onToast?.('충돌 처리 완료')
+  }
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 70 }}>
@@ -189,6 +212,145 @@ export default function VersionSwitcher({ onToast, coachPreviewVersion = null })
           {actionTimeText} · {actionUserText}
         </div>
       </div>
+      {!!opsSyncConflicts?.length && (
+        <OpsConflictModal
+          fieldConflicts={fieldConflicts}
+          ambiguousConflicts={ambiguousConflicts}
+          choices={conflictChoices}
+          setChoices={setConflictChoices}
+          onKeepAll={() => chooseAll(OPS_CONFLICT_KEEP_CURRENT)}
+          onUseSourceAll={() => chooseAll(OPS_CONFLICT_USE_SOURCE)}
+          onApply={applyChoices}
+        />
+      )}
     </div>
   )
+}
+
+function OpsConflictModal({ fieldConflicts, ambiguousConflicts, choices, setChoices, onKeepAll, onUseSourceAll, onApply }) {
+  return (
+    <div style={modalBackdrop}>
+      <div style={modalPanel}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'center' }}>
+          <div style={{ fontSize: 14, fontWeight: 900 }}>편성운영 갱신 충돌</div>
+          <div style={{ fontSize: 11, color: 'var(--text3)', fontWeight: 700 }}>
+            입력값 {fieldConflicts.length}건 · 시간 이동 후보 {ambiguousConflicts.length}건
+          </div>
+        </div>
+        <div style={conflictListStyle}>
+          {fieldConflicts.map(conflict => {
+            const choice = choices[conflict.id] || OPS_CONFLICT_KEEP_CURRENT
+            return (
+              <div key={conflict.id} style={conflictRowStyle}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {conflict.dateKey} {conflict.timeText} · {conflict.pgmCode || '-'} · {conflict.pgmCodeName || '-'}
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+                    {getConflictFieldLabel(conflict)}: 현재 "{formatConflictValue(conflict.currentValue)}" / 신규 "{formatConflictValue(conflict.sourceValue)}"
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 4, flexShrink: 0 }}>
+                  <button onClick={() => setChoices(s => ({ ...s, [conflict.id]: OPS_CONFLICT_KEEP_CURRENT }))} style={choiceButtonStyle(choice === OPS_CONFLICT_KEEP_CURRENT)}>현재</button>
+                  <button onClick={() => setChoices(s => ({ ...s, [conflict.id]: OPS_CONFLICT_USE_SOURCE }))} style={choiceButtonStyle(choice === OPS_CONFLICT_USE_SOURCE)}>신규</button>
+                </div>
+              </div>
+            )
+          })}
+          {ambiguousConflicts.map(conflict => (
+            <div key={conflict.id} style={conflictRowStyle}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 900 }}>
+                  시간 이동 후보 중복 · {conflict.dateKey} {conflict.timeText} · {conflict.pgmCode || '-'}
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 4 }}>
+                  후보 {conflict.candidates?.length || 0}개라 자동 이전하지 않았습니다.
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button onClick={onKeepAll} style={modalButtonStyle}>모두 현재값 유지</button>
+          <button onClick={onUseSourceAll} style={modalButtonStyle}>모두 신규값 적용</button>
+          <button onClick={onApply} style={{ ...modalButtonStyle, background: '#111827', color: '#fff', borderColor: '#111827' }}>선택 적용</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const modalBackdrop = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 5000,
+  background: 'rgba(15,23,42,.28)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 24,
+}
+
+const modalPanel = {
+  width: 'min(860px, 96vw)',
+  maxHeight: '82vh',
+  background: '#fff',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  boxShadow: '0 22px 60px rgba(15,23,42,.24)',
+  padding: 16,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 12,
+}
+
+const conflictListStyle = {
+  overflow: 'auto',
+  maxHeight: '58vh',
+  border: '1px solid var(--border)',
+  borderRadius: 6,
+}
+
+const conflictRowStyle = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  gap: 12,
+  padding: '10px 12px',
+  borderBottom: '1px solid var(--border)',
+}
+
+const modalButtonStyle = {
+  border: '1px solid var(--border)',
+  background: '#fff',
+  borderRadius: 6,
+  padding: '7px 10px',
+  fontSize: 12,
+  fontWeight: 800,
+  cursor: 'pointer',
+}
+
+const choiceButtonStyle = active => ({
+  ...modalButtonStyle,
+  padding: '5px 8px',
+  background: active ? '#eff6ff' : '#fff',
+  borderColor: active ? '#60a5fa' : 'var(--border)',
+  color: active ? '#1d4ed8' : 'var(--text)',
+})
+
+function getConflictFieldLabel(conflict) {
+  const labels = {
+    requestNote: '기타요청',
+    scheduleComment: '편성C',
+    annotation: '첨삭',
+    memoCode: '메모코드',
+    memoCodeCode: '메모코드 코드',
+    expectedSalesPerWeightedMin: '수기 취급/분',
+    expectedProfitPerWeightedMin: '수기 한익/분',
+  }
+  return labels[conflict.field] || conflict.field
+}
+
+function formatConflictValue(value) {
+  if (value === undefined || value === null || value === '') return '-'
+  return String(value)
 }

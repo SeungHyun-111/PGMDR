@@ -1,5 +1,5 @@
 // src/components/modal/BlockEditModal.jsx
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
 import { DEAL_TYPES } from '../../constants/dealTypes'
 import { CATEGORIES } from '../../constants/categories'
@@ -61,6 +61,8 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
   const [manualProfit, setManualProfit] = useState(manual.expectedProfitPerWeightedMin ?? '')
   const [saveState, setSaveState] = useState('idle')
   const [channelConflict, setChannelConflict] = useState(null)
+  const backdropMouseDownRef = useRef(false)
+  const conflictBackdropMouseDownRef = useRef(false)
 
   const setField = (key, val) => setForm(prev => {
     const next = { ...prev, [key]: val }
@@ -171,7 +173,11 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
   return (
     // 배경 클릭 시에만 닫힘 (모달 내부 클릭으로 인한 의도치 않은 닫힘 방지)
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      onMouseDown={e => { backdropMouseDownRef.current = e.target === e.currentTarget }}
+      onClick={e => {
+        if (backdropMouseDownRef.current && e.target === e.currentTarget) onClose()
+        backdropMouseDownRef.current = false
+      }}>
       <div
         style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '24px 28px', width: 500, maxHeight: '90vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
 
@@ -321,7 +327,11 @@ export default function BlockEditModal({ block, onClose, saveBlock }) {
       {channelConflict && (
         <div
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.48)', zIndex: 10001, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-          onClick={() => setChannelConflict(null)}
+          onMouseDown={e => { conflictBackdropMouseDownRef.current = e.target === e.currentTarget }}
+          onClick={e => {
+            if (conflictBackdropMouseDownRef.current && e.target === e.currentTarget) setChannelConflict(null)
+            conflictBackdropMouseDownRef.current = false
+          }}
         >
           <div
             onClick={e => e.stopPropagation()}

@@ -8,6 +8,7 @@ import { getCompetitionItems } from '../../utils/competition'
 import { filterUnscheduledItems } from '../../utils/proposalVisibility'
 import { makePerfKey, normalizeDealType } from '../../hooks/usePerformanceMap'
 import { collectPerfKeys } from '../../utils/performanceHistory'
+import { buildOpsOverlayResult, applyOpsConflictResolutions } from '../../domain/ops/opsOverlay'
 import {
   VERSION_DRAFT,
   VERSION_OPS,
@@ -165,6 +166,7 @@ export function createSessionActions(setState, getState) {
         scheduledItemIds:   versionData.scheduledItemIds || {},
         scheduledUniqueKeys,
         manualInputs:       versionData.manualInputs || {},
+        opsOverlay:         versionData.opsOverlay || {},
         allProposalItems,
         proposalItems:      filterUnscheduledItems(allProposalItems, versionData.scheduledItemIds || {}, scheduledUniqueKeys),
         lastUpdated:        updatedSnap.exists()  ? updatedSnap.val()               : null,
@@ -206,9 +208,16 @@ export function createSessionActions(setState, getState) {
       const updatedAt = Date.now()
       const updatedBy = userName || ''
       const rawBlocks = payload.scheduleBlocks || {}
-      const scheduleBlocks = {}
-      const entityProps = {}
-      const scheduledUniqueKeys = {}
+      const opsPath = getVersionPath(weekKey, VERSION_OPS)
+      const [opsSnap, salesSnap] = await Promise.all([
+        get(ref(db, opsPath)),
+        get(ref(db, getVersionPath(weekKey, VERSION_SALES))),
+      ])
+      const hasExistingOps = opsSnap.exists()
+      const currentOpsVersion = hasExistingOps ? opsSnap.val() : {}
+      const salesVersion = salesSnap.exists() ? salesSnap.val() : {}
+      const sourceBlocks = {}
+      const sourceEntityProps = {}
 
       Object.entries(rawBlocks).forEach(([blockKey, block]) => {
         if (!block) return
@@ -223,22 +232,33 @@ export function createSessionActions(setState, getState) {
           dealTypeChar: getDealTypeChar(dealType),
           perfKey: makePerfKey(dealType, normalizedTeamBlock.pgmCodeName),
         }
-        scheduleBlocks[blockKey] = nextBlock
-        entityProps[uniqueKey] = extractEntityFields(nextBlock)
-        scheduledUniqueKeys[uniqueKey] = true
+        sourceBlocks[blockKey] = nextBlock
+        sourceEntityProps[uniqueKey] = extractEntityFields(nextBlock)
       })
 
-      await set(ref(db, getVersionPath(weekKey, VERSION_OPS)), {
+      const overlayResult = buildOpsOverlayResult({
+        mode: hasExistingOps ? 'refresh' : 'initial',
+        sourceBlocks,
+        sourceEntityProps,
+        salesVersion,
+        currentOpsVersion,
+        dirtyByUniqueKey: currentOpsVersion.opsOverlay?.dirtyByUniqueKey || {},
+        orphans: currentOpsVersion.opsOverlay?.orphans || {},
+        now: updatedAt,
+      })
+
+      await set(ref(db, opsPath), {
         pgmSlots: (payload.pgmSlots || []).map(buildSlot),
         proposalItems: [],
-        scheduleBlocks,
-        entityProps,
+        scheduleBlocks: overlayResult.scheduleBlocks,
+        entityProps: overlayResult.entityProps,
         splitSlots: payload.splitSlots || {},
         customSlots: {},
         starred: {},
         scheduledItemIds: {},
-        scheduledUniqueKeys,
-        manualInputs: {},
+        scheduledUniqueKeys: overlayResult.scheduledUniqueKeys,
+        manualInputs: overlayResult.manualInputs,
+        opsOverlay: overlayResult.opsOverlay,
         updatedAt,
         updatedBy,
         sourceVersionId: 'ops_sheet',
@@ -258,9 +278,34 @@ export function createSessionActions(setState, getState) {
         opsSlotCount: (payload.pgmSlots || []).length,
       })
 
+      setState({
+        opsSyncConflicts: overlayResult.conflicts,
+        opsSyncResult: {
+          mode: hasExistingOps ? 'refresh' : 'initial',
+          conflictCount: overlayResult.conflicts.length,
+          updatedAt,
+        },
+      })
       localStorage.setItem('currentVersionId', VERSION_OPS)
       await getState()._loadFromFirebase(startDate, poolType, VERSION_OPS)
-      return payload
+      return { ...payload, mode: hasExistingOps ? 'refresh' : 'initial', conflicts: overlayResult.conflicts }
+    },
+
+    async resolveOpsSyncConflicts(resolutions) {
+      const { startDate, poolType, opsSyncConflicts } = getState()
+      if (!startDate || !poolType || !opsSyncConflicts?.length) return
+      const weekKey = `${startDate}_${poolType}`
+      const opsPath = getVersionPath(weekKey, VERSION_OPS)
+      const snap = await get(ref(db, opsPath))
+      if (!snap.exists()) return
+      const versionData = snap.val()
+      const resolved = applyOpsConflictResolutions(versionData, opsSyncConflicts, resolutions)
+      await update(ref(db, opsPath), {
+        entityProps: resolved.entityProps,
+        manualInputs: resolved.manualInputs,
+        opsOverlay: resolved.opsOverlay,
+      })
+      setState({ opsSyncConflicts: [] })
     },
 
     async publishSalesVersion() {
@@ -317,7 +362,7 @@ export function createSessionActions(setState, getState) {
         weightedMinTargets: [], targetMetrics: null,
         scheduleBlocks: {}, _rawBlocks: {}, entityProps: {},
         splitSlots: {}, customSlots: {}, starred: {},
-        scheduledItemIds: {}, scheduledUniqueKeys: {}, manualInputs: {}, lastUpdated: null,
+        scheduledItemIds: {}, scheduledUniqueKeys: {}, manualInputs: {}, opsOverlay: {}, opsSyncConflicts: [], opsSyncResult: null, lastUpdated: null,
         allProposalItems: [], proposalItems: [], proposalLoaded: false,
       })
       const weekKey = `${startDate}_${poolType}`

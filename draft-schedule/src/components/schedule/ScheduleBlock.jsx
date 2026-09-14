@@ -1,5 +1,5 @@
 ﻿// src/components/schedule/ScheduleBlock.jsx
-import { useState, useEffect, memo } from 'react'
+import { useState, useEffect, useRef, memo } from 'react'
 import { createPortal } from 'react-dom'
 import BlockEditModal from '../modal/BlockEditModal'
 import ConfirmActionModal from '../common/ConfirmActionModal'
@@ -22,6 +22,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
   const [competitionSelect, setCompetitionSelect] = useState(null)
   const [annotationPopup, setAnnotationPopup] = useState(false)
   const [annotationText, setAnnotationText]   = useState('')
+  const annotationBackdropMouseDownRef = useRef(false)
   const { returnBlockToSidebar: returnBlockToSidebarRaw, releaseCompetition, perfMap, manualInputs, performanceHistoryByKey, runUndoBatch, saveEntityProps, entityProps } = useScheduleStore()
   const returnBlockToSidebar = async (targetBlock) => {
     await runUndoBatch(`사이드바 반환 되돌리기: ${targetBlock.pgmCodeName || targetBlock.blockKey || targetBlock.slotId}`, async () => {
@@ -254,7 +255,11 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
 
       {annotationPopup && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}
-          onClick={e => { if (e.target === e.currentTarget) setAnnotationPopup(false) }}>
+          onMouseDown={e => { annotationBackdropMouseDownRef.current = e.target === e.currentTarget }}
+          onClick={e => {
+            if (annotationBackdropMouseDownRef.current && e.target === e.currentTarget) setAnnotationPopup(false)
+            annotationBackdropMouseDownRef.current = false
+          }}>
           <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '20px 24px', minWidth: 320, display: 'flex', flexDirection: 'column', gap: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 700 }}>📎 첨삭 — {block.pgmCodeName}</div>
             <textarea value={annotationText} onChange={e => setAnnotationText(e.target.value)} rows={5} autoFocus
