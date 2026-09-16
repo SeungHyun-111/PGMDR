@@ -27,6 +27,7 @@ export function subscribeRealtimePaths(weekKey, versionId, setState, getState) {
   unsubscribeAll()
   const versionPath = getVersionPath(weekKey, versionId)
   const paths = {
+    [`sessions/${weekKey}/versionMeta`]: snap => setState({ versionMeta: snap.exists() ? snap.val() : {} }),
     [`${versionPath}/pgmSlots`]: snap => {
       const raw = snap.exists() ? snap.val() : []
       if (!Array.isArray(raw) || raw.length === 0) return

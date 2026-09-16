@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
+import { db, ref, get } from '../../api/firebase'
 import { OPS_CONFLICT_KEEP_CURRENT, OPS_CONFLICT_USE_SOURCE } from '../../domain/ops/opsOverlay'
 import { SESSION_VERSIONS, VERSION_DRAFT, VERSION_OPS, VERSION_SALES, getVersionLabel } from '../../utils/sessionVersion'
 
@@ -53,12 +54,45 @@ export default function VersionSwitcher({ onToast, coachPreviewVersion = null })
   const actionMeta = displayVersionId === VERSION_DRAFT
     ? versionMeta?.[VERSION_SALES]
     : versionMeta?.[VERSION_OPS]
+  const didInitSalesNoticeRef = useRef(false)
+  const previousSalesPublishedAtRef = useRef(salesPublishedAt)
+
+  useEffect(() => {
+    if (!didInitSalesNoticeRef.current) {
+      didInitSalesNoticeRef.current = true
+      previousSalesPublishedAtRef.current = salesPublishedAt
+      return
+    }
+
+    if (!previousSalesPublishedAtRef.current && salesPublishedAt) {
+      onToast?.('영업팀 공유본이 생성되었습니다.')
+    }
+    previousSalesPublishedAtRef.current = salesPublishedAt
+  }, [onToast, salesPublishedAt])
 
   const handleSelect = async (versionId) => {
     if (versionId === currentVersionId) return
-    if (versionId === VERSION_SALES && !salesPublishedAt) {
-      alert('영업팀 공유본이 아직 없습니다. 담당 작성에서 먼저 공유본을 생성하세요.')
-      return
+    if (versionId === VERSION_SALES) {
+      let latestSalesMeta = salesPublishedAt ? versionMeta?.[VERSION_SALES] : null
+
+      if (!latestSalesMeta && startDate && poolType) {
+        const weekKey = `${startDate}_${poolType}`
+        const snap = await get(ref(db, `sessions/${weekKey}/versionMeta/${VERSION_SALES}`))
+        latestSalesMeta = snap.exists() ? snap.val() : null
+        if (latestSalesMeta) {
+          useScheduleStore.setState(state => ({
+            versionMeta: {
+              ...(state.versionMeta || {}),
+              [VERSION_SALES]: latestSalesMeta,
+            },
+          }))
+        }
+      }
+
+      if (!latestSalesMeta?.publishedAt) {
+        alert('영업팀 공유본이 아직 없습니다. 담당작성에서 먼저 공유본을 생성하세요.')
+        return
+      }
     }
     await setSessionVersion(versionId)
   }
@@ -113,7 +147,6 @@ export default function VersionSwitcher({ onToast, coachPreviewVersion = null })
 
   const isVersionDisabled = (versionId) => {
     if (coachPreviewVersion) return false
-    if (versionId === VERSION_SALES) return !salesPublishedAt
     return false
   }
 
