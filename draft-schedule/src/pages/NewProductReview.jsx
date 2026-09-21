@@ -48,6 +48,10 @@ function getEntryId(row) {
   return `${row.broadcastTimestamp || 0}_${encodeKey(row.perfKey || '')}_${row.sourceRow || 0}`
 }
 
+function getEntryPrefix(row) {
+  return `${row.broadcastTimestamp || 0}_${encodeKey(row.perfKey || '')}`
+}
+
 function getTeamName(row) {
   return row.mdTeam || mdNameTeamMap[String(row.mdName || '').trim()] || ''
 }
@@ -76,6 +80,19 @@ export default function NewProductReview() {
     return () => unsubscribe?.()
   }, [])
 
+  const reviewInputsByPrefix = useMemo(() => {
+    const result = {}
+    Object.entries(reviewInputs || {}).forEach(([entryId, state]) => {
+      const prefix = entryId.split('_').slice(0, -1).join('_')
+      if (!prefix) return
+      const previous = result[prefix]
+      if (!previous || Number(state?.updatedAt || 0) > Number(previous?.updatedAt || 0)) {
+        result[prefix] = state
+      }
+    })
+    return result
+  }, [reviewInputs])
+
   const baseRows = useMemo(() => {
     return Object.values(performanceRows || {})
       .filter(row => REVIEW_TYPES.has(row?.newProductType))
@@ -88,8 +105,9 @@ export default function NewProductReview() {
         return {
           ...row,
           entryId,
+          entryPrefix: getEntryPrefix(row),
           teamName: getTeamName(row),
-          reviewState: reviewInputs[entryId] || {},
+          reviewState: reviewInputs[entryId] || reviewInputsByPrefix[getEntryPrefix(row)] || {},
         }
       })
       .filter(row => teamFilter === '전체' || row.teamName === teamFilter)
@@ -99,7 +117,7 @@ export default function NewProductReview() {
         if (at !== bt) return at - bt
         return String(a.pgmCodeName || '').localeCompare(String(b.pgmCodeName || ''), 'ko')
       })
-  }, [endDate, performanceRows, reviewInputs, startDate, teamFilter])
+  }, [endDate, performanceRows, reviewInputs, reviewInputsByPrefix, startDate, teamFilter])
 
   const teamOptions = useMemo(() => {
     const names = new Set(['전체'])

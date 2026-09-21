@@ -80,7 +80,10 @@ export function createRefreshActions(setState, getState) {
             perfMap: encoded,
           })
         }
-        await writeGlobalPerformanceData(rawData, rawPerfMap, userName)
+        await writeGlobalPerformanceData(rawData, rawPerfMap, userName, {
+          action: '실적DB 갱신',
+          details: `${Object.keys(perfMap).length.toLocaleString()}개 키 갱신`,
+        })
         await update(ref(db, `sessions/${weekKey}/lastUpdated`), { performance: now, performanceBy: userName || '' })
         getState().seedPerformanceFromPerfMap?.(perfMap)
         getState().invalidatePerformanceKeys?.()
@@ -116,6 +119,7 @@ export function createRefreshActions(setState, getState) {
           proposalItems: proposalItemsRaw,
           entityProps: buildNextEntityProps(entityProps, scheduleBlocks, proposalItemsRaw),
         })
+        await getState()._writeRefreshLog('제안상품 갱신', `${proposalItemsRaw.length.toLocaleString()}건 갱신`)
         await update(ref(db, `sessions/${weekKey}/lastUpdated`), { proposal: now, proposalBy: userName || '' })
         const allItems = normalizeItemsTeamNames(
           proposalItemsRaw.map((item, i) => buildProposalItem({ ...item, _fbIdx: i })),
@@ -161,7 +165,10 @@ export function createRefreshActions(setState, getState) {
           proposalItems: proposalItemsRaw,
           perfMap: encodePerfMap(gasData.perfMap || {}),
         })
-        await writeGlobalPerformanceData(gasData, gasData.perfMap || {}, userName)
+        await writeGlobalPerformanceData(gasData, gasData.perfMap || {}, userName, {
+          action: 'GAS 전체 재동기화',
+          details: `실적 ${Object.keys(buildPerfMapFromGas(gasData.perfMap || {})).length.toLocaleString()}개 키 갱신`,
+        })
         await update(ref(db, versionPath), {
           pgmSlots: pgmSlotsNew,
           proposalItems: proposalItemsRaw,
@@ -239,6 +246,7 @@ export function createRefreshActions(setState, getState) {
         const now = Date.now()
         const preScheduleRows = data.preScheduleRows || []
         await update(ref(db, `sessions/${weekKey}/gasData`), { preScheduleRows })
+        await getState()._writeRefreshLog('선편성정보 갱신', `${preScheduleRows.length.toLocaleString()}건 갱신`)
         await update(ref(db, `sessions/${weekKey}/lastUpdated`), { preSchedule: now, preScheduleBy: userName || '' })
         // 사용자가 직접 편성한 블록(isDefault도 isPreSchedule도 아닌)만 보호
         // default·기존선편성 블록은 새 데이터로 덮어씀 (정규화 반영)
@@ -267,7 +275,7 @@ export function createRefreshActions(setState, getState) {
   }
 }
 
-async function writeGlobalPerformanceData(rawData, rawPerfMap, userName = '') {
+async function writeGlobalPerformanceData(rawData, rawPerfMap, userName = '', log = null) {
   const updates = {}
   const performanceRows = getPerformanceRowsSource(rawData, rawPerfMap)
   const normalizedRows = normalizePerformanceRows(performanceRows)
@@ -282,6 +290,7 @@ async function writeGlobalPerformanceData(rawData, rawPerfMap, userName = '') {
   })
 
   if (Object.keys(updates).length > 0) {
+    const now = Date.now()
     const latestEntry = getLatestEntry(normalizedRows)
     if (latestEntry) {
       updates.performanceMeta = {
@@ -289,8 +298,16 @@ async function writeGlobalPerformanceData(rawData, rawPerfMap, userName = '') {
         latestDate: latestEntry.broadcastDate || '',
         latestTime: latestEntry.broadcastTime || '',
         latestPerfKey: latestEntry.perfKey || '',
-        updatedAt: Date.now(),
+        updatedAt: now,
         updatedBy: userName || '',
+      }
+    }
+    if (log) {
+      updates[`performanceRefreshLogs/log_${now}`] = {
+        timestamp: now,
+        action: log.action || '실적DB 갱신',
+        details: log.details || `${normalizedRows.length.toLocaleString()}건 반영`,
+        user: userName || '',
       }
     }
     await update(ref(db), updates)

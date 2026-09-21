@@ -27,7 +27,16 @@ export function subscribeRealtimePaths(weekKey, versionId, setState, getState) {
   unsubscribeAll()
   const versionPath = getVersionPath(weekKey, versionId)
   const paths = {
+    performanceMeta: snap => {
+      const previousUpdatedAt = getState().performanceMeta?.updatedAt || null
+      const performanceMeta = snap.exists() ? snap.val() : null
+      setState({ performanceMeta })
+      if (performanceMeta?.updatedAt && performanceMeta.updatedAt !== previousUpdatedAt) {
+        getState().loadGlobalPerformanceData?.({ force: true })
+      }
+    },
     [`sessions/${weekKey}/versionMeta`]: snap => setState({ versionMeta: snap.exists() ? snap.val() : {} }),
+    [`sessions/${weekKey}/lastUpdated`]: snap => setState({ lastUpdated: snap.exists() ? snap.val() : null }),
     [`${versionPath}/pgmSlots`]: snap => {
       const raw = snap.exists() ? snap.val() : []
       if (!Array.isArray(raw) || raw.length === 0) return

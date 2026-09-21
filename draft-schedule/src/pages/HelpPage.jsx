@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect } from 'react'
 import useScheduleStore from '../store/useScheduleStore'
-import { db, ref, get } from '../api/firebase'
+import { db, ref, onValue } from '../api/firebase'
 
 import { CALC_ROWS, COLLAB_ROWS, DB_PATHS, PERF_COLS, PGM_SLOT_COLS, PRE_SCHEDULE_COLS, PROPOSAL_COLS, REFRESH_TABLE, ROOT_PATHS, USAGE_SECTIONS } from '../data/helpContent.jsx'
 
@@ -11,13 +11,27 @@ export default function HelpPage() {
   useEffect(() => {
     if (!startDate || !poolType) return
     const weekKey = `${startDate}_${poolType}`
-    get(ref(db, `sessions/${weekKey}/refreshLogs`)).then(snap => {
-      if (!snap.exists()) return
-      const logs = Object.values(snap.val())
+    let sessionLogs = []
+    let performanceLogs = []
+    const applyLogs = () => {
+      const logs = [...sessionLogs, ...performanceLogs]
         .sort((a, b) => b.timestamp - a.timestamp)
         .slice(0, 30)
       setRefreshLogs(logs)
-    }).catch(() => {})
+    }
+    const unsubscribeSession = onValue(ref(db, `sessions/${weekKey}/refreshLogs`), snap => {
+      sessionLogs = snap.exists() ? Object.values(snap.val()) : []
+      applyLogs()
+    })
+    const unsubscribePerformance = onValue(ref(db, 'performanceRefreshLogs'), snap => {
+      performanceLogs = snap.exists() ? Object.values(snap.val()) : []
+      applyLogs()
+    })
+
+    return () => {
+      unsubscribeSession()
+      unsubscribePerformance()
+    }
   }, [startDate, poolType])
 
   const fmtTime = ts => {
@@ -102,7 +116,7 @@ export default function HelpPage() {
 
         {/* 갱신 이력 */}
         <Card>
-          <SubTitle>최근 갱신 이력 (현재 세션)</SubTitle>
+          <SubTitle>최근 갱신 이력</SubTitle>
           {refreshLogs.length === 0 ? (
             <div style={{ fontSize: 11, color: 'var(--text3)' }}>기록 없음</div>
           ) : (
