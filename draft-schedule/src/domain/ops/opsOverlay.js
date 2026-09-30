@@ -37,6 +37,19 @@ export function makeOpsMoveKey(block = {}) {
   return [dateKey, dealType, pgmCode].join('|')
 }
 
+export function toFirebaseObjectKey(value) {
+  return String(value || '').replace(/[.#$/[\]]/g, char => `%${char.charCodeAt(0).toString(16).toUpperCase().padStart(2, '0')}`)
+}
+
+export function getOrphanByExactKey(orphans = {}, exactKey) {
+  if (!exactKey) return { key: '', orphan: null }
+  const safeKey = toFirebaseObjectKey(exactKey)
+  if (orphans[safeKey]) return { key: safeKey, orphan: orphans[safeKey] }
+  if (orphans[exactKey]) return { key: exactKey, orphan: orphans[exactKey] }
+  const entry = Object.entries(orphans).find(([, orphan]) => orphan?.exactKey === exactKey)
+  return entry ? { key: entry[0], orphan: entry[1] } : { key: '', orphan: null }
+}
+
 export function extractOpsEntityOverlay(source = {}) {
   const out = {}
   OPS_ENTITY_FIELDS.forEach(field => {
@@ -108,8 +121,9 @@ export function buildOpsOverlayResult({
 
     if (baseMatch) matchedBaseKeys.add(baseMatch.blockKey)
 
-    const orphan = exactKey ? orphans[exactKey] : null
-    if (orphan && exactKey) matchedOrphanKeys.add(exactKey)
+    const orphanMatch = getOrphanByExactKey(orphans, exactKey)
+    const orphan = orphanMatch.orphan
+    if (orphan && orphanMatch.key) matchedOrphanKeys.add(orphanMatch.key)
     const sourceUniqueKey = sourceBlock.uniqueKey || ''
     const uniqueKey = baseMatch?.block?.uniqueKey || orphan?.uniqueKey || sourceUniqueKey
     const sourceEntity = extractOpsEntityOverlay(sourceEntityProps[sourceUniqueKey] || sourceBlock)
@@ -178,12 +192,14 @@ export function buildOpsOverlayResult({
     const manual = extractOpsManualOverlay(baseManualInputs[uniqueKey] || {})
     const entity = extractOpsEntityOverlay({ ...block, ...(baseEntityProps[uniqueKey] || {}) })
     if (!dirty && !hasOverlayValue(entity) && !hasOverlayValue(manual)) return
-    nextOrphans[exactKey] = { uniqueKey, entity, manual, dirty: dirty || null, lastSeenAt: now }
+    nextOrphans[toFirebaseObjectKey(exactKey)] = { uniqueKey, exactKey, entity, manual, dirty: dirty || null, lastSeenAt: now }
   })
 
   Object.entries(orphans || {}).forEach(([key, orphan]) => {
-    if (!key || nextOrphans[key] || matchedOrphanKeys.has(key)) return
-    nextOrphans[key] = { ...orphan, lastSeenAt: orphan?.lastSeenAt || now }
+    if (!key || matchedOrphanKeys.has(key)) return
+    const safeKey = toFirebaseObjectKey(orphan?.exactKey || key)
+    if (nextOrphans[safeKey]) return
+    nextOrphans[safeKey] = { ...orphan, exactKey: orphan?.exactKey || key, lastSeenAt: orphan?.lastSeenAt || now }
   })
 
   return {

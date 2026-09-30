@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { buildOpsOverlayResult, makeOpsExactKey } from '../src/domain/ops/opsOverlay.js'
+import { buildOpsOverlayResult, makeOpsExactKey, toFirebaseObjectKey } from '../src/domain/ops/opsOverlay.js'
 
 const block = (uniqueKey, timeText = '12:00', extra = {}) => ({
   uniqueKey,
@@ -159,14 +159,16 @@ run('H. 기존 방송 삭제', () => {
 
 run('I. 삭제됐던 방송이 같은 주차에서 다시 등장', () => {
   const orphanKey = makeOpsExactKey(block('ops1'))
+  const safeOrphanKey = toFirebaseObjectKey(orphanKey)
   const s = source({ a: block('src2') })
   const result = buildOpsOverlayResult({
     mode: 'refresh',
     ...s,
     currentOpsVersion: version(),
     orphans: {
-      [orphanKey]: {
+      [safeOrphanKey]: {
         uniqueKey: 'ops1',
+        exactKey: orphanKey,
         entity: { requestNote: '복구' },
         manual: { expectedProfitPerWeightedMin: 7 },
         dirty: { requestNote: true, manual: { expectedProfitPerWeightedMin: true } },
