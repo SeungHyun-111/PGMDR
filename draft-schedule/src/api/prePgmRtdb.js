@@ -1,3 +1,4 @@
+const DEFAULT_DATABASE_URL = 'https://broadcast-schedule-6c97d-default-rtdb.asia-southeast1.firebasedatabase.app'
 const DEFAULT_SCHEDULE_PATH = 'schedules'
 const DEFAULT_CULTURE_PATH = 'culturePreschedule'
 
@@ -14,8 +15,8 @@ export async function fetchPrePgmPreScheduleRows(startDate) {
 }
 
 function getPrePgmDatabaseUrl() {
-  const url = String(import.meta.env.VITE_PREPGM_DATABASE_URL || '').replace(/\/+$/, '')
-  if (!url) throw new Error('VITE_PREPGM_DATABASE_URL이 설정되지 않았습니다.')
+  const url = String(import.meta.env.VITE_PREPGM_DATABASE_URL || DEFAULT_DATABASE_URL).replace(/\/+$/, '')
+  if (!url) throw new Error('prePGM RTDB URL is not configured.')
   return url
 }
 
@@ -31,7 +32,7 @@ async function readPrePgmMonth(databaseUrl, monthId) {
 
 async function readJson(url) {
   const res = await fetch(url)
-  if (!res.ok) throw new Error(`prePGM RTDB 조회 실패: ${res.status}`)
+  if (!res.ok) throw new Error(`prePGM RTDB request failed: ${res.status}`)
   return res.json()
 }
 
@@ -99,7 +100,7 @@ function extractDealTypeChar(dealType) {
 
 function getWeekDates(startDate) {
   const start = new Date(`${startDate}T00:00:00`)
-  if (Number.isNaN(start.getTime())) throw new Error('startDate 형식이 올바르지 않습니다.')
+  if (Number.isNaN(start.getTime())) throw new Error('Invalid startDate.')
 
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start)
@@ -118,3 +119,4 @@ function formatDate(date) {
 function cleanPath(path) {
   return String(path || '').replace(/^\/+|\/+$/g, '')
 }
+
