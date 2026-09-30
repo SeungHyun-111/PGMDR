@@ -152,7 +152,12 @@ export function createRefreshActions(setState, getState) {
       setState({ isLoadingGasAll: true })
       try {
         const { fetchInitData } = await import('../../api/gas')
-        const gasData = await fetchInitData(startDate, poolType)
+        const { fetchPrePgmPreScheduleRows } = await import('../../api/prePgmRtdb')
+        const gasDataRaw = await fetchInitData(startDate, poolType)
+        const gasData = {
+          ...gasDataRaw,
+          preScheduleRows: await fetchPrePgmPreScheduleRows(startDate),
+        }
         const weekKey = `${startDate}_${poolType}`
         const versionPath = getCurrentVersionPath(getState, weekKey)
         const now = Date.now()
@@ -239,12 +244,11 @@ export function createRefreshActions(setState, getState) {
       const { startDate, poolType, pgmSlots, scheduleBlocks, userName, entityProps } = getState()
       setState({ isLoadingPreSchedule: true })
       try {
-        const { fetchRefreshPreSchedule } = await import('../../api/gas')
-        const data = await fetchRefreshPreSchedule()
+        const { fetchPrePgmPreScheduleRows } = await import('../../api/prePgmRtdb')
         const weekKey = `${startDate}_${poolType}`
         const versionPath = getCurrentVersionPath(getState, weekKey)
         const now = Date.now()
-        const preScheduleRows = data.preScheduleRows || []
+        const preScheduleRows = await fetchPrePgmPreScheduleRows(startDate)
         await update(ref(db, `sessions/${weekKey}/gasData`), { preScheduleRows })
         await getState()._writeRefreshLog('선편성정보 갱신', `${preScheduleRows.length.toLocaleString()}건 갱신`)
         await update(ref(db, `sessions/${weekKey}/lastUpdated`), { preSchedule: now, preScheduleBy: userName || '' })

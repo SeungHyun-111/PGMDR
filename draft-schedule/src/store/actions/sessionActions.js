@@ -42,7 +42,12 @@ export function createSessionActions(setState, getState) {
 
         if (!metaSnap.exists()) {
           const { fetchInitData } = await import('../../api/gas')
-          const gasData = await fetchInitData(startDate, poolType)
+          const { fetchPrePgmPreScheduleRows } = await import('../../api/prePgmRtdb')
+          const gasDataRaw = await fetchInitData(startDate, poolType)
+          const gasData = {
+            ...gasDataRaw,
+            preScheduleRows: await fetchPrePgmPreScheduleRows(startDate),
+          }
           const now = Date.now()
           const proposalItems = [
             ...(gasData.proposalItems || []).map(item => ({ ...item, uniqueKey: genKey('1') })),
