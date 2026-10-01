@@ -479,7 +479,7 @@ export default function ScheduleRatio() {
       </div>
 
       <div data-coach="ratio-donut">
-        <RatioDonutChart chartData={chartData} />
+        <RatioDonutChart chartData={chartData} sizeMode={viewType === 'category' ? 'large' : 'normal'} />
       </div>
 
       <div data-coach="ratio-table">

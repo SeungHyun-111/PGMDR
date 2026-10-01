@@ -11,38 +11,73 @@ export { TEAM_COLORS }
 const RADIAN = Math.PI / 180
 const SHORT = name => (name || '').replace(/팀$/, '')
 
-const renderInnerLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct, name }) => {
+const makeInnerLabelRenderer = isLarge => {
+  const labelSlots = { left: [], right: [] }
+
+  const placeLabelY = (desiredY, side) => {
+    if (!isLarge) return desiredY
+    const minGap = 28
+    const minY = 36
+    const maxY = 324
+    const clamp = value => Math.max(minY, Math.min(maxY, value))
+    const baseY = clamp(desiredY)
+    const offsets = [0, 28, -28, 56, -56, 84, -84, 112, -112, 140, -140]
+    let y = baseY
+
+    for (const offset of offsets) {
+      const candidate = clamp(baseY + offset)
+      if (!labelSlots[side].some(existing => Math.abs(existing - candidate) < minGap)) {
+        y = candidate
+        break
+      }
+    }
+    labelSlots[side].push(y)
+    return y
+  }
+
+  return ({ cx, cy, midAngle, innerRadius, outerRadius, pct, name, payload }) => {
   if (!pct || pct < 0.5) return null
   const cos = Math.cos(-midAngle * RADIAN)
   const sin = Math.sin(-midAngle * RADIAN)
   const pctStr = pct.toFixed(1) + '%'
   const shortName = SHORT(name)
+  const mainFontSize = isLarge ? 9.2 : 8
+  const subFontSize = isLarge ? 8.1 : 7
 
   if (pct >= 5) {
     const r = innerRadius + (outerRadius - innerRadius) * 0.5
     const x = cx + r * cos
     const y = cy + r * sin
     return (
-      <text textAnchor="middle" fontSize={8} fontWeight={700} fill="#fff">
+      <text textAnchor="middle" fontSize={mainFontSize} fontWeight={700} fill="#fff">
         <tspan x={x} y={y - 5}>{shortName}</tspan>
         <tspan x={x} y={y + 6}>{pctStr}</tspan>
       </text>
     )
   }
 
-  const sx = cx + (innerRadius - 1) * cos
-  const sy = cy + (innerRadius - 1) * sin
-  const lx = cx + 28 * cos
-  const ly = cy + 28 * sin
+  const sx = cx + (isLarge ? outerRadius + 4 : innerRadius - 1) * cos
+  const sy = cy + (isLarge ? outerRadius + 4 : innerRadius - 1) * sin
+  const mx = cx + (isLarge ? outerRadius + 18 : 28) * cos
+  const my = cy + (isLarge ? outerRadius + 18 : 28) * sin
+  const isRight = cos >= 0
+  const side = isRight ? 'right' : 'left'
+  const lx = isLarge ? mx + (isRight ? 34 : -34) : mx
+  const ly = payload?.calloutY ?? placeLabelY(my, side)
   return (
     <g>
-      <line x1={sx} y1={sy} x2={lx} y2={ly} stroke="var(--text3)" strokeWidth={0.8} />
-      <text textAnchor="middle" fontSize={7} fontWeight={600} fill="var(--text3)">
+      {isLarge ? (
+        <polyline points={`${sx},${sy} ${mx},${my} ${lx},${ly}`} fill="none" stroke="var(--text3)" strokeWidth={0.8} />
+      ) : (
+        <line x1={sx} y1={sy} x2={lx} y2={ly} stroke="var(--text3)" strokeWidth={0.8} />
+      )}
+      <text textAnchor={isLarge ? (isRight ? 'start' : 'end') : 'middle'} fontSize={subFontSize} fontWeight={600} fill="var(--text3)">
         <tspan x={lx} y={ly - 4}>{shortName}</tspan>
         <tspan x={lx} y={ly + 5}>{pctStr}</tspan>
       </text>
     </g>
   )
+}
 }
 
 const renderOuterLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct, name }) => {
@@ -96,8 +131,64 @@ function CustomTooltip({ active, payload }) {
   )
 }
 
-export default function RatioDonutChart({ chartData }) {
+function spreadSmallLabelY(data, outerRadius) {
+  const minGap = 28
+  const minY = 36
+  const maxY = 324
+  const centerY = 180
+  const radius = outerRadius + 18
+  const total = data.reduce((acc, item) => acc + Number(item.value || 0), 0)
+  if (total <= 0) return data
+
+  let cursor = 90
+  const withAngles = data.map(item => {
+    const angle = Number(item.value || 0) / total * 360
+    const midAngle = cursor - angle / 2
+    cursor -= angle
+    const sin = Math.sin(-midAngle * RADIAN)
+    const cos = Math.cos(-midAngle * RADIAN)
+    return {
+      ...item,
+      _desiredY: Math.max(minY, Math.min(maxY, centerY + radius * sin)),
+      _side: cos >= 0 ? 'right' : 'left',
+    }
+  })
+
+  const assigned = new Map()
+  ;['left', 'right'].forEach(side => {
+    const labels = withAngles
+      .filter(item => item.pct > 0 && item.pct < 5 && item._side === side)
+      .sort((a, b) => a._desiredY - b._desiredY)
+
+    labels.forEach((item, index) => {
+      const prev = index > 0 ? assigned.get(labels[index - 1].name) : null
+      const y = Math.max(item._desiredY, prev == null ? minY : prev + minGap)
+      assigned.set(item.name, y)
+    })
+
+    const overflow = labels.length ? (assigned.get(labels[labels.length - 1].name) || 0) - maxY : 0
+    if (overflow > 0) {
+      labels.forEach(item => assigned.set(item.name, Math.max(minY, (assigned.get(item.name) || item._desiredY) - overflow)))
+    }
+  })
+
+  return withAngles.map(item => ({
+    ...item,
+    calloutY: assigned.get(item.name),
+  }))
+}
+
+export default function RatioDonutChart({ chartData, sizeMode = 'normal' }) {
   if (!chartData || chartData.length === 0) return null
+
+  const isLarge = sizeMode === 'large'
+  const chartHeight = 360
+  const chartWidth = '55%'
+  const outerInnerRadius = isLarge ? 143 : 95
+  const outerOuterRadius = isLarge ? 203 : 135
+  const innerInnerRadius = isLarge ? 75 : 50
+  const innerOuterRadius = isLarge ? 135 : 90
+  const renderInnerLabel = makeInnerLabelRenderer(isLarge)
 
   const totalTarget = chartData.reduce((acc, d) => acc + (d.target || 0), 0)
   const totalActual = chartData.reduce((acc, d) => acc + (d.actual || 0), 0)
@@ -107,9 +198,10 @@ export default function RatioDonutChart({ chartData }) {
     .filter(d => (d.target || 0) > 0)
     .map(d => ({ ...d, value: d.target, pct: totalTarget > 0 ? d.target / totalTarget * 100 : 0 }))
 
-  const innerData = sortedData
+  const innerBaseData = sortedData
     .filter(d => (d.actual || 0) > 0)
     .map(d => ({ ...d, value: d.actual, pct: totalActual > 0 ? d.actual / totalActual * 100 : 0 }))
+  const innerData = isLarge ? spreadSmallLabelY(innerBaseData, innerOuterRadius) : innerBaseData
 
   return (
     <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '20px 24px', marginBottom: 24 }}>
@@ -128,13 +220,13 @@ export default function RatioDonutChart({ chartData }) {
       </div>
 
       <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-        <ResponsiveContainer width="55%" height={360}>
+        <ResponsiveContainer width={chartWidth} height={chartHeight}>
           <PieChart margin={{ top: 30, right: 50, bottom: 30, left: 50 }}>
             <Pie
               data={outerData}
               cx="50%" cy="50%"
               startAngle={90} endAngle={-270}
-              innerRadius={95} outerRadius={135}
+              innerRadius={outerInnerRadius} outerRadius={outerOuterRadius}
               dataKey="value"
               paddingAngle={1}
               labelLine={false}
@@ -148,7 +240,7 @@ export default function RatioDonutChart({ chartData }) {
               data={innerData}
               cx="50%" cy="50%"
               startAngle={90} endAngle={-270}
-              innerRadius={50} outerRadius={90}
+              innerRadius={innerInnerRadius} outerRadius={innerOuterRadius}
               dataKey="value"
               paddingAngle={1}
               labelLine={false}
