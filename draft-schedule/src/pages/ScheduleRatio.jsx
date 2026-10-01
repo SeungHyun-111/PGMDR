@@ -276,6 +276,11 @@ export default function ScheduleRatio() {
     return map
   }, [targetTeams])
 
+  const activeTargetMap = useMemo(
+    () => viewType === 'team' ? targetMap : {},
+    [targetMap, viewType]
+  )
+
   const targetTeamNameMap = useMemo(() => {
     const map = {}
     targetTeams.forEach(({ name }) => {
@@ -397,6 +402,8 @@ export default function ScheduleRatio() {
     [targetTeams]
   )
 
+  const activeTotalTarget = viewType === 'team' ? totalTarget : 0
+
   const scheduledCount = useMemo(
     () => Object.values(validScheduleBlocks).filter(b => !b.isDefault).length,
     [validScheduleBlocks]
@@ -418,7 +425,7 @@ export default function ScheduleRatio() {
       .map(([name, weighted], i) => ({
         name,
         actual: Math.round(weighted),
-        target: Math.round(targetMap[name] || 0),
+        target: Math.round(activeTargetMap[name] || 0),
         color: name === UNSCHEDULED_NAME
           ? '#64748b'
           : name === DEFAULT_TEAM_NAME
@@ -427,7 +434,7 @@ export default function ScheduleRatio() {
               ? '#dc2626'
               : TEAM_COLORS[i % TEAM_COLORS.length],
       }))
-  , [displayRatioData, targetMap])
+  , [activeTargetMap, displayRatioData, viewType])
 
   const openRatioCoach = () => {
     setRatioCoachStep(0)
@@ -466,7 +473,7 @@ export default function ScheduleRatio() {
         <RatioSummaryCards
           stats={stats}
           totalSlotWeighted={totalSlotWeighted}
-          totalTarget={totalTarget}
+          totalTarget={activeTotalTarget}
           scheduledCount={scheduledCount}
         />
       </div>
@@ -480,9 +487,9 @@ export default function ScheduleRatio() {
           data={displayRatioData}
           groupDm={displayRatioStats.groupDm}
           stats={displayRatioStats}
-          targetMap={targetMap}
+          targetMap={activeTargetMap}
           totalSlotWeighted={totalSlotWeighted}
-          totalTarget={totalTarget}
+          totalTarget={activeTotalTarget}
           showTarget={viewType === 'team'}
           chartData={chartData}
           scheduledWeighted={stats.totalWeighted}
