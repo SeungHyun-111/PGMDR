@@ -16,6 +16,7 @@ import CoachMark from '../components/common/CoachMark'
 
 const TEAM_COLORS = ['#818cf8','#34d399','#fb923c','#60a5fa','#f472b6','#a78bfa','#4ade80','#f87171','#fbbf24','#2dd4bf']
 const MIN_TEAM_COL_WIDTH = 44
+const GRADE_ORDER = Object.fromEntries(GRADES.map((grade, index) => [grade, index]))
 const STATUS_COACH_STEPS = [
   {
     target: '[data-coach="status-page"]',
