@@ -9,79 +9,43 @@ const TEAM_COLORS = [
 export { TEAM_COLORS }
 
 const RADIAN = Math.PI / 180
+const INNER_LABEL_MIN_PCT = 5
+const OUTER_LABEL_MIN_PCT = 10
 const SHORT = name => (name || '').replace(/팀$/, '')
 
 const renderInnerLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct, name }) => {
-  if (!pct || pct < 0.5) return null
+  if (!pct || pct < INNER_LABEL_MIN_PCT) return null
   const cos = Math.cos(-midAngle * RADIAN)
   const sin = Math.sin(-midAngle * RADIAN)
   const pctStr = pct.toFixed(1) + '%'
   const shortName = SHORT(name)
 
-  if (pct >= 5) {
-    const r = innerRadius + (outerRadius - innerRadius) * 0.5
-    const x = cx + r * cos
-    const y = cy + r * sin
-    return (
-      <text textAnchor="middle" fontSize={8} fontWeight={700} fill="#fff">
-        <tspan x={x} y={y - 5}>{shortName}</tspan>
-        <tspan x={x} y={y + 6}>{pctStr}</tspan>
-      </text>
-    )
-  }
-
-  const sx = cx + (innerRadius - 1) * cos
-  const sy = cy + (innerRadius - 1) * sin
-  const lx = cx + 28 * cos
-  const ly = cy + 28 * sin
+  const r = innerRadius + (outerRadius - innerRadius) * 0.5
+  const x = cx + r * cos
+  const y = cy + r * sin
   return (
-    <g>
-      <line x1={sx} y1={sy} x2={lx} y2={ly} stroke="var(--text3)" strokeWidth={0.8} />
-      <text textAnchor="middle" fontSize={7} fontWeight={600} fill="var(--text3)">
-        <tspan x={lx} y={ly - 4}>{shortName}</tspan>
-        <tspan x={lx} y={ly + 5}>{pctStr}</tspan>
-      </text>
-    </g>
+    <text textAnchor="middle" fontSize={8} fontWeight={700} fill="#fff">
+      <tspan x={x} y={y - 5}>{shortName}</tspan>
+      <tspan x={x} y={y + 6}>{pctStr}</tspan>
+    </text>
   )
 }
 
 const renderOuterLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, pct, name }) => {
-  if (!pct || pct < 0.5) return null
+  if (!pct || pct < OUTER_LABEL_MIN_PCT) return null
   const cos = Math.cos(-midAngle * RADIAN)
   const sin = Math.sin(-midAngle * RADIAN)
   const pctStr = pct.toFixed(1) + '%'
   const shortName = SHORT(name)
 
-  if (pct >= 5) {
-    const r = innerRadius + (outerRadius - innerRadius) * 0.5
-    const x = cx + r * cos
-    const y = cy + r * sin
-    return (
-      <text textAnchor="middle" fontSize={8} fontWeight={700} fill="#fff">
-        <tspan x={x} y={y - 5}>{shortName}</tspan>
-        <tspan x={x} y={y + 6}>{pctStr}</tspan>
-      </text>
-    )
-  }
-
-  const sx = cx + (outerRadius + 2) * cos
-  const sy = cy + (outerRadius + 2) * sin
-  const mx = cx + (outerRadius + 16) * cos
-  const my = cy + (outerRadius + 16) * sin
-  const isRight = cos >= 0
-  const ex = mx + (isRight ? 10 : -10)
-  const ey = my
-  const textX = ex + (isRight ? 3 : -3)
+  const r = innerRadius + (outerRadius - innerRadius) * 0.5
+  const x = cx + r * cos
+  const y = cy + r * sin
   return (
-    <g>
-      <circle cx={sx} cy={sy} r={1.5} fill="var(--text3)" />
-      <polyline points={`${sx},${sy} ${mx},${my} ${ex},${ey}`}
-        fill="none" stroke="var(--text3)" strokeWidth={0.8} />
-      <text x={textX} y={ey} fill="var(--text2)"
-        textAnchor={isRight ? 'start' : 'end'} dominantBaseline="central" fontSize={8}>
-        {shortName} {pctStr}
-      </text>
-    </g>
+    <text textAnchor="middle" fontSize={8} fontWeight={700} fill="#fff">
+      <tspan x={x} y={y - 5}>{shortName}</tspan>
+      <tspan x={x} y={y + 6}>{pctStr}</tspan>
+    </text>
   )
 }
 
@@ -127,8 +91,9 @@ export default function RatioDonutChart({ chartData }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 24, alignItems: 'center' }}>
-        <ResponsiveContainer width="55%" height={360}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(340px, 0.95fr) minmax(360px, 1.05fr)', gap: 28, alignItems: 'center' }}>
+        <div style={{ height: 380, minWidth: 0 }}>
+        <ResponsiveContainer width="100%" height="100%">
           <PieChart margin={{ top: 30, right: 50, bottom: 30, left: 50 }}>
             <Pie
               data={outerData}
@@ -161,8 +126,9 @@ export default function RatioDonutChart({ chartData }) {
             <Tooltip content={<CustomTooltip />} />
           </PieChart>
         </ResponsiveContainer>
+        </div>
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px 18px', alignItems: 'start' }}>
           {sortedData.map(d => {
             const hasTarget = (d.target || 0) > 0
             const achievePct = hasTarget ? Math.round(d.actual / d.target * 100) : null
