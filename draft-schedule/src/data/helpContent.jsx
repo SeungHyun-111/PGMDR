@@ -179,7 +179,7 @@ export const USAGE_SECTIONS = [
   },
 ]
 
-function SectionTitle({ children }) {
+export function SectionTitle({ children }) {
   return (
     <div style={{ fontSize: 15, fontWeight: 800, color: 'var(--accent)', marginBottom: 14, paddingBottom: 7, borderBottom: '2px solid var(--border)', letterSpacing: '-.01em' }}>
       {children}
@@ -187,7 +187,7 @@ function SectionTitle({ children }) {
   )
 }
 
-function Card({ children, style }) {
+export function Card({ children, style }) {
   return (
     <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, padding: '14px 18px', ...style }}>
       {children}
@@ -195,11 +195,11 @@ function Card({ children, style }) {
   )
 }
 
-function SubTitle({ children }) {
+export function SubTitle({ children }) {
   return <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text2)', marginBottom: 8 }}>{children}</div>
 }
 
-function FlowDiagram() {
+export function FlowDiagram() {
   const box = (label, sub, color) => (
     <div style={{ border: `2px solid ${color}`, borderRadius: 8, padding: '8px 14px', textAlign: 'center', background: 'var(--bg)', minWidth: 110 }}>
       <div style={{ fontSize: 12, fontWeight: 700, color }}>{label}</div>
@@ -225,10 +225,10 @@ function FlowDiagram() {
   )
 }
 
-const thS = { padding: '7px 10px', fontSize: 10, fontWeight: 700, color: 'var(--text3)', background: 'var(--bg3)', textAlign: 'left', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }
-const tdS = { padding: '7px 10px', fontSize: 10, borderBottom: '1px solid var(--border)', verticalAlign: 'top', lineHeight: 1.5 }
+export const thS = { padding: '7px 10px', fontSize: 10, fontWeight: 700, color: 'var(--text3)', background: 'var(--bg3)', textAlign: 'left', borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap' }
+export const tdS = { padding: '7px 10px', fontSize: 10, borderBottom: '1px solid var(--border)', verticalAlign: 'top', lineHeight: 1.5 }
 
-const PERF_WEIGHT_ROWS = [
+export const PERF_WEIGHT_ROWS = [
   { table: '검색 패널: 거래형태별 실적', shown: '실적없는 블록 포함 sum(weightedMin)', denominator: '실적없는 블록 제외 sum(weightedMin where sp > 0 || pp > 0)', correction: '미적용. 원본 weightedMin 사용', logic: '취급/분 평균 = 실적있는 블록의 sum(weightedMin * sp) / 실적없는 블록 제외 가중분. 한익/분도 동일' },
   { table: '검색 패널: 채널별 실적', shown: '실적없는 블록 포함 sum(weightedMin)', denominator: '실적없는 블록 제외 sum(weightedMin where sp > 0 || pp > 0)', correction: '미적용. 원본 weightedMin 사용', logic: '취급/분 평균 = 실적있는 블록의 sum(weightedMin * sp) / 실적없는 블록 제외 가중분. 한익/분도 동일' },
   { table: '시뮬레이션: 전체 요약', shown: '실적없는 블록 포함 sum(effectiveWeightedMin)', denominator: '실적없는 블록 포함 sum(effectiveWeightedMin)', correction: '적용. 일반 팀 weightedMin=0이면 1, 편성팀은 0 유지', logic: '취급/분 평균 = 실적없는 블록은 sp=0으로 둔 전체 sum(effectiveWeightedMin * sp) / 실적없는 블록 포함 전체 가중분' },
@@ -246,7 +246,7 @@ const PERF_WEIGHT_ROWS = [
   { table: '편성현황 팀별: 전체 테이블 미편성 행', shown: '행별 availableWeightedMin1 표시', denominator: '이 테이블 자체 평균 없음', correction: '미적용. 제안상품의 availableWeightedMin1 원본 사용', logic: '행 표시용. 실적없으면 취급/분/한익/분 0. 팀요약 평균에서는 미편성 전체가 제외' },
 ]
 
-function emphasizeNoPerfIncluded(text) {
+export function emphasizeNoPerfIncluded(text) {
   const marker = '실적없는 블록 포함'
   if (!String(text).includes(marker)) return text
   return String(text).split(marker).map((part, idx) => (

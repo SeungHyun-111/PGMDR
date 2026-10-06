@@ -164,7 +164,8 @@ function buildInitJson_(startDate, poolType) {
   const pgmSlots           = loadPgmSlotsAsJson_(startDate);
   const preScheduleRows    = loadPreScheduleRowsAsJson_(perfMap);
   const targetMetrics      = loadTargetMetricsAsJson_(targetMonth);
-  const weightedMinTargets = loadWeightedMinTargetAsJson_(startDate);
+  const businessPlanRatios = loadMonthlyTeamRatioRows_();
+  const weightedMinTargets = buildWeightedMinTargetAsJson_(startDate, pgmSlots, businessPlanRatios);
 
   return {
     meta: {
@@ -180,6 +181,7 @@ function buildInitJson_(startDate, poolType) {
       targetSalesCount:    targetMetrics.sales.length,
       targetProfitCount:   targetMetrics.profit.length,
       weightedTargetCount: weightedMinTargets.length,
+      businessPlanRatioCount: businessPlanRatios.length,
       createdAt:           Utilities.formatDate(new Date(), DRAFT_CONFIG.TIMEZONE, 'yyyy-MM-dd HH:mm:ss')
     },
     dictionaries: {
@@ -195,7 +197,8 @@ function buildInitJson_(startDate, poolType) {
     performanceRows:    performanceRows,
     preScheduleRows:    preScheduleRows,
     targetMetrics:      targetMetrics,
-    weightedMinTargets: weightedMinTargets
+    weightedMinTargets: weightedMinTargets,
+    businessPlanRatios: businessPlanRatios
   };
 }
 
@@ -504,59 +507,97 @@ function loadOneTargetMetricSheet_(ss, sheetName, valueKey, targetMonth) {
 
 /************************************
  * 팀별 주간 가중분 목표 JSON
+ * 일자별 전체 슬롯 가중분 × 해당 월 조직 편성비중을 7일 합산
  ************************************/
-function loadWeightedMinTargetAsJson_(startDateText) {
+function buildWeightedMinTargetAsJson_(startDateText, pgmSlots, ratioRows) {
+  ratioRows = ratioRows || loadMonthlyTeamRatioRows_();
+  if (ratioRows.length === 0) return [];
+
+  const dailyWeightedMap = buildDailySlotWeightedMap_(startDateText, pgmSlots);
+  const weeklyByTeam = {};
+
+  Object.keys(dailyWeightedMap).forEach(dateKey => {
+    const dayWeighted = dailyWeightedMap[dateKey] || 0;
+    if (dayWeighted <= 0) return;
+
+    const month = Number(dateKey.slice(5, 7));
+    ratioRows.forEach(row => {
+      const ratio = row.monthRatios[month] || 0;
+      if (ratio <= 0) return;
+      weeklyByTeam[row.teamName] = (weeklyByTeam[row.teamName] || 0) + dayWeighted * ratio;
+    });
+  });
+
+  return ratioRows.map(row => ({
+    teamName: row.teamName,
+    weeklyTarget: weeklyByTeam[row.teamName] || 0,
+    startDate: startDateText,
+    targetMetricId: makeHashId_(['WGTARGET', row.teamName, startDateText])
+  }));
+}
+
+function buildDailySlotWeightedMap_(startDateText, pgmSlots) {
+  const startDate = parseDateOnly_(startDateText);
+  const dailyWeightedMap = {};
+
+  for (let i = 0; i < 7; i++) {
+    dailyWeightedMap[formatDateOnly_(addDays_(startDate, i))] = 0;
+  }
+
+  (pgmSlots || []).forEach(slot => {
+    const dateKey = slot.dateKey || '';
+    if (dailyWeightedMap[dateKey] == null) return;
+    dailyWeightedMap[dateKey] += toNumber_(slot.weightedMin);
+  });
+
+  return dailyWeightedMap;
+}
+
+function loadMonthlyTeamRatioRows_() {
   const ss    = SpreadsheetApp.openById(DRAFT_CONFIG.WEIGHTED_TARGET_SPREADSHEET_ID);
   const sheet = ss.getSheetByName(DRAFT_CONFIG.WEIGHTED_TARGET_SHEET_NAME);
   if (!sheet) throw new Error('가중분목표 시트를 찾을 수 없습니다.');
 
-  const startDate = parseDateOnly_(startDateText);
-  const headerRow = sheet.getRange(8, 1, 1, 60).getValues()[0];
+  const values = sheet.getRange(1, 1, Math.min(sheet.getLastRow(), 200), Math.min(sheet.getLastColumn(), 30)).getDisplayValues();
+  const headerIndex = values.findIndex(row => {
+    const labels = row.map(cell => String(cell).trim());
+    return labels.includes('1월') && labels.includes('12월');
+  });
 
-  const targetCols = [];
-  for (let i = 0; i < 7; i++) {
-    const targetDate = addDays_(startDate, i);
-    const tYear  = targetDate.getFullYear();
-    const tMonth = targetDate.getMonth();
-    const tDay   = targetDate.getDate();
-    for (let c = 0; c < headerRow.length; c++) {
-      const cell = headerRow[c];
-      if (cell instanceof Date &&
-          cell.getFullYear() === tYear &&
-          cell.getMonth()    === tMonth &&
-          cell.getDate()     === tDay) {
-        targetCols.push(c);
-        break;
-      }
-    }
+  if (headerIndex < 0) throw new Error('가중분목표 시트에서 월별 조직 편성비중 헤더(1월~12월)를 찾을 수 없습니다.');
+
+  const header = values[headerIndex].map(cell => String(cell).trim());
+  const monthCols = {};
+  for (let month = 1; month <= 12; month++) {
+    const idx = header.indexOf(month + '월');
+    if (idx >= 0) monthCols[month] = idx;
   }
 
-  if (targetCols.length === 0) return [];
-
-  const dataStartRow = 45;
-  const maxRows      = 100;
-  const lastCol      = Math.max(...targetCols) + 1;
-  const values       = sheet.getRange(dataStartRow, 1, maxRows, lastCol).getDisplayValues();
-
   const result = [];
-  for (let i = 0; i < values.length; i++) {
-    const teamName = String(values[i][1]).trim();
-    if (teamName === '') break;
+  for (let r = headerIndex + 1; r < values.length; r++) {
+    const row = values[r];
+    const teamName = String(row[0] || row[1] || '').trim();
+    if (teamName === '') {
+      if (result.length > 0) break;
+      continue;
+    }
 
-    let weeklyTarget = 0;
-    targetCols.forEach(colIdx => {
-      weeklyTarget += toNumber_(values[i][colIdx]);
+    const monthRatios = {};
+    Object.keys(monthCols).forEach(monthText => {
+      monthRatios[Number(monthText)] = normalizeRatio_(row[monthCols[monthText]]);
     });
 
-    result.push({
-      teamName,
-      weeklyTarget,
-      startDate: startDateText,
-      targetMetricId: makeHashId_(['WGTARGET', teamName, startDateText])
-    });
+    result.push({ teamName, monthRatios });
   }
 
   return result;
+}
+
+function normalizeRatio_(value) {
+  const raw = String(value == null ? '' : value).trim();
+  const num = toNumber_(raw);
+  if (!num) return 0;
+  return raw.indexOf('%') >= 0 || num > 1 ? num / 100 : num;
 }
 
 /************************************
@@ -810,20 +851,9 @@ function debugDraftScheduleData() {
 }
 
 function debugWeightedTarget() {
-  const ss = SpreadsheetApp.openById('13D5TrPbu_8kcd2yuR9W9tSFQO5U0avYXvY3OLdfJG7I');
-  const sheet = ss.getSheetByName('시트2');
-
-  const headerRow = sheet.getRange(8, 1, 1, 60).getValues()[0];
-
-  for (let c = 0; c < headerRow.length; c++) {
-    const cell = headerRow[c];
-    if (cell instanceof Date && cell.getFullYear() > 2000) {
-      Logger.log('col ' + c + ': ' + cell + ' → ' + Utilities.formatDate(cell, 'Asia/Seoul', 'yyyy-MM-dd'));
-    } else if (String(cell).trim() !== '') {
-      Logger.log('col ' + c + ': [비날짜] ' + String(cell));
-    }
-  }
-
-  const row45 = sheet.getRange(45, 1, 3, 5).getValues();
-  Logger.log('45행~: ' + JSON.stringify(row45));
+  const startDate = '2026-09-28';
+  const pgmSlots = loadPgmSlotsAsJson_(startDate);
+  Logger.log('일자별 전체 가중분: ' + JSON.stringify(buildDailySlotWeightedMap_(startDate, pgmSlots)));
+  Logger.log('월별 조직 편성비중 샘플: ' + JSON.stringify(loadMonthlyTeamRatioRows_().slice(0, 5)));
+  Logger.log('주간 조직별 목표 샘플: ' + JSON.stringify(buildWeightedMinTargetAsJson_(startDate, pgmSlots).slice(0, 10)));
 }

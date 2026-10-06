@@ -2,7 +2,7 @@
 import useScheduleStore from '../store/useScheduleStore'
 import { db, ref, onValue } from '../api/firebase'
 
-import { CALC_ROWS, COLLAB_ROWS, DB_PATHS, PERF_COLS, PGM_SLOT_COLS, PRE_SCHEDULE_COLS, PROPOSAL_COLS, REFRESH_TABLE, ROOT_PATHS, USAGE_SECTIONS } from '../data/helpContent.jsx'
+import { CALC_ROWS, Card, COLLAB_ROWS, DB_PATHS, FlowDiagram, PERF_COLS, PERF_WEIGHT_ROWS, PGM_SLOT_COLS, PRE_SCHEDULE_COLS, PROPOSAL_COLS, REFRESH_TABLE, ROOT_PATHS, SectionTitle, SubTitle, USAGE_SECTIONS, emphasizeNoPerfIncluded, tdS, thS } from '../data/helpContent.jsx'
 
 export default function HelpPage() {
   const { startDate, poolType } = useScheduleStore()
@@ -421,7 +421,7 @@ export default function HelpPage() {
                 { fn: 'buildPerfMap_()',                   desc: '실적DB 시트 파싱. 동일 perfKey 중복 시 최신 날짜 선택. getValues()로 Date 객체 직접 처리.' },
                 { fn: 'loadPreScheduleRowsAsJson_(perfMap)', desc: '선편성 시트 파싱. 반영여부="반영"만. dealTypeChar → dealType 변환.' },
                 { fn: 'loadTargetMetricsAsJson_(targetMonth)', desc: '분당취급고/분당한계이익 목표 시트 파싱.' },
-                { fn: 'loadWeightedMinTargetAsJson_(startDateText)', desc: '팀별 주간 가중분 목표 파싱. 헤더 행에서 날짜 객체로 열 위치 탐색.' },
+                { fn: 'buildWeightedMinTargetAsJson_(startDateText, pgmSlots)', desc: '팀별 주간 가중분 목표 계산. 일자별 전체 슬롯 가중분 × 해당 월 조직 편성비중을 7일 합산.' },
                 { fn: 'normalizeDealType_(value)',          desc: '거래형태 문자열 정규화 → [위]/[모]/[직]/[혼]/[액]/[률]. React의 동일 함수와 로직 동일.' },
                 { fn: 'normalizeValue_(value, key)',        desc: '숫자 필드는 toNumber_() 변환. 나머지는 문자열 trim.' },
                 { fn: 'toNumber_(value)',                   desc: '콤마·% 제거 후 Number 변환. 변환 불가 시 0 반환.' },
@@ -436,7 +436,7 @@ export default function HelpPage() {
                 { fn: 'showDraftSchedulePopup()',            desc: '구글 시트 메뉴에서 초안편성 설정 팝업 표시 (HtmlService).' },
                 { fn: 'runDraftScheduleBuilder(options)',    desc: '팝업에서 실행 버튼 클릭 시 buildInitJson_ 실행 → 결과 요약 반환.' },
                 { fn: 'debugDraftScheduleData()',            desc: 'GAS 에디터 직접 실행용 디버그 함수. Logger로 샘플 출력.' },
-                { fn: 'debugWeightedTarget()',               desc: '가중분 목표 시트 헤더 날짜 컬럼 디버그.' },
+                { fn: 'debugWeightedTarget()',               desc: '월별 조직 편성비중 파싱과 주간 목표 계산 결과 디버그.' },
               ].map(r => (
                 <tr key={r.fn}>
                   <td style={{ ...tdS, fontFamily: 'monospace', color: 'var(--accent)', whiteSpace: 'nowrap' }}>{r.fn}</td>

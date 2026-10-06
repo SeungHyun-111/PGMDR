@@ -99,7 +99,7 @@ export function createSessionActions(setState, getState) {
       const resolvedVersionId = await ensureVersionData(weekKey, versionId)
       const versionPath = getVersionPath(weekKey, resolvedVersionId)
       const [
-        metaSnap, pgmSnap, perfMapSnap, preSnap, weightedSnap, targetSnap, versionSnap, versionMetaSnap, updatedSnap
+        metaSnap, pgmSnap, perfMapSnap, preSnap, weightedSnap, targetSnap, businessPlanSnap, versionSnap, versionMetaSnap, updatedSnap
       ] = await Promise.all([
         get(ref(db, `sessions/${weekKey}/gasData/meta`)),
         get(ref(db, `sessions/${weekKey}/gasData/pgmSlots`)),
@@ -107,6 +107,7 @@ export function createSessionActions(setState, getState) {
         get(ref(db, `sessions/${weekKey}/gasData/preScheduleRows`)),
         get(ref(db, `sessions/${weekKey}/gasData/weightedMinTargets`)),
         get(ref(db, `sessions/${weekKey}/gasData/targetMetrics`)),
+        get(ref(db, `sessions/${weekKey}/gasData/businessPlanRatios`)),
         get(ref(db, versionPath)),
         get(ref(db, `sessions/${weekKey}/versionMeta`)),
         get(ref(db, `sessions/${weekKey}/lastUpdated`)),
@@ -162,6 +163,7 @@ export function createSessionActions(setState, getState) {
         preScheduleRows:    preSnap.exists()      ? preSnap.val()      : [],
         weightedMinTargets,
         targetMetrics:      targetSnap.exists()   ? targetSnap.val()   : null,
+        businessPlanRatios: businessPlanSnap.exists() ? Object.values(businessPlanSnap.val()) : [],
         _rawBlocks:         rawBlocks,
         scheduleBlocks:     applyEntityProps(normalizedBlocks, entityProps),
         entityProps,
@@ -364,7 +366,7 @@ export function createSessionActions(setState, getState) {
         currentVersionId: VERSION_DRAFT, versionMeta: {}, isPublishingSales: false,
         pgmSlots: [], perfMap: {}, preScheduleRows: [],
         latestPerfByKey: {}, performanceHistoryByKey: {}, performanceRows: {}, loadedPerfKeys: {}, performanceGlobalLoaded: false,
-        weightedMinTargets: [], targetMetrics: null,
+        weightedMinTargets: [], businessPlanRatios: [], targetMetrics: null,
         scheduleBlocks: {}, _rawBlocks: {}, entityProps: {},
         splitSlots: {}, customSlots: {}, starred: {},
         scheduledItemIds: {}, scheduledUniqueKeys: {}, manualInputs: {}, opsOverlay: {}, opsSyncConflicts: [], opsSyncResult: null, lastUpdated: null,

@@ -31,11 +31,10 @@ export function createPerformanceHistoryActions(setState, getState) {
           get(ref(db, GLOBAL_HISTORY_PATH)),
           get(ref(db, GLOBAL_META_PATH)),
         ])
-        const performanceRows = entriesSnap.exists()
-          ? entriesSnap.val()
-          : legacyRowsSnap.exists()
-            ? legacyRowsSnap.val()
-            : {}
+        const performanceRows = {
+          ...(legacyRowsSnap.exists() ? legacyRowsSnap.val() : {}),
+          ...(entriesSnap.exists() ? entriesSnap.val() : {}),
+        }
         const rowHistoryByKey = buildHistoryByKeyFromRows(performanceRows)
         const storedHistoryByKey = decodeHistoryByKey(historySnap.exists() ? historySnap.val() : {})
         const performanceHistoryByKey = Object.keys(rowHistoryByKey).length ? rowHistoryByKey : storedHistoryByKey

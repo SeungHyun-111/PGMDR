@@ -30,6 +30,7 @@ const useScheduleStore = create((setState, getState) => ({
   proposalItems:      [],
   preScheduleRows:    [],
   weightedMinTargets: [],
+  businessPlanRatios: [],
   targetMetrics:      null,
   perfMap:            {},
   latestPerfByKey:    {},

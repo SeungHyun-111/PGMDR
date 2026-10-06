@@ -217,6 +217,9 @@ export function createRefreshActions(setState, getState) {
           },
           ...buildPerformanceStateFromRaw(gasData, gasData.perfMap || {}, s),
           preScheduleRows: gasData.preScheduleRows || [],
+          weightedMinTargets: gasData.weightedMinTargets || [],
+          businessPlanRatios: gasData.businessPlanRatios || [],
+          targetMetrics: gasData.targetMetrics || null,
           allProposalItems: proposalItems,
           proposalItems: filterUnscheduledItems(proposalItems, scheduledItemIds, scheduledUniqueKeys),
           proposalLoaded:  true,
@@ -327,13 +330,14 @@ async function getGlobalPerformanceCursor() {
     }
   }
 
-  const entriesSnap = await get(ref(db, 'performanceEntries'))
-  const legacyRowsSnap = entriesSnap.exists() ? null : await get(ref(db, 'performanceRows'))
-  const rows = normalizePerformanceRows(entriesSnap.exists()
-    ? entriesSnap.val()
-    : legacyRowsSnap?.exists()
-      ? legacyRowsSnap.val()
-      : {})
+  const [entriesSnap, legacyRowsSnap] = await Promise.all([
+    get(ref(db, 'performanceEntries')),
+    get(ref(db, 'performanceRows')),
+  ])
+  const rows = normalizePerformanceRows({
+    ...(legacyRowsSnap.exists() ? legacyRowsSnap.val() : {}),
+    ...(entriesSnap.exists() ? entriesSnap.val() : {}),
+  })
   const latestEntry = getLatestEntry(rows)
   return {
     latestDate: getPreviousDate(latestEntry?.broadcastDate || ''),
@@ -382,7 +386,10 @@ function buildPerformanceStateFromRaw(rawData, rawPerfMap, state) {
   const historyByKey = buildHistoryByKeyFromRows(rows)
   const latestByKey = buildLatestByKeyFromHistory(historyByKey)
   return {
-    performanceRows: Object.fromEntries(rows.map(entry => [makePerformanceEntryId(entry), entry])),
+    performanceRows: {
+      ...(state.performanceRows || {}),
+      ...Object.fromEntries(rows.map(entry => [makePerformanceEntryId(entry), entry])),
+    },
     performanceHistoryByKey: {
       ...(state.performanceHistoryByKey || {}),
       ...historyByKey,

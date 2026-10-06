@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import useScheduleStore from '../store/useScheduleStore'
 import useCategoryMap from '../hooks/useCategoryMap'
 import useRatioStats from '../hooks/useRatioStats'
@@ -10,7 +10,7 @@ import RatioPgmCount from '../components/ratio/RatioPgmCount'
 import { getCompetitionItems } from '../utils/competition'
 import { applyEntityProps, resolveEntity } from '../utils/mergeEntity'
 import { getEffectiveBlockWeightedMin } from '../utils/weightedMin'
-import { db, ref, get } from '../api/firebase'
+import { db, ref, get, onValue, set } from '../api/firebase'
 import { VERSION_OPS, getVersionPath } from '../utils/sessionVersion'
 import useLocalStorageState from '../hooks/useLocalStorageState'
 import CoachMark from '../components/common/CoachMark'
@@ -21,6 +21,15 @@ const COMPETING_NAME = '경쟁'
 const UNCATEGORIZED_NAME = '미분류'
 const EXCLUDED_TARGET_TEAMS = new Set(['편성팀', '편성', '전략상품팀', '전략상품'])
 const TEAM_RATIO_ORDER = ['헬스푸드팀', '패션트렌드팀', '리빙팀', '가전팀', '뷰티팀', '문화서비스팀', '식품팀']
+const RATIO_VIEW_OPTIONS = [
+  { key: 'team', label: '팀별' },
+  { key: 'teamPlan', label: '팀별(실행계획)' },
+  { key: 'category', label: '카테고리별' },
+]
+
+function isTeamRatioView(viewType) {
+  return viewType === 'team' || viewType === 'teamPlan'
+}
 
 function getTeamAlias(name) {
   if (!name) return ''
@@ -121,6 +130,79 @@ function getValidScheduleBlocks(scheduleBlocks, effectiveSlots, splitSlots) {
   return result
 }
 
+function buildExecutionPlanTargetTeams({ executionPlan, targetTeams, businessPlanRatios, dailySlotWeighted }) {
+  const teamMap = {}
+  targetTeams.forEach(team => {
+    teamMap[team.name] = { name: team.name, target: 0 }
+  })
+
+  Object.entries(executionPlan?.teams || {}).forEach(([, team]) => {
+    const name = String(team?.name || '').trim()
+    if (!name || EXCLUDED_TARGET_TEAMS.has(name)) return
+    if (!teamMap[name]) teamMap[name] = { name, target: 0 }
+  })
+  ;(businessPlanRatios || []).forEach(row => {
+    const name = String(row?.teamName || '').trim()
+    if (!name || EXCLUDED_TARGET_TEAMS.has(name)) return
+    if (!teamMap[name]) teamMap[name] = { name, target: 0 }
+  })
+
+  const planRatioByTeam = getExecutionPlanRatioByTeam(executionPlan)
+  const businessRatioByTeam = getBusinessPlanRatioByTeam(businessPlanRatios)
+  Object.values(teamMap).forEach(team => {
+    const monthRatios = planRatioByTeam[team.name] || planRatioByTeam[getTeamAlias(team.name)] || {}
+    const businessMonthRatios = businessRatioByTeam[team.name] || businessRatioByTeam[getTeamAlias(team.name)] || {}
+    Object.entries(dailySlotWeighted || {}).forEach(([dateKey, dayWeighted]) => {
+      const month = Number(String(dateKey).slice(5, 7))
+      const ratio = monthRatios[month] ?? businessMonthRatios[month]
+      if (ratio == null) return
+      team.target += Number(dayWeighted || 0) * ratio
+    })
+  })
+
+  return Object.values(teamMap).map(({ name, target }) => ({ name, target }))
+}
+
+function getBusinessPlanRatioByTeam(rows = []) {
+  const result = {}
+  ;(rows || []).forEach(row => {
+    const name = String(row?.teamName || '').trim()
+    if (!name) return
+    result[name] = {}
+    for (let month = 1; month <= 12; month++) {
+      const ratio = parseRatioValue(row?.monthRatios?.[month])
+      if (ratio != null) result[name][month] = ratio
+    }
+  })
+  return result
+}
+
+function getExecutionPlanRatioByTeam(executionPlan) {
+  const result = {}
+  const teams = executionPlan?.teams || {}
+  const values = executionPlan?.sections?.ratio?.values || {}
+  Object.entries(teams).forEach(([teamId, team]) => {
+    const name = String(team?.name || '').trim()
+    if (!name) return
+    const row = values[teamId] || {}
+    result[name] = {}
+    for (let month = 1; month <= 12; month++) {
+      const value = row[`month${String(month).padStart(2, '0')}`]
+      const ratio = parseRatioValue(value)
+      if (ratio != null) result[name][month] = ratio
+    }
+  })
+  return result
+}
+
+function parseRatioValue(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return null
+  const num = Number(raw.replace(/,/g, '').replace('%', ''))
+  if (!Number.isFinite(num)) return null
+  return raw.includes('%') || num > 1 ? num / 100 : num
+}
+
 export default function ScheduleRatio() {
   const {
     scheduleBlocks,
@@ -128,6 +210,7 @@ export default function ScheduleRatio() {
     customSlots,
     splitSlots,
     weightedMinTargets,
+    businessPlanRatios,
     proposalItems,
     perfMap,
     performanceHistoryByKey,
@@ -141,8 +224,31 @@ export default function ScheduleRatio() {
   const uiScope = `${startDate || 'no-session'}_${poolType || 'A'}_${currentVersionId || 'draft'}`
   const [viewType, setViewType] = useLocalStorageState(`pgmdr.ui.${uiScope}.ratio.viewType`, 'team')
   const [previousOpsVersion, setPreviousOpsVersion] = useState(null)
+  const [executionPlanTargets, setExecutionPlanTargets] = useState([])
+  const [executionPlanTargetsLoaded, setExecutionPlanTargetsLoaded] = useState(false)
+  const [executionPlanTargetsExists, setExecutionPlanTargetsExists] = useState(false)
+  const [isRecalculatingPlan, setIsRecalculatingPlan] = useState(false)
   const [ratioCoachOpen, setRatioCoachOpen] = useState(false)
   const [ratioCoachStep, setRatioCoachStep] = useState(0)
+
+  useEffect(() => {
+    if (!startDate || !poolType || !currentVersionId) {
+      setExecutionPlanTargets([])
+      setExecutionPlanTargetsLoaded(false)
+      setExecutionPlanTargetsExists(false)
+      return
+    }
+    setExecutionPlanTargetsLoaded(false)
+    setExecutionPlanTargetsExists(false)
+    const weekKey = `${startDate}_${poolType}`
+    const path = `${getVersionPath(weekKey, currentVersionId)}/executionPlanTargets`
+    const unsubscribe = onValue(ref(db, path), snap => {
+      setExecutionPlanTargets(snap.exists() ? Object.values(snap.val()) : [])
+      setExecutionPlanTargetsExists(snap.exists())
+      setExecutionPlanTargetsLoaded(true)
+    })
+    return () => unsubscribe()
+  }, [currentVersionId, poolType, startDate])
 
   useEffect(() => {
     let cancelled = false
@@ -219,6 +325,15 @@ export default function ScheduleRatio() {
     [effectiveSlots]
   )
 
+  const dailySlotWeighted = useMemo(() => {
+    const map = {}
+    effectiveSlots.forEach(slot => {
+      if (!slot?.dateKey) return
+      map[slot.dateKey] = (map[slot.dateKey] || 0) + Number(slot.weightedMin || 0)
+    })
+    return map
+  }, [effectiveSlots])
+
   const unscheduledWeighted = Math.max(0, totalSlotWeighted - stats.totalWeighted)
   const previousTotalSlotWeighted = useMemo(
     () => previousEffectiveSlots.reduce((acc, s) => acc + (s.weightedMin || 0), 0),
@@ -267,33 +382,65 @@ export default function ScheduleRatio() {
       .filter(t => t.name && !EXCLUDED_TARGET_TEAMS.has(t.name))
   , [weightedMinTargets])
 
-  const targetMap = useMemo(() => {
+  const recalculateExecutionPlanTargets = useCallback(async () => {
+    if (!startDate || !poolType || !currentVersionId) return []
+    setIsRecalculatingPlan(true)
+    try {
+      const planSnap = await get(ref(db, 'global/executionPlan'))
+      const executionPlan = planSnap.exists() ? planSnap.val() : null
+      const next = buildExecutionPlanTargetTeams({
+        executionPlan,
+        targetTeams,
+        businessPlanRatios,
+        dailySlotWeighted,
+      })
+      const weekKey = `${startDate}_${poolType}`
+      await set(ref(db, `${getVersionPath(weekKey, currentVersionId)}/executionPlanTargets`), next)
+      return next
+    } finally {
+      setIsRecalculatingPlan(false)
+    }
+  }, [businessPlanRatios, currentVersionId, dailySlotWeighted, poolType, startDate, targetTeams])
+
+  useEffect(() => {
+    if (!executionPlanTargetsLoaded || executionPlanTargetsExists) return
+    recalculateExecutionPlanTargets()
+  }, [executionPlanTargetsExists, executionPlanTargetsLoaded, recalculateExecutionPlanTargets])
+
+  const executionPlanTargetTeams = useMemo(() => {
+    if (viewType !== 'teamPlan') return targetTeams
+    return executionPlanTargets.length > 0 ? executionPlanTargets : targetTeams
+  }, [executionPlanTargets, targetTeams, viewType])
+
+  const executionPlanTargetMap = useMemo(() => {
     const map = {}
-    targetTeams.forEach(t => {
+    executionPlanTargetTeams.forEach(t => {
       map[t.name] = t.target
       map[getTeamAlias(t.name)] = t.target
     })
     return map
-  }, [targetTeams])
+  }, [executionPlanTargetTeams])
+
+  const activeTargetTeams = viewType === 'teamPlan' ? executionPlanTargetTeams : targetTeams
 
   const activeTargetMap = useMemo(
-    () => viewType === 'team' ? targetMap : {},
-    [targetMap, viewType]
+    () => isTeamRatioView(viewType) ? executionPlanTargetMap : {},
+    [executionPlanTargetMap, viewType]
   )
 
   const targetTeamNameMap = useMemo(() => {
     const map = {}
-    targetTeams.forEach(({ name }) => {
+    activeTargetTeams.forEach(({ name }) => {
       map[name] = name
       map[getTeamAlias(name)] = name
     })
     return map
-  }, [targetTeams])
+  }, [activeTargetTeams])
 
   const displayRatioData = useMemo(() => {
-    if (viewType !== 'team') return ratioData
+    if (!isTeamRatioView(viewType)) return ratioData
     const next = { ...ratioData }
-    targetTeams.forEach(({ name }) => {
+    activeTargetTeams.forEach(({ name }) => {
       const alias = getTeamAlias(name)
       if (next[name] == null && next[alias] != null) {
         next[name] = next[alias]
@@ -303,13 +450,13 @@ export default function ScheduleRatio() {
       }
     })
     return next
-  }, [ratioData, targetTeams, viewType])
+  }, [activeTargetTeams, ratioData, viewType])
 
   const previousDisplayRatioData = useMemo(() => {
     if (!previousOpsVersion || !previousRatioData) return null
-    if (viewType !== 'team') return previousRatioData
+    if (!isTeamRatioView(viewType)) return previousRatioData
     const next = { ...previousRatioData }
-    targetTeams.forEach(({ name }) => {
+    activeTargetTeams.forEach(({ name }) => {
       const alias = getTeamAlias(name)
       if (next[name] == null && next[alias] != null) {
         next[name] = next[alias]
@@ -319,14 +466,14 @@ export default function ScheduleRatio() {
       }
     })
     return next
-  }, [previousOpsVersion, previousRatioData, targetTeams, viewType])
+  }, [activeTargetTeams, previousOpsVersion, previousRatioData, viewType])
 
   const displayRatioStats = useMemo(() => {
-    if (viewType !== 'team') return ratioStats
+    if (!isTeamRatioView(viewType)) return ratioStats
     return {
       ...ratioStats,
       group: displayRatioData,
-      groupDm: targetTeams.reduce((acc, { name }) => {
+      groupDm: activeTargetTeams.reduce((acc, { name }) => {
         const alias = getTeamAlias(name)
         if (acc[name] == null && acc[alias] != null) {
           acc[name] = acc[alias]
@@ -337,15 +484,15 @@ export default function ScheduleRatio() {
         return acc
       }, { ...ratioStats.groupDm }),
     }
-  }, [displayRatioData, ratioStats, targetTeams, viewType])
+  }, [activeTargetTeams, displayRatioData, ratioStats, viewType])
 
   const previousDisplayRatioStats = useMemo(() => {
     if (!previousOpsVersion || !previousRatioStats || !previousDisplayRatioData) return null
-    if (viewType !== 'team') return previousRatioStats
+    if (!isTeamRatioView(viewType)) return previousRatioStats
     return {
       ...previousRatioStats,
       group: previousDisplayRatioData,
-      groupDm: targetTeams.reduce((acc, { name }) => {
+      groupDm: activeTargetTeams.reduce((acc, { name }) => {
         const alias = getTeamAlias(name)
         if (acc[name] == null && acc[alias] != null) {
           acc[name] = acc[alias]
@@ -356,7 +503,7 @@ export default function ScheduleRatio() {
         return acc
       }, { ...previousRatioStats.groupDm }),
     }
-  }, [previousOpsVersion, previousRatioStats, previousDisplayRatioData, targetTeams, viewType])
+  }, [activeTargetTeams, previousOpsVersion, previousRatioStats, previousDisplayRatioData, viewType])
 
   const previousComparison = useMemo(() => {
     if (!previousOpsVersion || !previousDisplayRatioStats || !previousDisplayRatioData) return null
@@ -373,7 +520,7 @@ export default function ScheduleRatio() {
   }, [previousOpsVersion, previousDisplayRatioStats, previousDisplayRatioData])
 
   const competingIncludedData = useMemo(() => {
-    if (viewType !== 'team') return null
+    if (!isTeamRatioView(viewType)) return null
     const next = { ...displayRatioData }
     Object.values(enrichedBlocks).forEach(block => {
       if (!block?.isCompeting) return
@@ -391,18 +538,18 @@ export default function ScheduleRatio() {
         })
       })
     })
-    targetTeams.forEach(({ name }) => {
+    activeTargetTeams.forEach(({ name }) => {
       if (next[name] == null) next[name] = 0
     })
     return next
-  }, [displayRatioData, enrichedBlocks, entityProps, targetTeamNameMap, targetTeams, viewType])
+  }, [activeTargetTeams, displayRatioData, enrichedBlocks, entityProps, targetTeamNameMap, viewType])
 
   const totalTarget = useMemo(
-    () => targetTeams.reduce((acc, t) => acc + t.target, 0),
-    [targetTeams]
+    () => activeTargetTeams.reduce((acc, t) => acc + t.target, 0),
+    [activeTargetTeams]
   )
 
-  const activeTotalTarget = viewType === 'team' ? totalTarget : 0
+  const activeTotalTarget = isTeamRatioView(viewType) ? totalTarget : 0
 
   const scheduledCount = useMemo(
     () => Object.values(validScheduleBlocks).filter(b => !b.isDefault).length,
@@ -412,7 +559,7 @@ export default function ScheduleRatio() {
   const chartData = useMemo(() =>
     Object.entries(displayRatioData)
       .sort((a, b) => {
-        if (viewType === 'team') {
+        if (isTeamRatioView(viewType)) {
           const order = getTeamRatioOrder(a[0]) - getTeamRatioOrder(b[0])
           if (order) return order
         }
@@ -447,14 +594,14 @@ export default function ScheduleRatio() {
     <div data-coach="ratio-page" style={{ padding: 16, height: '100%', overflowY: 'auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
         <div data-coach="ratio-view-toggle" style={{ display: 'flex', gap: 8 }}>
-          {['team', 'category'].map(v => (
-            <button key={v} onClick={() => setViewType(v)} style={{
+          {RATIO_VIEW_OPTIONS.map(({ key, label }) => (
+            <button key={key} onClick={() => setViewType(key)} style={{
               padding: '5px 14px', borderRadius: 5, fontSize: 12, cursor: 'pointer',
-              background: viewType === v ? 'var(--accent)' : 'var(--bg3)',
+              background: viewType === key ? 'var(--accent)' : 'var(--bg3)',
               border: '1px solid var(--border)',
-              color: viewType === v ? '#fff' : 'var(--text2)',
+              color: viewType === key ? '#fff' : 'var(--text2)',
             }}>
-              {v === 'team' ? '팀별' : '카테고리별'}
+              {label}
             </button>
           ))}
         </div>
@@ -467,6 +614,25 @@ export default function ScheduleRatio() {
         >
           ?
         </button>
+        {viewType === 'teamPlan' && (
+          <button
+            onClick={recalculateExecutionPlanTargets}
+            disabled={isRecalculatingPlan}
+            style={{
+              marginLeft: 'auto',
+              padding: '5px 12px',
+              borderRadius: 5,
+              border: '1px solid var(--border)',
+              background: isRecalculatingPlan ? 'var(--bg3)' : 'var(--accent)',
+              color: isRecalculatingPlan ? 'var(--text3)' : '#fff',
+              fontSize: 12,
+              fontWeight: 800,
+              cursor: isRecalculatingPlan ? 'default' : 'pointer',
+            }}
+          >
+            {isRecalculatingPlan ? '재계산 중...' : '재계산'}
+          </button>
+        )}
       </div>
 
       <div data-coach="ratio-summary">
@@ -490,7 +656,7 @@ export default function ScheduleRatio() {
           targetMap={activeTargetMap}
           totalSlotWeighted={totalSlotWeighted}
           totalTarget={activeTotalTarget}
-          showTarget={viewType === 'team'}
+          showTarget={isTeamRatioView(viewType)}
           chartData={chartData}
           scheduledWeighted={stats.totalWeighted}
           competingIncludedData={competingIncludedData}

@@ -14,6 +14,7 @@ const TAB_LABELS = {
   settings: '설정',
   newReview: '신상품/재녹화 리뷰',
   help: '도움말',
+  executionPlan: '실행계획',
 }
 
 function getColor(name = '') {

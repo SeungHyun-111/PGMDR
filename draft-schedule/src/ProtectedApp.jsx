@@ -6,6 +6,7 @@ const ScheduleStatus      = lazy(() => import('./pages/ScheduleStatus'))
 const SettingsPage        = lazy(() => import('./pages/SettingsPage'))
 const NewProductReview    = lazy(() => import('./pages/NewProductReview'))
 const HelpPage            = lazy(() => import('./pages/HelpPage'))
+const ExecutionPlanPage   = lazy(() => import('./pages/ExecutionPlanPage'))
 import ExportModal from './components/common/ExportModal'
 import ChatPanel from './components/common/ChatPanel'
 import PresenceBar from './components/common/PresenceBar'
@@ -28,6 +29,7 @@ const TABS = [
   { id: 'settings', label: '설정' },
   { id: 'newReview', label: '신상품/재녹화 리뷰' },
   { id: 'help',     label: '설명서' },
+  { id: 'executionPlan', label: '실행계획' },
 ]
 
 const COACH_STEPS = [
@@ -208,10 +210,16 @@ export default function App() {
   const formatUpdatedHistory = (ts, by) => `${formatUpdated(ts)} · ${by || '-'}`
 
   const isRefreshing = isLoadingProposals || isLoadingPerformance || isLoadingPreSchedule || isLoadingGasAll
+  const performanceUpdatedAt = Number(performanceMeta?.updatedAt || 0) >= Number(lastUpdated?.performance || 0)
+    ? performanceMeta?.updatedAt
+    : lastUpdated?.performance
+  const performanceUpdatedBy = Number(performanceMeta?.updatedAt || 0) >= Number(lastUpdated?.performance || 0)
+    ? (performanceMeta?.updatedBy || '전역')
+    : (lastUpdated?.performanceBy || '전역')
   const historyUpdated = {
     ...(lastUpdated || {}),
-    performance: performanceMeta?.updatedAt || lastUpdated?.performance,
-    performanceBy: performanceMeta?.updatedBy || lastUpdated?.performanceBy || '전역',
+    performance: performanceUpdatedAt,
+    performanceBy: performanceUpdatedBy,
   }
   const currentVersionLabel = getVersionLabel(currentVersionId)
   const versionTone = currentVersionId === VERSION_SALES
@@ -258,7 +266,7 @@ export default function App() {
             <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
               padding: '0 16px', height: '100%', background: 'transparent', border: 'none',
               borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
-              color: activeTab === tab.id ? 'var(--accent)' : 'var(--text2)',
+              color: tab.id === 'executionPlan' ? '#dc2626' : activeTab === tab.id ? 'var(--accent)' : 'var(--text2)',
               cursor: 'pointer', fontSize: 12, fontWeight: activeTab === tab.id ? 600 : 400
             }}>{tab.label}</button>
           ))}
@@ -400,6 +408,7 @@ export default function App() {
           {activeTab === 'settings' && <SettingsPage />}
           {activeTab === 'newReview' && <NewProductReview />}
           {activeTab === 'help'     && <HelpPage />}
+          {activeTab === 'executionPlan' && <ExecutionPlanPage />}
         </Suspense>
       </div>
 
