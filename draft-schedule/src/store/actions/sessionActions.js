@@ -58,6 +58,9 @@ export function createSessionActions(setState, getState) {
             proposalItems,
             perfMap: encodePerfMap(gasData.perfMap || {}),
           })
+          if (gasData.businessPlanRatios) {
+            await set(ref(db, 'global/businessPlanRatios'), gasData.businessPlanRatios)
+          }
           await set(ref(db, `sessions/${weekKey}/lastUpdated`), {
             pgm: now, proposal: now, performance: now, preSchedule: now
           })
@@ -99,7 +102,7 @@ export function createSessionActions(setState, getState) {
       const resolvedVersionId = await ensureVersionData(weekKey, versionId)
       const versionPath = getVersionPath(weekKey, resolvedVersionId)
       const [
-        metaSnap, pgmSnap, perfMapSnap, preSnap, weightedSnap, targetSnap, businessPlanSnap, versionSnap, versionMetaSnap, updatedSnap
+        metaSnap, pgmSnap, perfMapSnap, preSnap, weightedSnap, targetSnap, businessPlanSnap, globalBusinessPlanSnap, versionSnap, versionMetaSnap, updatedSnap
       ] = await Promise.all([
         get(ref(db, `sessions/${weekKey}/gasData/meta`)),
         get(ref(db, `sessions/${weekKey}/gasData/pgmSlots`)),
@@ -108,6 +111,7 @@ export function createSessionActions(setState, getState) {
         get(ref(db, `sessions/${weekKey}/gasData/weightedMinTargets`)),
         get(ref(db, `sessions/${weekKey}/gasData/targetMetrics`)),
         get(ref(db, `sessions/${weekKey}/gasData/businessPlanRatios`)),
+        get(ref(db, 'global/businessPlanRatios')),
         get(ref(db, versionPath)),
         get(ref(db, `sessions/${weekKey}/versionMeta`)),
         get(ref(db, `sessions/${weekKey}/lastUpdated`)),
@@ -163,7 +167,9 @@ export function createSessionActions(setState, getState) {
         preScheduleRows:    preSnap.exists()      ? preSnap.val()      : [],
         weightedMinTargets,
         targetMetrics:      targetSnap.exists()   ? targetSnap.val()   : null,
-        businessPlanRatios: businessPlanSnap.exists() ? Object.values(businessPlanSnap.val()) : [],
+        businessPlanRatios: globalBusinessPlanSnap.exists()
+          ? Object.values(globalBusinessPlanSnap.val())
+          : businessPlanSnap.exists() ? Object.values(businessPlanSnap.val()) : [],
         _rawBlocks:         rawBlocks,
         scheduleBlocks:     applyEntityProps(normalizedBlocks, entityProps),
         entityProps,

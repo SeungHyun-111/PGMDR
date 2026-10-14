@@ -170,6 +170,9 @@ export function createRefreshActions(setState, getState) {
           proposalItems: proposalItemsRaw,
           perfMap: encodePerfMap(gasData.perfMap || {}),
         })
+        if (gasData.businessPlanRatios) {
+          await set(ref(db, 'global/businessPlanRatios'), gasData.businessPlanRatios)
+        }
         await writeGlobalPerformanceData(gasData, gasData.perfMap || {}, userName, {
           action: 'GAS 전체 재동기화',
           details: `실적 ${Object.keys(buildPerfMapFromGas(gasData.perfMap || {})).length.toLocaleString()}개 키 갱신`,
@@ -218,7 +221,7 @@ export function createRefreshActions(setState, getState) {
           ...buildPerformanceStateFromRaw(gasData, gasData.perfMap || {}, s),
           preScheduleRows: gasData.preScheduleRows || [],
           weightedMinTargets: gasData.weightedMinTargets || [],
-          businessPlanRatios: gasData.businessPlanRatios || [],
+          businessPlanRatios: gasData.businessPlanRatios || s.businessPlanRatios || [],
           targetMetrics: gasData.targetMetrics || null,
           allProposalItems: proposalItems,
           proposalItems: filterUnscheduledItems(proposalItems, scheduledItemIds, scheduledUniqueKeys),
