@@ -56,19 +56,21 @@ export function buildGridSection({ scheduleBlocks, pgmSlots, customSlots, splitS
     const reportChromePx = 26 + 38 + 62
     htmlGridPageW = 400 * PX_PER_MM - bodyPadPx * 2
     htmlGridPageH = 285 * PX_PER_MM - bodyPadPx * 2 - reportChromePx
+    GRID_TOOLBAR_H = 12 * PX_PER_MM
+    GRID_HEADER_H = 3 * PX_PER_MM
+    const gridChromePx = GRID_TOOLBAR_H + GRID_HEADER_H + 2
+    const bodyGridH = Math.max(1, htmlGridPageH - gridChromePx)
     const layout = calcReportLayout(
       maxSlotUnits,
       dates.length,
       htmlGridPageW / PX_PER_MM,
-      htmlGridPageH / PX_PER_MM
+      bodyGridH / PX_PER_MM
     )
     const dayW = layout.dayW * PX_PER_MM
     TIME_W = 7.5 * PX_PER_MM
     COL_W = Math.max(40, dayW - TIME_W)
     UNIT_H = layout.rowH * PX_PER_MM
     FONT_K = layout.fontK
-    GRID_TOOLBAR_H = 12 * PX_PER_MM
-    GRID_HEADER_H = 3 * PX_PER_MM
   }
   const totalH    = maxSlotUnits * UNIT_H
   const colW      = TIME_W + COL_W
