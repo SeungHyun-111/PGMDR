@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { compareCompetitorBroadcastDesc, fetchCompetitorSearchMonths, getBroadcastSortValue, matchesCompetitorSearch, searchCompetitorInfo } from '../../api/competitorSearch'
 import CoachMark from './CoachMark'
+import useCompetitorVisibilityStore from '../../store/useCompetitorVisibilityStore'
 
 const COMPANY_ORDER = ['K', 'SSG', 'SK']
 const COMPANY_META = {
@@ -87,6 +88,9 @@ const SORT_COLUMNS = [
 ]
 
 export default function CompetitorSearch() {
+  const hidden = useCompetitorVisibilityStore(state => state.hidden)
+  const setHidden = useCompetitorVisibilityStore(state => state.setHidden)
+  const [contextMenu, setContextMenu] = useState(null)
   const [isOpen, setIsOpen] = useState(false)
   const [months, setMonths] = useState([])
   const [month, setMonth] = useState('')
@@ -348,12 +352,16 @@ export default function CompetitorSearch() {
 
   return (
     <>
-      <button
+      {!hidden && <button
         type="button"
         data-testid="competitor-search-trigger"
         data-coach="competitor-search"
         aria-label="경쟁사 실적 검색"
-        title="경쟁사 실적 검색"
+        title="경쟁사 실적 검색 · 우클릭: 숨기기"
+        onContextMenu={event => {
+          event.preventDefault()
+          setContextMenu({ x: Math.max(8, Math.min(event.clientX, window.innerWidth - 208)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 60)) })
+        }}
         onPointerDown={handleButtonPointerDown}
         onPointerMove={handleButtonPointerMove}
         onPointerUp={handleButtonPointerUp}
@@ -370,7 +378,13 @@ export default function CompetitorSearch() {
           <path d="m16 16 4.2 4.2" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
           <path d="M7.8 10.8h6M10.8 7.8v6" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" opacity=".75" />
         </svg>
-      </button>
+      </button>}
+
+      {contextMenu && <div onPointerDown={() => setContextMenu(null)} onContextMenu={event => { event.preventDefault(); setContextMenu(null) }} style={{ position: 'fixed', inset: 0, zIndex: 8500 }}>
+        <div role="menu" aria-label="경쟁사 검색 아이콘" style={{ position: 'absolute', left: contextMenu.x, top: contextMenu.y, padding: 5, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg2)', boxShadow: '0 6px 24px rgba(0,0,0,.2)' }} onPointerDown={event => event.stopPropagation()}>
+          <button type="button" role="menuitem" autoFocus onKeyDown={event => { if (event.key === 'Escape') setContextMenu(null) }} onClick={() => { setHidden(true); setContextMenu(null); setIsOpen(false) }} style={{ padding: '10px 14px', border: 0, borderRadius: 5, background: 'var(--bg2)', color: 'var(--text)', cursor: 'pointer', fontFamily: 'inherit' }}>경쟁사 검색 아이콘 숨기기</button>
+        </div>
+      </div>}
 
       {isOpen && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9000, background: 'rgba(15,23,42,.52)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>

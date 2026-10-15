@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-export default function PromotionFormulaTooltip({ label, text }) {
+export default function PromotionFormulaTooltip({ label, text, suffix = ' 계산식', maxWidth = 390, preferredHeight = 280, centered = false }) {
   const id = useId()
   const trigger = useRef(null)
   const popup = useRef(null)
@@ -10,16 +10,20 @@ export default function PromotionFormulaTooltip({ label, text }) {
   const show = () => {
     clearTimeout(closeTimer.current)
     const box = trigger.current.getBoundingClientRect()
-    const width = Math.min(390, window.innerWidth - 24)
+    const width = Math.min(maxWidth, window.innerWidth - 24)
+    if (centered) {
+      setPosition({ width, left: '50%', top: '50%', transform: 'translate(-50%, -50%)', maxHeight: 'calc(100dvh - 24px)' })
+      return
+    }
     const below = window.innerHeight - box.bottom
-    const useBelow = below >= 280 || below > box.top
+    const useBelow = below >= preferredHeight || below > box.top
     setPosition({ width, left: Math.max(12, Math.min(box.left, window.innerWidth - width - 12)),
       ...(useBelow ? { top: box.bottom + 8 } : { bottom: window.innerHeight - box.top + 8 }),
       maxHeight: Math.max(100, (useBelow ? below : box.top) - 20),
     })
   }
   const delayClose = () => {
-    if (document.activeElement !== trigger.current) closeTimer.current = setTimeout(() => setPosition(null), 120)
+    if (document.activeElement !== trigger.current) closeTimer.current = setTimeout(() => setPosition(null), centered ? 400 : 120)
   }
   useEffect(() => () => clearTimeout(closeTimer.current), [])
   useEffect(() => {
@@ -43,10 +47,10 @@ export default function PromotionFormulaTooltip({ label, text }) {
   }, [position])
   return (
     <>
-      <button ref={trigger} type="button" className="promotion-formula-trigger" aria-label={`${label} 계산식`} aria-describedby={position ? id : undefined}
+      <button ref={trigger} type="button" className="promotion-formula-trigger" aria-label={`${label}${suffix}`} aria-describedby={position ? id : undefined}
         onMouseEnter={show} onMouseLeave={delayClose}
         onFocus={show} onBlur={() => setPosition(null)} onClick={show}>?</button>
-      {position && createPortal(<div ref={popup} id={id} role="tooltip" className="promotion-formula-tooltip" style={position} onMouseEnter={() => clearTimeout(closeTimer.current)} onMouseLeave={delayClose}><strong>{label} 계산식</strong><div>{text}</div></div>, document.body)}
+      {position && createPortal(<div ref={popup} id={id} role="tooltip" className="promotion-formula-tooltip" style={position} onMouseEnter={() => clearTimeout(closeTimer.current)} onMouseLeave={delayClose}><strong>{label}{suffix}</strong><div>{text}</div></div>, document.body)}
     </>
   )
 }

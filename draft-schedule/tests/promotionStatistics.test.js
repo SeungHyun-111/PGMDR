@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { filterPerformanceRows, percentChange, summarizePerformance, summarizePreviousSlots, summarizeVideoTypes } from '../src/utils/promotionStatistics.js'
+import { filterPerformanceRows, percentChange, formatPercentagePointDifference, summarizePerformance, summarizePreviousSlots, summarizeVideoTypes } from '../src/utils/promotionStatistics.js'
 
 test('summary uses aggregate amounts and weighted minutes, not arithmetic mean of row ratios', () => {
   const result = summarizePerformance([
@@ -29,7 +29,7 @@ test('zero denominators do not produce Infinity or misleading growth percentages
   assert.equal(percentChange(0, 10), -1)
 })
 
-test('preorder share uses aggregate target sales and increase is relative percentage, not percentage points', () => {
+test('preorder share uses aggregate target sales and comparison uses percentage points', () => {
   const current = summarizePerformance([
     { preorderExpectedSales: 15, targetSales: 100 },
     { preorderExpectedSales: 45, targetSales: 300 },
@@ -37,7 +37,11 @@ test('preorder share uses aggregate target sales and increase is relative percen
   const previous = summarizePerformance([{ preorderExpectedSales: 10, targetSales: 100 }])
   assert.equal(current.preorderShare, 0.15)
   assert.equal(previous.preorderShare, 0.1)
-  assert.ok(Math.abs(percentChange(current.preorderShare, previous.preorderShare) - 0.5) < 1e-10)
+  assert.equal(formatPercentagePointDifference(current.preorderShare, previous.preorderShare), '+5.0%p')
+  assert.equal(formatPercentagePointDifference(0.1, 0.15), '-5.0%p')
+  assert.equal(formatPercentagePointDifference(0.15, 0), '+15.0%p')
+  assert.equal(formatPercentagePointDifference(null, 0), '—')
+  assert.equal(formatPercentagePointDifference(0, 0), '0.0%p')
   assert.equal(summarizePerformance([{ preorderExpectedSales: 10, targetSales: 0 }]).preorderShare, null)
   assert.equal(percentChange(current.preorderShare, 0), null)
 })

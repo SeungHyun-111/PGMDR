@@ -18,7 +18,7 @@ const inputStyle = {
 const buttonStyle = { padding: '8px 14px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg2)', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }
 
 export default function PromotionPage() {
-  const [activeTab, setActiveTab] = useState('settings')
+  const [activeTab, setActiveTab] = useState('performance')
   const [today, setToday] = useState(getKoreaToday)
   const [promotions, setPromotions] = useState({})
   const [loaded, setLoaded] = useState(false)
@@ -79,7 +79,7 @@ export default function PromotionPage() {
         ) : <p className="promotion-ongoing-empty">{!loaded ? (error ? '프로모션을 불러오지 못했습니다.' : '프로모션을 불러오는 중입니다.') : '이번 달에 해당하는 프로모션이 없습니다.'}</p>}
       </section>
       <div role="tablist" aria-label="프로모션 관리" style={{ display: 'flex', padding: '0 20px', borderBottom: '1px solid var(--border)', background: 'var(--bg2)' }}>
-        {[['settings', '프로모션 설정'], ['products', '프로모션 상품'], ['performance', '프로모션 실적'], ['pgmSelection', '프로모션 PGM 선정']].map(([tab, label]) => (
+        {[['performance', '프로모션 실적'], ['settings', '프로모션 설정'], ['products', '프로모션 상품'], ['pgmSelection', '프로모션 PGM 선정']].map(([tab, label]) => (
           <button key={tab} id={`promotion-${tab}-tab`} type="button" role="tab" aria-selected={activeTab === tab} aria-controls={`promotion-${tab}-panel`} onClick={() => setActiveTab(tab)}
             style={{ padding: '14px 18px', border: 'none', borderBottom: `2px solid ${activeTab === tab ? (tab === 'performance' ? 'var(--red)' : 'var(--accent)') : 'transparent'}`, background: 'transparent', color: tab === 'performance' ? 'var(--red)' : activeTab === tab ? 'var(--accent)' : 'var(--text3)', fontSize: 13, fontWeight: 800, cursor: 'pointer' }}>
             {label}

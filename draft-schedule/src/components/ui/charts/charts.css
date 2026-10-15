@@ -1,0 +1,50 @@
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@source "../../charts";
+@source "../../shimmering-text.jsx";
+
+@theme inline {
+  --color-chart-label: var(--chart-label);
+  --color-chart-foreground: var(--chart-foreground);
+  --color-chart-foreground-muted: var(--chart-foreground-muted);
+  --color-chart-tooltip-background: var(--chart-tooltip-background);
+  --color-chart-tooltip-foreground: var(--chart-tooltip-foreground);
+  --color-chart-tooltip-muted: var(--chart-tooltip-muted);
+  --color-chart-grid: var(--chart-grid);
+}
+
+.promotion-history-chart {
+  --chart-1: #3b82f6;
+  --chart-2: #10b981;
+  --chart-3: #8b5cf6;
+  --chart-background: var(--bg2);
+  --chart-foreground: var(--text);
+  --chart-foreground-muted: var(--text3);
+  --chart-label: var(--text2);
+  --chart-grid: var(--border);
+  --chart-crosshair: var(--text3);
+  --chart-line-primary: var(--chart-1);
+  --chart-line-secondary: var(--chart-3);
+  --chart-tooltip-background: var(--bg2);
+  --chart-tooltip-foreground: var(--text);
+  --chart-tooltip-muted: var(--text2);
+  --chart-marker-background: var(--bg2);
+  --chart-marker-border: var(--border);
+  --chart-marker-foreground: var(--text);
+  padding-top: 14px;
+  margin-top: 12px;
+  border-top: 1px solid var(--border);
+  white-space: normal;
+}
+.promotion-history-chart-heading { display: flex; justify-content: space-between; gap: 8px; margin-bottom: 10px; font-size: 12px; }
+.promotion-history-chart-heading > span { color: var(--text3); font-size: 10px; }
+.promotion-history-chart-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; color: var(--text2); font-size: 10px; }
+.promotion-history-chart-legend > span { display: inline-flex; align-items: center; gap: 5px; }
+.promotion-history-chart-legend i { width: 9px; height: 9px; border-radius: 2px; }
+.promotion-history-chart-legend i.is-line { width: 14px; height: 2px; }
+.promotion-history-chart-hover { min-width: 230px; padding: 10px; color: var(--text); background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 4px 14px #0002; font-size: 11px; }
+.promotion-history-chart-hover > strong { display: block; margin-bottom: 6px; }
+.promotion-history-chart-hover > div { display: flex; justify-content: space-between; gap: 12px; }
+@media (max-width: 560px) {
+  .promotion-history-chart > .relative { min-height: 230px; }
+}

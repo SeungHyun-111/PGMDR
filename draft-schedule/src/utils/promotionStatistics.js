@@ -22,6 +22,20 @@ export function percentChange(current, baseline) {
   return current !== null && baseline !== null && baseline !== 0 ? (current - baseline) / Math.abs(baseline) : null
 }
 
+export function formatPreorderShare(value) {
+  if (!Number.isFinite(value)) return '—'
+  const scaled = value * 1000
+  const truncated = Math.trunc(scaled + Math.sign(scaled) * 1e-9) / 10
+  return `${truncated.toFixed(1)}%`
+}
+
+export function formatPercentagePointDifference(current, baseline) {
+  if (!Number.isFinite(current) || !Number.isFinite(baseline)) return '—'
+  const difference = (current - baseline) * 100
+  const value = Math.trunc(difference * 10 + Math.sign(difference) * 1e-9) / 10
+  return `${value > 0 ? '+' : ''}${value.toFixed(1)}%p`
+}
+
 export function summarizePreviousSlots(rows, byKey, getKey) {
   const slots = [[], [], []]
   rows.forEach(row => (byKey[getKey(row)] || []).forEach((previous, index) => { if (index < 3) slots[index].push(previous) }))
@@ -37,10 +51,12 @@ export function filterPerformanceRows(entries, { excludeLateNight, excludeIntang
     && (!categories.length || categories.includes(getPerformanceCategory(row))))
 }
 
+export const getPerformanceVideoType = row => String(row.newProductType || '').trim() || '미분류'
+
 export function summarizeVideoTypes(rows, byKey, getKey) {
   const groups = new Map()
   rows.forEach(row => {
-    const type = String(row.newProductType || '').trim() || '미분류'
+    const type = getPerformanceVideoType(row)
     if (!groups.has(type)) groups.set(type, [])
     groups.get(type).push(row)
   })

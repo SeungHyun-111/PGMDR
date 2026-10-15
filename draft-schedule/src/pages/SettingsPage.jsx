@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import useMemoCodes from '../hooks/useMemoCodes'
+import useCompetitorVisibilityStore from '../store/useCompetitorVisibilityStore'
 
 const DEFAULT_WIDTHS = { no: 54, code: 92, name: 280, use: 74, owner: 120, actions: 118 }
 const COLUMNS = [
@@ -13,6 +14,8 @@ const COLUMNS = [
 const emptyForm = { code: '', name: '', use: 'Y', owner: '' }
 
 export default function SettingsPage() {
+  const competitorHidden = useCompetitorVisibilityStore(state => state.hidden)
+  const setCompetitorHidden = useCompetitorVisibilityStore(state => state.setHidden)
   const { memoCodes: rows, loading, error, saveMemoCodes } = useMemoCodes()
   const [keyword, setKeyword] = useState('')
   const [useFilter, setUseFilter] = useState('전체')
@@ -118,6 +121,10 @@ export default function SettingsPage() {
 
   return (
     <div style={{ height: '100%', overflow: 'auto', background: 'var(--bg)', padding: 16 }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, color: 'var(--text)', fontSize: 13, cursor: 'pointer' }}>
+        <input type="checkbox" checked={!competitorHidden} onChange={event => setCompetitorHidden(!event.target.checked)} />
+        경쟁사 검색 아이콘 표시
+      </label>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--text)' }}>설정</div>
