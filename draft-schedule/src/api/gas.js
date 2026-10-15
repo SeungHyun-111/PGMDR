@@ -1,4 +1,5 @@
 import mdNameTeamMap from '../data/md-name-team-map.json'
+import { getLateNightPgmYn } from '../utils/lateNight'
 
 const MAIN_GAS_URL = 'https://script.google.com/macros/s/AKfycbzlnzcV5DkCNwAZcOrdtJnCfGpCLmu5-tA9eF8N2Rs4hS15N61p0h8m7BQqTVxwX7g3/exec'
 const OPS_GAS_URL = 'https://script.google.com/macros/s/AKfycbz9e0_2L6wX3Lm7uKWLfReZrm-LNRFxg8f_EeHVKwqaLZrx0neyHss9fORPhhvFppIA/exec'
@@ -182,14 +183,6 @@ function toBroadcastTimestamp(dateText, timeText) {
   const dateKey = String(dateText || '').replace(/\D/g, '')
   const timeKey = String(timeText || '00:00').replace(/\D/g, '').padEnd(4, '0').slice(0, 4)
   return Number(`${dateKey}${timeKey}`) || 0
-}
-
-function getLateNightPgmYn(timeText) {
-  const [hourText, minuteText = '0'] = normalizeTime(timeText).split(':')
-  const hour = Number(hourText)
-  const minute = Number(minuteText)
-  const startMinute = hour * 60 + minute
-  return startMinute >= 41 && startMinute <= 299 ? 'Y' : 'N'
 }
 
 function getTeamByMdName(mdName) {

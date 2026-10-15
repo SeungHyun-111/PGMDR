@@ -5,6 +5,7 @@ const ScheduleRatio       = lazy(() => import('./pages/ScheduleRatio'))
 const ScheduleStatus      = lazy(() => import('./pages/ScheduleStatus'))
 const SettingsPage        = lazy(() => import('./pages/SettingsPage'))
 const NewProductReview    = lazy(() => import('./pages/NewProductReview'))
+const PromotionPage       = lazy(() => import('./pages/PromotionPage'))
 const HelpPage            = lazy(() => import('./pages/HelpPage'))
 const ExecutionPlanPage   = lazy(() => import('./pages/ExecutionPlanPage'))
 import ExportModal from './components/common/ExportModal'
@@ -28,6 +29,7 @@ const TABS = [
   { id: 'status',   label: '편성현황' },
   { id: 'settings', label: '설정' },
   { id: 'newReview', label: '신상품/재녹화 리뷰' },
+  { id: 'promotion', label: '프로모션' },
   { id: 'help',     label: '설명서' },
   { id: 'executionPlan', label: '실행계획' },
 ]
@@ -407,6 +409,7 @@ export default function App() {
           {activeTab === 'status'   && <ScheduleStatus />}
           {activeTab === 'settings' && <SettingsPage />}
           {activeTab === 'newReview' && <NewProductReview />}
+          {activeTab === 'promotion' && <PromotionPage />}
           {activeTab === 'help'     && <HelpPage />}
           {activeTab === 'executionPlan' && <ExecutionPlanPage />}
         </Suspense>

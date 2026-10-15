@@ -36,6 +36,7 @@ const useScheduleStore = create((setState, getState) => ({
   latestPerfByKey:    {},
   performanceHistoryByKey: {},
   performanceRows:    {},
+  performanceRowPaths: {},
   performanceMeta:    null,
   loadedPerfKeys:     {},
   performanceGlobalLoaded: false,

@@ -186,7 +186,6 @@ export function createSessionActions(setState, getState) {
         isLoaded: true, isLoading: false, proposalLoaded: true,
       })
       getState().seedPerformanceFromPerfMap?.(perfMap)
-      getState().loadGlobalPerformanceData?.()
       getState().ensurePerformanceKeys?.(collectPerfKeys(allProposalItems), { latest: true })
       getState().ensurePerformanceKeys?.(collectPerfKeys(Object.values(normalizedBlocks || {})), { latest: true, history: true })
 

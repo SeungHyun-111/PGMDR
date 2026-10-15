@@ -1,0 +1,7 @@
+{
+  "rules": {
+    "performanceEntries": {
+      ".indexOn": ["perfKey"]
+    }
+  }
+}

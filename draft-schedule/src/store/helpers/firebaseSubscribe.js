@@ -4,6 +4,7 @@ import { applyEntityProps } from '../../utils/mergeEntity'
 import { filterUnscheduledItems } from '../../utils/proposalVisibility'
 import { buildProposalItem, buildSlot } from '../helpers/blockBuilders'
 import { getVersionPath } from '../../utils/sessionVersion'
+import { receivePerformanceMeta } from '../usePerformanceQueryStore'
 
 const _subs = {}
 
@@ -31,8 +32,9 @@ export function subscribeRealtimePaths(weekKey, versionId, setState, getState) {
       const previousUpdatedAt = getState().performanceMeta?.updatedAt || null
       const performanceMeta = snap.exists() ? snap.val() : null
       setState({ performanceMeta })
+      receivePerformanceMeta(performanceMeta)
       if (performanceMeta?.updatedAt && performanceMeta.updatedAt !== previousUpdatedAt) {
-        getState().loadGlobalPerformanceData?.({ force: true })
+        getState().refreshLoadedPerformanceKeys?.()
       }
     },
     [`sessions/${weekKey}/versionMeta`]: snap => setState({ versionMeta: snap.exists() ? snap.val() : {} }),

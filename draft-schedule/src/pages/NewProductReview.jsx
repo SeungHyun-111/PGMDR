@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { db, ref, set, onValue } from '../api/firebase'
 import useScheduleStore from '../store/useScheduleStore'
+import usePerformanceRange from '../hooks/usePerformanceRange'
 import { encodeKey } from '../utils/firebaseKey'
 import mdNameTeamMap from '../data/md-name-team-map.json'
 
@@ -62,17 +63,8 @@ export default function NewProductReview() {
   const [endDate, setEndDate] = useState(defaultRange.end)
   const [teamFilter, setTeamFilter] = useState('전체')
   const [reviewInputs, setReviewInputs] = useState({})
-  const {
-    performanceRows,
-    performanceGlobalLoaded,
-    isLoadingPerformanceKeys,
-    loadGlobalPerformanceData,
-    userName,
-  } = useScheduleStore()
-
-  useEffect(() => {
-    if (!performanceGlobalLoaded) loadGlobalPerformanceData?.()
-  }, [loadGlobalPerformanceData, performanceGlobalLoaded])
+  const userName = useScheduleStore(state => state.userName)
+  const { rows: performanceRows, loading: isLoadingPerformanceKeys, error: performanceError } = usePerformanceRange(startDate, endDate)
 
   useEffect(() => {
     const reviewRef = ref(db, REVIEW_INPUT_PATH)
@@ -163,6 +155,7 @@ export default function NewProductReview() {
         </span>
       </div>
 
+      {performanceError && <p role="alert" style={{ color: 'var(--red)', padding: '0 16px', fontSize: 12 }}>{performanceError}</p>}
       <div style={contentStyle}>
         <ReviewTable title="미입력" rows={incompleteRows} onSave={saveReview} />
         <ReviewTable title="입력" rows={completeRows} onSave={saveReview} />

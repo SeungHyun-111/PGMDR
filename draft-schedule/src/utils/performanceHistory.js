@@ -1,4 +1,5 @@
 import { encodeKey, decodeKey } from './firebaseKey'
+import { getLateNightPgmYn } from './lateNight'
 
 const DATE_RE = /^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/
 const TIME_RE = /^(\d{1,2})(?::(\d{1,2}))?/
@@ -44,6 +45,7 @@ export function normalizePerfEntry(entry, fallbackPerfKey = '') {
     broadcastDate,
     broadcastTime,
     broadcastTimestamp,
+    lateNightPgmYn: getLateNightPgmYn(entry),
     weightedMin: toNullableNumber(entry.weightedMin),
     expectedSales: toNullableNumber(entry.expectedSales),
     contributionProfit: toNullableNumber(entry.contributionProfit),
@@ -126,7 +128,7 @@ export function getSameBroadcastPerf(perfKey, blockTimestamp, historyByKey) {
 export function getLastPerfBefore(perfKey, blockTimestamp, historyByKey) {
   if (!perfKey || !blockTimestamp) return null
   const history = historyByKey?.[perfKey] || []
-  return findLastBy(history, entry => entry.broadcastTimestamp < blockTimestamp && entry.lateNightPgmYn !== 'Y')
+  return findLastBy(history, entry => entry.broadcastTimestamp < blockTimestamp && getLateNightPgmYn(entry) !== 'Y')
 }
 
 export function getLatestPerf(perfKey, latestPerfByKey, fallbackPerfMap) {
@@ -151,7 +153,7 @@ export function getScheduledBlockPerformance(block, {
   const legacyPreviousPerf = legacyPerf
     && blockTimestamp
     && legacyPerf.broadcastTimestamp <= blockTimestamp
-    && legacyPerf.lateNightPgmYn !== 'Y'
+    && getLateNightPgmYn(legacyPerf) !== 'Y'
     ? legacyPerf
     : null
   const lastPerf = previousPerf || legacyPreviousPerf

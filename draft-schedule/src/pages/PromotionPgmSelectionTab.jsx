@@ -1,0 +1,108 @@
+import { useEffect, useMemo, useState } from 'react'
+import { getPromotionBroadcasts } from '../utils/promotionPerformance'
+import { dateRange } from '../utils/performanceQuery'
+import usePerformanceQuery from '../hooks/usePerformanceQuery'
+import usePerformanceQueryStore, { watchPerformanceMeta } from '../store/usePerformanceQueryStore'
+import PromotionBroadcastRow from '../components/common/PromotionBroadcastRow'
+import usePromotionAssignmentStore, { subscribePromotionAssignments } from '../store/usePromotionAssignmentStore'
+import PromotionOrganizationFilter from '../components/common/PromotionOrganizationFilter'
+import mdNameTeamMap from '../data/md-name-team-map.json'
+
+const getOrganization = row => String(row.mdTeam || row.orgName || mdNameTeamMap[String(row.mdName || '').trim()] || '미분류').trim()
+
+export default function PromotionPgmSelectionTab({ promotions, loaded, active }) {
+  const [selectedId, setSelectedId] = useState('')
+  const [dateChoice, setDateChoice] = useState('')
+  const [organizations, setOrganizations] = useState([])
+  const [today, setToday] = useState(() => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date()))
+  const assignmentError = usePromotionAssignmentStore(state => state.error)
+  const meta = usePerformanceQueryStore(state => state.meta)
+  const performanceGlobalLoaded = usePerformanceQueryStore(state => state.metaReady)
+  const metaError = usePerformanceQueryStore(state => state.error)
+  const selected = promotions.find(([id]) => id === selectedId)?.[1]
+  const hasSelection = !!selectedId
+
+  useEffect(() => {
+    if (active && hasSelection) return subscribePromotionAssignments()
+  }, [active, hasSelection])
+
+  useEffect(() => {
+    if (active) return watchPerformanceMeta()
+  }, [active])
+
+  useEffect(() => {
+    const timer = setInterval(() => setToday(new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date())), 60000)
+    return () => clearInterval(timer)
+  }, [])
+
+  const dates = useMemo(() => {
+    if (!selected?.startDate || !selected?.endDate || !meta?.latestDate) return []
+    const end = [selected.endDate, today, meta.latestDate].sort()[0]
+    return dateRange(selected.startDate, end)
+  }, [selected, today, meta])
+  const currentDate = dates.includes(dateChoice) ? dateChoice : dates[0] || ''
+  const dateIndex = dates.indexOf(currentDate)
+  const dayQuery = usePerformanceQuery('date', currentDate, active && performanceGlobalLoaded)
+  const performanceRows = dayQuery.rows
+  const isLoading = !performanceGlobalLoaded || dayQuery.loading
+  const storeError = metaError || dayQuery.error
+  const organizationOptions = useMemo(() => [...new Set([...Object.values(mdNameTeamMap), ...Object.values(performanceRows).map(getOrganization)])].sort((a, b) => a.localeCompare(b, 'ko')), [performanceRows])
+  const dailyBroadcasts = useMemo(() => getPromotionBroadcasts(performanceRows, selected, currentDate), [performanceRows, selected, currentDate])
+  const broadcasts = useMemo(() => dailyBroadcasts.filter(([, row]) => !organizations.length || organizations.includes(getOrganization(row))), [dailyBroadcasts, organizations])
+  const productCount = Object.values(selected?.products || {}).filter(product => String(product.pgmCodeName || '').trim()).length
+  const promotionNames = useMemo(() => [...new Set([...promotions]
+    .sort(([a], [b]) => Number(b === selectedId) - Number(a === selectedId))
+    .map(([, promotion]) => String(promotion.name || '').trim()).filter(Boolean))], [promotions, selectedId])
+
+  return (
+    <div className={`promotion-products promotion-performance${selected && performanceGlobalLoaded && dates.length ? ' has-broadcast-dates' : ''}`}>
+      <h2>프로모션 PGM 선정</h2>
+      <div className="promotion-product-selector" style={{ marginTop: 20 }}>
+        <label htmlFor="promotion-pgm-selection">프로모션명</label>
+        <select id="promotion-pgm-selection" value={selected ? selectedId : ''} onChange={event => { setSelectedId(event.target.value); setDateChoice('') }} disabled={!loaded || !promotions.length}>
+          <option value="">프로모션을 선택하세요</option>
+          {promotions.map(([id, promotion], index) => <option key={id} value={id}>{promotion.name || `프로모션 ${index + 1} (이름 미입력)`}</option>)}
+        </select>
+        <PromotionOrganizationFilter options={organizationOptions} selected={organizations} onChange={setOrganizations} />
+      </div>
+      {selected && (
+        <>
+          <div className="promotion-performance-meta">
+            <span>프로모션 기간 <strong>{selected.startDate || '미설정'} ~ {selected.endDate || '미설정'}</strong></span>
+            <span>등록 상품 <strong>{productCount}개</strong></span>
+            {dates.length > 0 && <span>조회 가능 <strong>{dates[0]} ~ {dates[dates.length - 1]}</strong></span>}
+          </div>
+          {isLoading || storeError ? (
+            <div className="promotion-products-empty">{isLoading ? '해당 날짜 실적을 불러오는 중입니다.' : <><p role="alert">{storeError}</p><button type="button" onClick={dayQuery.retry}>다시 불러오기</button></>}</div>
+          ) : dates.length === 0 ? (
+            <div className="promotion-products-empty">{!selected.startDate || !selected.endDate ? '프로모션 설정에서 기간을 입력해주세요.' : '프로모션 기간 안에 조회 가능한 실적 날짜가 없습니다.'}</div>
+          ) : (
+            <>
+              <div className="promotion-date-navigation" aria-label="실적 날짜 이동">
+                <button type="button" aria-label="이전 실적 날짜" disabled={dateIndex <= 0} onClick={() => setDateChoice(dates[dateIndex - 1])}>◀</button>
+                <label className="promotion-performance-date">
+                  <span className="promotion-sr-only">실적 날짜</span>
+                  <select value={currentDate} onChange={event => setDateChoice(event.target.value)}>
+                    {dates.map(date => <option key={date} value={date}>{date.replaceAll('-', '.')}</option>)}
+                  </select>
+                </label>
+                <button type="button" aria-label="다음 실적 날짜" disabled={dateIndex >= dates.length - 1} onClick={() => setDateChoice(dates[dateIndex + 1])}>▶</button>
+              </div>
+              <div className="promotion-performance-toolbar"><span>방송 상품 <strong>{broadcasts.length}건</strong>{organizations.length > 0 && ` / 전체 ${dailyBroadcasts.length}건 · ${organizations.join(', ')}`}</span>{assignmentError ? <span role="alert" className="promotion-products-error">{assignmentError}</span> : <span>프로모션명을 선택하면 해당 방송 실적에 즉시 저장됩니다.</span>}</div>
+              <div className="promotion-products-table-wrap promotion-performance-table-wrap">
+                <table className="promotion-table promotion-products-table promotion-performance-table">
+                  <colgroup><col style={{ width: '5%' }} /><col style={{ width: '22%' }} /><col style={{ width: '16%' }} /><col style={{ width: '6%' }} /><col style={{ width: '7%' }} /><col style={{ width: '13%' }} /><col style={{ width: '13%' }} /><col style={{ width: '18%' }} /></colgroup>
+                  <thead><tr><th>시간</th><th>편성코드명</th><th>프로모션명</th><th>거래형태</th><th>MD</th><th>예상취급고</th><th>한계이익</th><th>(연동)미리주문취급액</th></tr></thead>
+                  <tbody>
+                    {broadcasts.map(([id, row]) => <PromotionBroadcastRow key={id} entryId={id} row={row} names={promotionNames} sourcePath="performanceEntries" promotionStart={selected.startDate} />)}
+                    {!broadcasts.length && <tr><td colSpan={8} className="promotion-products-empty">{organizations.length ? '선택한 조직의 방송 실적이 없습니다. 조직명 필터에서 전체 보기를 선택해주세요.' : '이 날짜에 방송 실적이 없습니다.'}</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </>
+      )}
+    </div>
+  )
+}

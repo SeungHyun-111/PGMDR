@@ -1,0 +1,23 @@
+import { memo, useState } from 'react'
+import PreviousPerformance from './PreviousPerformance'
+import PromotionAssignmentSelect from './PromotionAssignmentSelect'
+import usePromotionAssignmentStore from '../../store/usePromotionAssignmentStore'
+
+const formatNumber = value => value === null || value === undefined || value === '' ? '—' : Math.trunc(Number(value)).toLocaleString('ko-KR')
+
+export default memo(function PromotionBroadcastRow({ entryId, row, names, sourcePath, promotionStart }) {
+  const [expanded, setExpanded] = useState(false)
+  const promotionName = usePromotionAssignmentStore(state => state.names[entryId] ?? row.promotionName ?? '')
+  return (
+    <><tr className={promotionName ? 'is-assigned' : ''}>
+      <td>{row.broadcastTime || '—'}</td>
+      <td className="promotion-pgm-name" title={row.pgmCodeName}><div className="promotion-pgm-name-content"><span>{row.pgmCodeName}</span><button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)}>직전 3회 {expanded ? '▴' : '▾'}</button></div></td>
+      <td><PromotionAssignmentSelect entryId={entryId} row={row} names={names} sourcePath={sourcePath} /></td>
+      <td>{row.dealTypeConverted || row.dealType2 || row.dealType || '—'}</td>
+      <td>{row.mdName || '—'}</td>
+      <td className="promotion-number">{formatNumber(row.expectedSales)}</td>
+      <td className="promotion-number">{formatNumber(row.contributionProfit)}</td>
+      <td className="promotion-number">{formatNumber(row.preorderExpectedSales)}</td>
+    </tr>{expanded && <tr><td colSpan={8}><PreviousPerformance row={row} promotionStart={promotionStart} /></td></tr>}</>
+  )
+})

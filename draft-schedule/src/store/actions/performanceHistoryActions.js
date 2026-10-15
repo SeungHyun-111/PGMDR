@@ -1,18 +1,14 @@
 import { db, ref, get } from '../../api/firebase'
-import { decodeKey, encodeKey } from '../../utils/firebaseKey'
+import { performanceQueryCache } from '../../api/performanceQuery'
+import { receivePerformanceMeta } from '../usePerformanceQueryStore'
+import { encodeKey } from '../../utils/firebaseKey'
 import {
-  buildHistoryByKeyFromRows,
-  buildLatestByKeyFromHistory,
   collectPerfKeys,
-  decodeHistoryByKey,
   normalizePerfEntry,
   normalizePerfHistory,
 } from '../../utils/performanceHistory'
 
-const GLOBAL_HISTORY_PATH = 'performanceHistory'
 const GLOBAL_LATEST_PATH = 'latestPerfMap'
-const GLOBAL_ENTRIES_PATH = 'performanceEntries'
-const LEGACY_ROWS_PATH = 'performanceRows'
 const GLOBAL_META_PATH = 'performanceMeta'
 
 export function createPerformanceHistoryActions(setState, getState) {
@@ -24,30 +20,12 @@ export function createPerformanceHistoryActions(setState, getState) {
 
       setState({ isLoadingPerformanceKeys: true })
       try {
-        const [entriesSnap, legacyRowsSnap, latestSnap, historySnap, metaSnap] = await Promise.all([
-          get(ref(db, GLOBAL_ENTRIES_PATH)),
-          get(ref(db, LEGACY_ROWS_PATH)),
-          get(ref(db, GLOBAL_LATEST_PATH)),
-          get(ref(db, GLOBAL_HISTORY_PATH)),
-          get(ref(db, GLOBAL_META_PATH)),
-        ])
-        const performanceRows = {
-          ...(legacyRowsSnap.exists() ? legacyRowsSnap.val() : {}),
-          ...(entriesSnap.exists() ? entriesSnap.val() : {}),
-        }
-        const rowHistoryByKey = buildHistoryByKeyFromRows(performanceRows)
-        const storedHistoryByKey = decodeHistoryByKey(historySnap.exists() ? historySnap.val() : {})
-        const performanceHistoryByKey = Object.keys(rowHistoryByKey).length ? rowHistoryByKey : storedHistoryByKey
-        const latestPerfByKey = Object.keys(rowHistoryByKey).length
-          ? buildLatestByKeyFromHistory(performanceHistoryByKey)
-          : decodeLatestMap(latestSnap.exists() ? latestSnap.val() : {})
+        // Compatibility entry point: metadata only. Rows are queried by date/perfKey.
+        const metaSnap = await get(ref(db, GLOBAL_META_PATH))
+        receivePerformanceMeta(metaSnap.val())
         setState({
-          performanceRows,
           performanceMeta: metaSnap.exists() ? metaSnap.val() : null,
-          latestPerfByKey,
-          performanceHistoryByKey,
           performanceGlobalLoaded: true,
-          loadedPerfKeys: {},
           isLoadingPerformanceKeys: false,
         })
       } catch (e) {
@@ -56,7 +34,6 @@ export function createPerformanceHistoryActions(setState, getState) {
     },
 
     async ensurePerformanceKeys(perfKeys = [], options = {}) {
-      if (getState().performanceGlobalLoaded) return
       const keys = collectPerfKeys(perfKeys.map(perfKey => ({ perfKey })))
       if (!keys.length) return
       const wantLatest = options.latest !== false
@@ -72,14 +49,17 @@ export function createPerformanceHistoryActions(setState, getState) {
 
       setState({ isLoadingPerformanceKeys: true })
       try {
-        const latestPairs = await Promise.all(missingLatest.map(async perfKey => {
+        const latestResults = await Promise.allSettled(missingLatest.map(async perfKey => {
           const snap = await get(ref(db, `${GLOBAL_LATEST_PATH}/${encodeKey(perfKey)}`))
           return [perfKey, snap.exists() ? normalizePerfEntry(snap.val(), perfKey) : null]
         }))
-        const historyPairs = await Promise.all(missingHistory.map(async perfKey => {
-          const snap = await get(ref(db, `${GLOBAL_HISTORY_PATH}/${encodeKey(perfKey)}`))
-          return [perfKey, snap.exists() ? normalizePerfHistory(snap.val(), perfKey) : []]
+        const historyResults = await Promise.allSettled(missingHistory.map(async perfKey => {
+          const rows = await performanceQueryCache.load('product', perfKey)
+          return [perfKey, normalizePerfHistory(rows, perfKey)]
         }))
+        const latestPairs = latestResults.filter(result => result.status === 'fulfilled').map(result => result.value)
+        const historyPairs = historyResults.filter(result => result.status === 'fulfilled').map(result => result.value)
+        const failure = [...latestResults, ...historyResults].find(result => result.status === 'rejected')
         const now = Date.now()
         setState(s => {
           const latestPerfByKey = { ...(s.latestPerfByKey || {}) }
@@ -90,7 +70,7 @@ export function createPerformanceHistoryActions(setState, getState) {
             loadedPerfKeys[perfKey] = { ...(loadedPerfKeys[perfKey] || {}), latest: true, loadedAt: now }
           })
           historyPairs.forEach(([perfKey, history]) => {
-            if (history.length > 0) performanceHistoryByKey[perfKey] = history
+            performanceHistoryByKey[perfKey] = history
             loadedPerfKeys[perfKey] = { ...(loadedPerfKeys[perfKey] || {}), history: true, loadedAt: now }
           })
           return {
@@ -98,6 +78,7 @@ export function createPerformanceHistoryActions(setState, getState) {
             performanceHistoryByKey,
             loadedPerfKeys,
             isLoadingPerformanceKeys: false,
+            error: failure ? failure.reason.message : null,
           }
         })
       } catch (e) {
@@ -137,15 +118,16 @@ export function createPerformanceHistoryActions(setState, getState) {
         return { loadedPerfKeys }
       })
     },
-  }
-}
 
-function decodeLatestMap(raw = {}) {
-  const result = {}
-  Object.entries(raw || {}).forEach(([encodedKey, value]) => {
-    const perfKey = decodeKey(encodedKey)
-    const entry = normalizePerfEntry(value, perfKey)
-    if (entry) result[perfKey] = entry
-  })
-  return result
+    async refreshLoadedPerformanceKeys() {
+      const loaded = getState().loadedPerfKeys || {}
+      const latest = Object.keys(loaded).filter(key => loaded[key].latest)
+      const history = Object.keys(loaded).filter(key => loaded[key].history)
+      setState({ loadedPerfKeys: {} })
+      await Promise.all([
+        getState().ensurePerformanceKeys(latest, { latest: true }),
+        getState().ensurePerformanceKeys(history, { latest: false, history: true }),
+      ])
+    },
+  }
 }

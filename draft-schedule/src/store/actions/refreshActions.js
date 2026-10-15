@@ -1,5 +1,5 @@
 // src/store/actions/refreshActions.js
-import { db, ref, set, get, update } from '../../api/firebase'
+import { db, ref, set, get, update, query, orderByKey, limitToLast } from '../../api/firebase'
 import { buildPreScheduleBlocks, buildDefaultBlocks, buildSlot, buildProposalItem, encodePerfMap, buildPerfMapFromGas } from '../helpers/blockBuilders'
 import { genKey } from '../../utils/uniqueKey'
 import { normalizeItemsTeamNames } from '../../utils/teamName'
@@ -86,8 +86,7 @@ export function createRefreshActions(setState, getState) {
         })
         await update(ref(db, `sessions/${weekKey}/lastUpdated`), { performance: now, performanceBy: userName || '' })
         getState().seedPerformanceFromPerfMap?.(perfMap)
-        getState().invalidatePerformanceKeys?.()
-        getState().loadGlobalPerformanceData?.({ force: true })
+        getState().refreshLoadedPerformanceKeys?.()
         setState(s => ({
           perfMap: nextPerfMap,
           performanceMeta: {
@@ -208,8 +207,7 @@ export function createRefreshActions(setState, getState) {
 
         const perfMap = buildPerfMapFromGas(gasData.perfMap || {})
         getState().seedPerformanceFromPerfMap?.(perfMap)
-        getState().invalidatePerformanceKeys?.()
-        getState().loadGlobalPerformanceData?.({ force: true })
+        getState().refreshLoadedPerformanceKeys?.()
         setState(s => ({
           pgmSlots:        pgmSlotsNew,
           perfMap,
@@ -290,7 +288,10 @@ async function writeGlobalPerformanceData(rawData, rawPerfMap, userName = '', lo
   const performanceRows = getPerformanceRowsSource(rawData, rawPerfMap)
   const normalizedRows = normalizePerformanceRows(performanceRows)
   normalizedRows.forEach(entry => {
-    updates[`performanceEntries/${makePerformanceEntryId(entry)}`] = entry
+    // Refresh source fields without removing manually assigned promotion names.
+    Object.entries(entry).forEach(([field, value]) => {
+      updates[`performanceEntries/${makePerformanceEntryId(entry)}/${field}`] = value
+    })
   })
 
   const historyByKey = buildHistoryByKeyFromRows(normalizedRows)
@@ -334,8 +335,8 @@ async function getGlobalPerformanceCursor() {
   }
 
   const [entriesSnap, legacyRowsSnap] = await Promise.all([
-    get(ref(db, 'performanceEntries')),
-    get(ref(db, 'performanceRows')),
+    get(query(ref(db, 'performanceEntries'), orderByKey(), limitToLast(1))),
+    get(query(ref(db, 'performanceRows'), orderByKey(), limitToLast(1))),
   ])
   const rows = normalizePerformanceRows({
     ...(legacyRowsSnap.exists() ? legacyRowsSnap.val() : {}),
