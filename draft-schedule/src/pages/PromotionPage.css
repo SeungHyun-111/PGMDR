@@ -129,6 +129,52 @@
 .promotion-product-selector label { font-size: 13px; font-weight: 700; color: var(--text); }
 .promotion-product-selector select { width: min(100%, 440px); min-height: 42px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; font-size: 13px; }
 .promotion-product-selector select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.promotion-page .promotion-product-selector {
+  --bg: #232731;
+  --bg2: #191c23;
+  --bg3: #2c323e;
+  --text: #f8fafc;
+  --text2: #d5ddea;
+  --text3: #b2bfd0;
+  --border: #465064;
+  --accent: #8badff;
+  color: var(--text);
+  color-scheme: dark;
+  border-color: #343c4b;
+  border-left: 5px solid var(--accent);
+  background: #191c23;
+  box-shadow: 0 4px 14px #0003;
+}
+.promotion-page .promotion-product-selector > label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 6px 11px;
+  border-radius: 5px;
+  background: transparent;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.promotion-page .promotion-product-selector > select {
+  min-height: 38px;
+  border: 2px solid #65738c;
+  background: #2b313d;
+  color: #fff;
+  color-scheme: dark;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color .15s, box-shadow .15s;
+}
+.promotion-page .promotion-product-selector > select:hover:not(:disabled),
+.promotion-page .promotion-product-selector > select:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 15%, transparent);
+}
+.promotion-page .promotion-product-selector > select:disabled { opacity: .55; cursor: not-allowed; }
+.promotion-page .promotion-product-selector > select option { background: #16181d; color: #fff; }
 .promotion-product-group { margin-bottom: 20px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; background: var(--bg2); }
 .promotion-product-group > header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; }
 .promotion-product-group h3 { margin: 0; color: var(--text); font-size: 14px; }
