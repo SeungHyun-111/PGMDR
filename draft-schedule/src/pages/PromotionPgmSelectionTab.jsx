@@ -14,6 +14,7 @@ export default function PromotionPgmSelectionTab({ promotions, loaded, active })
   const [selectedId, setSelectedId] = useState('')
   const [dateChoice, setDateChoice] = useState('')
   const [organizations, setOrganizations] = useState([])
+  const [targetOnly, setTargetOnly] = useState(false)
   const [today, setToday] = useState(() => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date()))
   const assignmentError = usePromotionAssignmentStore(state => state.error)
   const meta = usePerformanceQueryStore(state => state.meta)
@@ -48,7 +49,10 @@ export default function PromotionPgmSelectionTab({ promotions, loaded, active })
   const storeError = metaError || dayQuery.error
   const organizationOptions = useMemo(() => [...new Set([...Object.values(mdNameTeamMap), ...Object.values(performanceRows).map(getOrganization)])].sort((a, b) => a.localeCompare(b, 'ko')), [performanceRows])
   const dailyBroadcasts = useMemo(() => getPromotionBroadcasts(performanceRows, selected, currentDate), [performanceRows, selected, currentDate])
-  const broadcasts = useMemo(() => dailyBroadcasts.filter(([, row]) => !organizations.length || organizations.includes(getOrganization(row))), [dailyBroadcasts, organizations])
+  const organizationBroadcasts = useMemo(() => dailyBroadcasts.filter(([, row]) => !organizations.length || organizations.includes(getOrganization(row))), [dailyBroadcasts, organizations])
+  const targetCodes = useMemo(() => new Set(Object.values(selected?.products || {}).map(product => String(product.pgmCodeName || '').trim()).filter(Boolean)), [selected])
+  const targetBroadcasts = useMemo(() => organizationBroadcasts.filter(([, row]) => targetCodes.has(String(row.pgmCodeName || '').trim())), [organizationBroadcasts, targetCodes])
+  const broadcasts = targetOnly ? targetBroadcasts : organizationBroadcasts
   const productCount = Object.values(selected?.products || {}).filter(product => String(product.pgmCodeName || '').trim()).length
   const promotionNames = useMemo(() => [...new Set([...promotions]
     .sort(([a], [b]) => Number(b === selectedId) - Number(a === selectedId))
@@ -59,7 +63,7 @@ export default function PromotionPgmSelectionTab({ promotions, loaded, active })
       <h2>프로모션 PGM 선정</h2>
       <div className="promotion-product-selector" style={{ marginTop: 20 }}>
         <label htmlFor="promotion-pgm-selection">프로모션명</label>
-        <select id="promotion-pgm-selection" value={selected ? selectedId : ''} onChange={event => { setSelectedId(event.target.value); setDateChoice('') }} disabled={!loaded || !promotions.length}>
+        <select id="promotion-pgm-selection" value={selected ? selectedId : ''} onChange={event => { setSelectedId(event.target.value); setDateChoice(''); setTargetOnly(false) }} disabled={!loaded || !promotions.length}>
           <option value="">프로모션을 선택하세요</option>
           {promotions.map(([id, promotion], index) => <option key={id} value={id}>{promotion.name || `프로모션 ${index + 1} (이름 미입력)`}</option>)}
         </select>
@@ -89,13 +93,17 @@ export default function PromotionPgmSelectionTab({ promotions, loaded, active })
                 <button type="button" aria-label="다음 실적 날짜" disabled={dateIndex >= dates.length - 1} onClick={() => setDateChoice(dates[dateIndex + 1])}>▶</button>
               </div>
               <div className="promotion-performance-toolbar"><span>방송 상품 <strong>{broadcasts.length}건</strong>{organizations.length > 0 && ` / 전체 ${dailyBroadcasts.length}건 · ${organizations.join(', ')}`}</span>{assignmentError ? <span role="alert" className="promotion-products-error">{assignmentError}</span> : <span>프로모션명을 선택하면 해당 방송 실적에 즉시 저장됩니다.</span>}</div>
+              <div className="promotion-target-toolbar">
+                <span role="status">현재 날짜·조직 기준 등록 상품과 일치하는 PGM <strong>{targetBroadcasts.length}건</strong></span>
+                <label><input type="checkbox" checked={targetOnly} onChange={event => setTargetOnly(event.target.checked)} />대상 상품만 보기</label>
+              </div>
               <div className="promotion-products-table-wrap promotion-performance-table-wrap">
                 <table className="promotion-table promotion-products-table promotion-performance-table">
                   <colgroup><col style={{ width: '5%' }} /><col style={{ width: '22%' }} /><col style={{ width: '16%' }} /><col style={{ width: '6%' }} /><col style={{ width: '7%' }} /><col style={{ width: '13%' }} /><col style={{ width: '13%' }} /><col style={{ width: '18%' }} /></colgroup>
                   <thead><tr><th>시간</th><th>편성코드명</th><th>프로모션명</th><th>거래형태</th><th>MD</th><th>예상취급고</th><th>한계이익</th><th>(연동)미리주문취급액</th></tr></thead>
                   <tbody>
-                    {broadcasts.map(([id, row]) => <PromotionBroadcastRow key={id} entryId={id} row={row} names={promotionNames} sourcePath="performanceEntries" promotionStart={selected.startDate} />)}
-                    {!broadcasts.length && <tr><td colSpan={8} className="promotion-products-empty">{organizations.length ? '선택한 조직의 방송 실적이 없습니다. 조직명 필터에서 전체 보기를 선택해주세요.' : '이 날짜에 방송 실적이 없습니다.'}</td></tr>}
+                    {broadcasts.map(([id, row]) => <PromotionBroadcastRow key={id} entryId={id} row={row} names={promotionNames} sourcePath="performanceEntries" promotionStart={selected.startDate} isTarget={targetCodes.has(String(row.pgmCodeName || '').trim())} selectedPromotionName={String(selected.name || '').trim()} />)}
+                    {!broadcasts.length && <tr><td colSpan={8} className="promotion-products-empty">{targetOnly ? '현재 날짜·조직에 등록 상품과 일치하는 PGM이 없습니다.' : organizations.length ? '선택한 조직의 방송 실적이 없습니다. 조직명 필터에서 전체 보기를 선택해주세요.' : '이 날짜에 방송 실적이 없습니다.'}</td></tr>}
                   </tbody>
                 </table>
               </div>
