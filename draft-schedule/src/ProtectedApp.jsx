@@ -255,7 +255,7 @@ export default function App() {
       {/* 네비 */}
       <nav style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', background: 'var(--bg2)', height: 44, padding: '0 16px', flexShrink: 0, zIndex: 100, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
 
-        <div ref={menuRef} data-coach="workspace" style={{ position: 'relative', marginRight: 24 }}>
+        <div ref={menuRef} data-coach="workspace" style={{ position: 'relative', marginRight: 24, flexShrink: 0, whiteSpace: 'nowrap' }}>
           <button onClick={() => setMenuOpen(v => !v)}
             style={{ background: 'transparent', border: 'none', fontSize: 15, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
             편성 작업판 <span style={{ fontSize: 10, color: 'var(--text3)' }}>▼</span>
@@ -263,10 +263,10 @@ export default function App() {
           {menuOpen && <NavMenu onAction={handleMenuAction} />}
         </div>
 
-        <div data-coach="tabs" style={{ display: 'flex', height: '100%' }}>
+        <div data-coach="tabs" style={{ display: 'flex', height: '100%', minWidth: 0, flexShrink: 1, overflowX: 'auto' }}>
           {TABS.map(tab => (
             <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
-              padding: '0 16px', height: '100%', background: 'transparent', border: 'none',
+              padding: '0 16px', height: '100%', background: 'transparent', border: 'none', flexShrink: 0, whiteSpace: 'nowrap',
               borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
               color: tab.id === 'executionPlan' ? '#dc2626' : activeTab === tab.id ? 'var(--accent)' : 'var(--text2)',
               cursor: 'pointer', fontSize: 12, fontWeight: activeTab === tab.id ? 600 : 400
@@ -278,7 +278,7 @@ export default function App() {
           aria-label="SK스토아 편성팀"
           style={{
             flex: 1,
-            minWidth: 260,
+            minWidth: 0,
             height: 42,
             display: 'flex',
             alignItems: 'center',
@@ -305,7 +305,7 @@ export default function App() {
           />
         </div>
 
-        <div data-coach="utilities" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div data-coach="utilities" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0, whiteSpace: 'nowrap' }}>
           {isRefreshing && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--accent)' }}>
               <div style={{ width: 12, height: 12, borderRadius: '50%', border: '2px solid var(--border)', borderTop: '2px solid var(--accent)', animation: 'spin 0.8s linear infinite' }} />

@@ -5,6 +5,7 @@ import { getVersionLabel } from '../../utils/sessionVersion'
 import { usePresenceUsers } from '../../hooks/usePresence'
 
 const COLORS = ['#4a6cf7','#16a34a','#d97706','#dc2626','#7c3aed','#0891b2','#be185d']
+const MAX_VISIBLE_USERS = 3
 
 const TAB_LABELS = {
   draft: '초안 편성',
@@ -42,9 +43,9 @@ export default function PresenceBar({ forceOpen = false }) {
       data-coach="presence"
       onMouseEnter={() => setOpen(true)}
       onMouseLeave={() => setOpen(false)}
-      style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 4 }}
+      style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 4, width: 210, flexShrink: 0, whiteSpace: 'nowrap' }}
     >
-      {users.map((u, i) => (
+      {users.slice(0, MAX_VISIBLE_USERS).map((u, i) => (
         <div
           key={u.uid || `${u.userName}_${i}`}
           title={`${u.userName} - ${getLocationText(u)}`}
@@ -74,7 +75,12 @@ export default function PresenceBar({ forceOpen = false }) {
           {(u.userName || '?').slice(0, 3)}
         </div>
       ))}
-      <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 2 }}>
+      {users.length > MAX_VISIBLE_USERS && (
+        <span style={{ fontSize: 10, color: 'var(--text3)', flexShrink: 0 }}>
+          +{users.length - MAX_VISIBLE_USERS}
+        </span>
+      )}
+      <span style={{ fontSize: 10, color: 'var(--text3)', marginLeft: 2, overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {users.length}명 접속 중
       </span>
 
@@ -90,6 +96,8 @@ export default function PresenceBar({ forceOpen = false }) {
           borderRadius: 8,
           boxShadow: '0 10px 28px rgba(0,0,0,.16)',
           padding: 8,
+          maxHeight: 'min(420px, calc(100vh - 64px))',
+          overflowY: 'auto',
           zIndex: 500,
         }}>
           {users.map((u, i) => (
