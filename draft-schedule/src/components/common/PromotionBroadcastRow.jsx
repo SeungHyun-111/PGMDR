@@ -15,9 +15,11 @@ export default memo(function PromotionBroadcastRow({ entryId, row, names, source
       <td><PromotionAssignmentSelect entryId={entryId} row={row} names={names} sourcePath={sourcePath} />{selectedPromotionName && String(promotionName).trim() === selectedPromotionName && <span className="promotion-selected-badge">✓ 선정 완료</span>}</td>
       <td>{row.dealTypeConverted || row.dealType2 || row.dealType || '—'}</td>
       <td>{row.mdName || '—'}</td>
+      <td className="promotion-number">{formatNumber(row.salesPerWeightedMin)}</td>
+      <td className="promotion-number">{formatNumber(row.contributionProfitPerWeightedMin ?? row.profitPerWeightedMin)}</td>
       <td className="promotion-number">{formatNumber(row.expectedSales)}</td>
       <td className="promotion-number">{formatNumber(row.contributionProfit)}</td>
       <td className="promotion-number">{formatNumber(row.preorderExpectedSales)}</td>
-    </tr>{expanded && <tr><td colSpan={8}><PreviousPerformance row={row} promotionStart={promotionStart} /></td></tr>}</>
+    </tr>{expanded && <tr><td colSpan={10}><PreviousPerformance row={row} promotionStart={promotionStart} /></td></tr>}</>
   )
 })
