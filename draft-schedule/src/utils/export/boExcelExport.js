@@ -92,7 +92,9 @@ function forceWorksheetText(ws) {
   }
 }
 
-export function exportToBoExcel(opts = {}) {
+export function buildBoExportData(opts = {}) {
+  if (!Array.isArray(opts.cultureCodes)) throw new Error('상선위정보를 불러온 후 BO용 Excel을 내려받아주세요.')
+  const knownCodes = new Set(opts.cultureCodes.map(item => String(item.code || '').trim()).filter(Boolean))
   const { startDate = '', scheduleBlocks = {}, pgmSlots = [], customSlots = {}, splitSlots = {}, memoCodes = MEMO_CODES } = opts
   const effectiveSlots = getEffectivePgmSlots(pgmSlots, customSlots)
   effectiveSlots.sort((a, b) =>
@@ -102,18 +104,44 @@ export function exportToBoExcel(opts = {}) {
   )
 
   const data = []
+  const missing = []
+  const addBlock = (slot, block, duration, channel) => {
+    if (channel === 'CA' || block?.channel === 'CA') return
+    if (!block || block.isDefault || block.isCompeting) return
+    if (!knownCodes.has(String(block.pgmCodeName || '').trim())) {
+      missing.push({
+        broadcastDateTime: `${slot.dateKey || block.dateKey || ''} ${formatBoTime(slot.timeText || block.timeText)}`.trim(),
+        channel: channel === 'ALL' ? (block.channel || 'ALL') : channel,
+        pgmCodeName: block.pgmCodeName || '(편성코드명 없음)',
+      })
+      return
+    }
+    data.push(buildBoExcelRow(slot, block, duration, memoCodes))
+  }
   effectiveSlots.forEach(slot => {
     if (splitSlots[slot.slotId]) {
       const halfDur = slot.durationMin != null ? Math.round(slot.durationMin / 2) : ''
-      ;['CA', 'IP'].forEach(channel => {
+      ;['IP'].forEach(channel => {
         const block = scheduleBlocks[`${slot.slotId}_${channel}`]
-        if (block && !block.isDefault && !block.isCompeting) data.push(buildBoExcelRow(slot, block, halfDur, memoCodes))
+        addBlock(slot, block, halfDur, channel)
       })
       return
     }
     const block = scheduleBlocks[slot.slotId]
-    if (block && !block.isDefault && !block.isCompeting) data.push(buildBoExcelRow(slot, block, slot.durationMin, memoCodes))
+    addBlock(slot, block, slot.durationMin, block?.channel || 'ALL')
   })
+  return { data, missing, startDate }
+}
+
+export function exportToBoExcel(opts = {}) {
+  const { data, missing, startDate } = buildBoExportData(opts)
+  if (missing.length) {
+    window.alert(`상선위정보에 없어 BO용 Excel에서 제외된 편성 ${missing.length}건\n\n방송일시 | 채널명 | 편성코드명\n${missing.map(row => `${row.broadcastDateTime} | ${row.channel === 'ALL' ? '전체' : row.channel} | ${row.pgmCodeName}`).join('\n')}`)
+  }
+  if (!data.length) {
+    window.alert('BO용 Excel로 내려받을 편성이 없습니다. CA와 상선위정보에 없는 편성은 제외됩니다.')
+    return { exportedCount: 0, missing }
+  }
 
   const headers = ['방송일자', '시작시간', '종료시간', '편성코드', '직매입여부', '약정여부', '메모코드1', '메모코드2', '모바일광고비여부']
   const ws = XLSX.utils.json_to_sheet(data, { header: headers })
@@ -123,4 +151,5 @@ export function exportToBoExcel(opts = {}) {
   const wb = XLSX.utils.book_new()
   XLSX.utils.book_append_sheet(wb, ws, 'Sheet1')
   XLSX.writeFile(wb, `TimeBlockUpload_${startDate || new Date().toISOString().slice(0, 10)}.xls`, { bookType: 'xls' })
+  return { exportedCount: data.length, missing }
 }

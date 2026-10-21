@@ -4,11 +4,21 @@ import useCategoryMap from '../../hooks/useCategoryMap'
 import { exportToExcel, printReportSchedule, printSchedule } from '../../utils/exportUtils'
 import HtmlSectionSelectModal from './HtmlSectionSelectModal'
 import useMemoCodes from '../../hooks/useMemoCodes'
+import useCultureCodeMaster from '../../hooks/useCultureCodeMaster'
 
 export default function ExportModal({ onClose, coachView = null }) {
   const { scheduleBlocks, proposalItems, startDate, endDate, pgmSlots, customSlots, splitSlots, perfMap, performanceHistoryByKey, manualInputs, entityProps } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const { allMemoCodes } = useMemoCodes()
+  const { codes: cultureCodes, loaded: cultureCodesLoaded, error: cultureCodesError } = useCultureCodeMaster()
+  const handleBoExport = () => {
+    if (!cultureCodesLoaded || cultureCodesError) {
+      window.alert(cultureCodesError || '상선위정보를 불러오는 중입니다. 잠시 후 다시 시도해주세요.')
+      return
+    }
+    const result = exportToExcel(rows, { ...opts, excelTarget: 'bo', cultureCodes })
+    if (result?.exportedCount) onClose()
+  }
   const [showHtmlModal, setShowHtmlModal] = useState(false)
   const [showPrintSelect, setShowPrintSelect] = useState(false)
   const [showExcelSelect, setShowExcelSelect] = useState(false)
@@ -139,7 +149,7 @@ export default function ExportModal({ onClose, coachView = null }) {
         ) : showExcelSelect ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 4 }}>
             <button onClick={() => { exportToExcel(rows, { ...opts, excelTarget: 'google' }); onClose() }} style={{ padding: '10px 12px', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>구글용</button>
-            <button onClick={() => { exportToExcel(rows, { ...opts, excelTarget: 'bo' }); onClose() }} style={{ padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>BO용</button>
+            <button onClick={handleBoExport} style={{ padding: '10px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: 'pointer', textAlign: 'left' }}>BO용</button>
             <button onClick={onClose} style={{ padding: '8px 0', background: 'var(--bg4)', border: '1px solid var(--border)', color: 'var(--text2)', borderRadius: 6, fontSize: 12, cursor: 'pointer' }}>취소</button>
           </div>
         ) : (

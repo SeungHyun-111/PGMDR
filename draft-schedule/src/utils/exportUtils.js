@@ -80,8 +80,7 @@ function buildExcelRow(slot, block, ch, slotDuration, options = {}) {
 
 export function exportToExcel(rows, opts = {}) {
   if (opts.excelTarget === 'bo') {
-    exportToBoExcel(opts)
-    return
+    return exportToBoExcel(opts)
   }
 
   const { startDate = '', scheduleBlocks = {}, pgmSlots = [], customSlots = {}, splitSlots = {} } = opts
