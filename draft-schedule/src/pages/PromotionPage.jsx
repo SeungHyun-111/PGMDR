@@ -5,6 +5,7 @@ import PromotionDateInput from './PromotionDateInput'
 import PromotionProductsTab from './PromotionProductsTab'
 import PromotionPerformanceTab from './PromotionPerformanceTab'
 import PromotionPgmSelectionTab from './PromotionPgmSelectionTab'
+import usePromotionAssignmentStore, { subscribePromotionAssignments, migrateLegacyPromotionAssignments } from '../store/usePromotionAssignmentStore'
 
 const PROMOTIONS_PATH = 'global/promotions'
 function getKoreaToday() {
@@ -24,6 +25,17 @@ export default function PromotionPage() {
   const [loaded, setLoaded] = useState(false)
   const [adding, setAdding] = useState(false)
   const [error, setError] = useState('')
+  const assignmentReady = usePromotionAssignmentStore(state => state.ready)
+
+  useEffect(() => subscribePromotionAssignments(), [])
+  useEffect(() => {
+    if (!loaded || !assignmentReady) return
+    let cancelled = false
+    migrateLegacyPromotionAssignments(Object.entries(promotions)).catch(() => {
+      if (!cancelled) setError('기존 프로모션 연결 이전에 실패했습니다. 페이지를 다시 열어 재시도해주세요.')
+    })
+    return () => { cancelled = true }
+  }, [loaded, assignmentReady, promotions])
 
   useEffect(() => {
     const timer = setInterval(() => setToday(getKoreaToday()), 60000)

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-export default function PromotionCodeInput({ value, onChange, onSave, codes, label }) {
+export default function PromotionCodeInput({ value, onChange, onSave, codes, label, strict = false }) {
   const input = useRef(null)
   const [selectedText, setSelectedText] = useState(null)
   const listId = useId()
@@ -25,6 +25,7 @@ export default function PromotionCodeInput({ value, onChange, onSave, codes, lab
   }, [])
   const select = item => {
     const text = item?.code || String(value || '').trim()
+    if (strict && !codes.some(item => item.code === text)) return
     setSelectedText(text)
     onChange(text)
     setPosition(null)
@@ -34,9 +35,9 @@ export default function PromotionCodeInput({ value, onChange, onSave, codes, lab
   return (
     <>
       <input ref={input} type="text" role="combobox" aria-label={label} aria-autocomplete="list" aria-expanded={!!visible} aria-controls={visible ? listId : undefined} aria-activedescendant={visible && matches[active] ? `${listId}-${active}` : undefined}
-        autoComplete="off" placeholder="편성코드명 검색 또는 직접 입력" value={value}
+        autoComplete="off" placeholder={strict ? 'RTDB 편성코드명 검색' : '편성코드명 검색 또는 직접 입력'} value={value}
         onFocus={() => { setSelectedText(null); open() }} onChange={event => { setSelectedText(null); onChange(event.target.value); setActive(0); open() }}
-        onBlur={() => { setPosition(null); if (selectedText === null) onSave(String(value || '').trim()) }}
+        onBlur={() => { setPosition(null); if (selectedText === null && (!strict || codes.some(item => item.code === String(value || '').trim()))) onSave(String(value || '').trim()) }}
         onKeyDown={event => {
           if (event.nativeEvent.isComposing) return
           if (event.key === 'Escape') { setPosition(null); return }
@@ -58,7 +59,7 @@ export default function PromotionCodeInput({ value, onChange, onSave, codes, lab
               onMouseEnter={() => setActive(index)} onPointerDown={event => { event.preventDefault(); select(item) }}>
               <span>{item.code}</span><small>{item.category}</small>
             </div>
-          )) : <div role="option" aria-selected="false" onPointerDown={event => { event.preventDefault(); select(null) }}><span>{value}</span><small>직접 입력</small></div>}
+          )) : <div role="option" aria-selected="false" onPointerDown={event => { event.preventDefault(); select(null) }}><span>{value}</span><small>{strict ? '등록된 코드 없음' : '직접 입력'}</small></div>}
         </div>, document.body,
       )}
     </>

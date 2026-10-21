@@ -21,18 +21,21 @@ test('same names skip writes; modern and legacy paths write names atomically', (
 test('one small subscription, no save-time reads, realtime updates, failures and cleanup', async () => {
   const writes = []
   let listener
+  let idsListener
   let listenerError
   let subscriptions = 0
   let stops = 0
   let rejectWrite = false
   const context = vm.createContext({})
-  const firebase = new vm.SyntheticModule(['db', 'ref', 'onValue', 'update'], function () {
+  const firebase = new vm.SyntheticModule(['db', 'ref', 'onValue', 'update', 'runTransaction'], function () {
+    this.setExport('runTransaction', async () => {})
     this.setExport('db', {})
     this.setExport('ref', (_db, path = '') => path)
     this.setExport('onValue', (path, next, error) => {
-      assert.equal(path, 'performancePromotionNames')
+      assert.ok(['performancePromotionNames', 'performancePromotionIds'].includes(path))
       subscriptions += 1
-      listener = next
+      if (path === 'performancePromotionNames') listener = next
+      else idsListener = next
       listenerError = error
       return () => { stops += 1 }
     })
@@ -62,9 +65,10 @@ test('one small subscription, no save-time reads, realtime updates, failures and
   const store = module.namespace
   const first = store.subscribePromotionAssignments()
   const second = store.subscribePromotionAssignments()
-  assert.equal(subscriptions, 1)
+  assert.equal(subscriptions, 2)
   await assert.rejects(store.savePromotionAssignment({ entryId: 'a', sourcePath: 'performanceEntries', name: '행사' }))
   listener({ val: () => ({}) })
+  idsListener({ val: () => ({}) })
   await store.savePromotionAssignment({ entryId: 'a', sourcePath: 'performanceEntries', name: '기존', fallbackName: '기존' })
   assert.equal(writes.length, 0)
   await store.savePromotionAssignment({ entryId: 'a', sourcePath: 'performanceEntries', name: '행사' })
@@ -86,5 +90,5 @@ test('one small subscription, no save-time reads, realtime updates, failures and
   first()
   assert.equal(stops, 0)
   second()
-  assert.equal(stops, 1)
+  assert.equal(stops, 2)
 })

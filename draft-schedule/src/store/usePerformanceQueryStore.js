@@ -6,6 +6,11 @@ const usePerformanceQueryStore = create(() => ({ meta: null, metaReady: false, r
 let count = 0
 let stop
 
+export function refreshPerformanceQueries() {
+  performanceQueryCache.invalidate()
+  usePerformanceQueryStore.setState(state => ({ revision: state.revision + 1 }))
+}
+
 export function receivePerformanceMeta(meta) {
   const previous = usePerformanceQueryStore.getState().meta
   const changed = previous && meta?.updatedAt && previous.updatedAt !== meta.updatedAt

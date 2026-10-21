@@ -29,3 +29,29 @@ An actual `perfKey` query was verified successfully after that change.
   loads latest values and histories only for requested product keys.
 - No performance root collection is downloaded. Promotion assignments retain
   their separate small realtime name subscription and original `promotionName`.
+
+## Multiple promotions and reservations
+
+- `performancePromotionIds/{entryId}` is the authoritative realtime membership
+  index: `{ "_v": true, "promotionId": true }`. `_v` keeps an explicitly cleared
+  selection from falling back to an old `promotionName`. New edits also mirror
+  individual ID leaves to `performanceEntries/{entryId}/promotionIds`.
+- Opening Promotions migrates recognized legacy name-index assignments to IDs
+  using transactions that preserve any existing ID selection. Legacy names and
+  unrecognized names remain intact; reads support unmigrated rows as a fallback.
+  Migration writes only the authoritative index and does not download history.
+- `promotionReservations/{sha256([promotionId, broadcastTimestamp, code])}` stores
+  Korea-local `broadcastDateTime`, its numeric `YYYYMMDDHHmm` timestamp, code,
+  promotion ID, status, creator and application entry IDs. Registration validates
+  the current RTDB code master and promotion period; duplicate submissions cannot
+  reset completed reservations. Cancelled reservations can be registered again.
+- Registration checks already existing performance for that day. Both performance
+  refresh paths match newly imported rows by exact timestamp and code, add ID
+  leaves, and mark reservations applied in one atomic update. No process runs
+  merely because time passes: automatic application runs during app refresh.
+- A transaction claims a pending reservation before application to prevent a
+  concurrent cancellation. Failed applications release the claim. A claim left
+  by a closed browser can be retried after two minutes. Completed reservations
+  do not reapply a promotion that a user subsequently removes manually.
+- Each promotion's report includes its ID membership; total/outside calculations
+  continue to use unique performance entry IDs, not assignment counts.

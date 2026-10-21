@@ -8,6 +8,9 @@ import { filterUnscheduledItems } from '../../utils/proposalVisibility'
 import { getCompetitionItems } from '../../utils/competition'
 import { getCurrentVersionPath } from '../../utils/sessionVersion'
 import { encodeKey } from '../../utils/firebaseKey'
+import { PROMOTION_RESERVATIONS_PATH, PROMOTION_IDS_PATH, PROMOTION_NAMES_PATH } from '../../utils/promotionAssignment'
+import { applyReservationBatch } from '../../api/promotionReservations'
+import { refreshPerformanceQueries } from '../usePerformanceQueryStore'
 import {
   buildHistoryByKeyFromRows,
   buildLatestByKeyFromHistory,
@@ -290,9 +293,20 @@ async function writeGlobalPerformanceData(rawData, rawPerfMap, userName = '', lo
   normalizedRows.forEach(entry => {
     // Refresh source fields without removing manually assigned promotion names.
     Object.entries(entry).forEach(([field, value]) => {
+      if (field === 'promotionIds' || field === 'promotionName') return
       updates[`performanceEntries/${makePerformanceEntryId(entry)}/${field}`] = value
     })
   })
+
+  const [reservationsSnapshot, promotionsSnapshot, idsSnapshot, namesSnapshot] = await Promise.all([
+    get(ref(db, PROMOTION_RESERVATIONS_PATH)), get(ref(db, 'global/promotions')),
+    get(ref(db, PROMOTION_IDS_PATH)), get(ref(db, PROMOTION_NAMES_PATH)),
+  ])
+  const reservationBatch = {
+    reservations: reservationsSnapshot.val(),
+    rows: Object.fromEntries(normalizedRows.map(entry => [makePerformanceEntryId(entry), { ...entry, promotionName: namesSnapshot.val()?.[makePerformanceEntryId(entry)] ?? entry.promotionName, promotionIds: idsSnapshot.val()?.[makePerformanceEntryId(entry)] }])),
+    promotions: promotionsSnapshot.val(),
+  }
 
   const historyByKey = buildHistoryByKeyFromRows(normalizedRows)
   const latestByKey = buildLatestByKeyFromHistory(historyByKey)
@@ -322,6 +336,12 @@ async function writeGlobalPerformanceData(rawData, rawPerfMap, userName = '', lo
       }
     }
     await update(ref(db), updates)
+  }
+  try {
+    await applyReservationBatch(reservationBatch)
+  } finally {
+    // A reservation failure must not leave successfully saved source rows stale.
+    refreshPerformanceQueries()
   }
 }
 
