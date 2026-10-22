@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-export default function PromotionCodeInput({ value, onChange, onSave, codes, label, strict = false }) {
+export default function PromotionCodeInput({ value, onChange, onSave, codes, label, strict = false, inputStyle }) {
   const input = useRef(null)
   const [selectedText, setSelectedText] = useState(null)
   const listId = useId()
@@ -34,7 +34,7 @@ export default function PromotionCodeInput({ value, onChange, onSave, codes, lab
   const visible = position && query
   return (
     <>
-      <input ref={input} type="text" role="combobox" aria-label={label} aria-autocomplete="list" aria-expanded={!!visible} aria-controls={visible ? listId : undefined} aria-activedescendant={visible && matches[active] ? `${listId}-${active}` : undefined}
+      <input ref={input} style={inputStyle} type="text" role="combobox" aria-label={label} aria-autocomplete="list" aria-expanded={!!visible} aria-controls={visible ? listId : undefined} aria-activedescendant={visible && matches[active] ? `${listId}-${active}` : undefined}
         autoComplete="off" placeholder={strict ? 'RTDB 편성코드명 검색' : '편성코드명 검색 또는 직접 입력'} value={value}
         onFocus={() => { setSelectedText(null); open() }} onChange={event => { setSelectedText(null); onChange(event.target.value); setActive(0); open() }}
         onBlur={() => { setPosition(null); if (selectedText === null && (!strict || codes.some(item => item.code === String(value || '').trim()))) onSave(String(value || '').trim()) }}

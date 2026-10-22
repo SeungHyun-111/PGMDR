@@ -20,6 +20,8 @@ import SessionSwitcher from './components/session/SessionSwitcher'
 import VersionSwitcher from './components/session/VersionSwitcher'
 import { VERSION_DRAFT, VERSION_OPS, VERSION_SALES, getVersionLabel } from './utils/sessionVersion'
 import { refreshKmaWeatherIfStale } from './api/weather'
+import useCultureCodeMasterStore, { ensureCultureCodeSubscription, ensureCultureHistorySubscription } from './store/useCultureCodeMasterStore'
+import { ensureCultureAuth } from './api/cultureFirebase'
 import PixelDriftText from './components/effects/PixelDriftText'
 
 const TABS = [
@@ -45,7 +47,7 @@ const COACH_STEPS = [
   { target: '[data-coach="presence"]', mode: 'presence', title: '상황판: 접속자 상태', description: '누가 같은 주차에 들어와 있는지, 어느 탭과 어느 버전을 보고 있는지 보여줍니다. 함께 편성할 때 충돌을 줄이는 작은 관제탑 역할이에요.' },
   { target: '[data-coach="current-version"]', title: '현재 버전 안내', description: '지금 내가 보고 있는 데이터 버전입니다. 담당 작성, 영업팀 공유, 편성운영 중 어디에 서 있는지 항상 먼저 확인하세요.' },
   { target: '[data-coach="session"]', title: '섹션 선택', description: '작업 주차와 풀을 전환하는 선택 영역입니다. 다른 기간이나 A/B 풀로 넘어갈 때 여기서 작업판을 바꿉니다.' },
-  { target: '[data-coach="history"]', title: '갱신 이력', description: 'PGM, 제안상품, 실적, 선편성이 언제 누구에 의해 갱신됐는지 남깁니다. 숫자가 이상할 때 “마지막으로 언제 갱신됐나”를 보는 곳입니다.' },
+  { target: '[data-coach="history"]', title: '갱신 이력', description: 'PGM, 제안상품, 실적, 선편성, 전역 편성코드 DB가 언제 누구에 의해 갱신됐는지 보여줍니다. 숫자가 이상할 때 마지막 갱신 시각을 확인하는 곳입니다.' },
   { target: '[data-coach="versions"]', mode: 'version-draft', title: '버전 선택', description: '세 버전 사이를 전환합니다. 담당 작성은 초안을 만드는 곳, 영업팀 공유는 확정 전 공유본, 편성운영은 운영 시트와 맞춘 최종 기준에 가깝습니다.' },
   { target: '[data-coach="version-draft"]', mode: 'version-draft', title: '담당 작성 버전', description: '실제 편성 초안을 만지는 작업 버전입니다. 여기서 편성한 내용을 초안 확정하면 영업팀 공유본으로 복사됩니다.' },
   { target: '[data-coach="version-action"]', mode: 'version-draft', title: '초안 확정', description: '담당 작성본을 영업팀 공유본으로 발행합니다. “이 초안을 공유해도 된다”는 순간에 누르는 버튼입니다.' },
@@ -66,6 +68,13 @@ const COACH_STEPS = [
 ]
 
 export default function App() {
+  useEffect(() => {
+    ensureCultureAuth().catch(error => setToast({ msg: error.message, type: 'error' }))
+    ensureCultureHistorySubscription()
+  }, [])
+  const cultureUpdatedAt = useCultureCodeMasterStore(state => state.updatedAt)
+  const cultureUpdatedBy = useCultureCodeMasterStore(state => state.updatedBy)
+  const cultureHistoryError = useCultureCodeMasterStore(state => state.historyError)
   const [activeTab, setActiveTab]     = useState('draft')
   const [menuOpen, setMenuOpen]       = useState(false)
   const [setupPopup, setSetupPopup]   = useState(false)
@@ -195,6 +204,12 @@ export default function App() {
       await refreshPreSchedule(); showToast('선편성정보 갱신 완료')
     } else if (action === 'refreshProposal') {
       await refreshProposals(); showToast('제안상품 갱신 완료')
+    } else if (action === 'refreshCultureCodes') {
+      ensureCultureCodeSubscription()
+      ensureCultureHistorySubscription()
+      const count = await useCultureCodeMasterStore.getState().refresh(userName || '')
+      if (count !== null) showToast(`편성코드 ${count.toLocaleString()}개 갱신 완료 · BO여부 반영`)
+      else showToast(useCultureCodeMasterStore.getState().refreshError, 'error')
     }
   }
 
@@ -387,12 +402,13 @@ export default function App() {
 
       {isLoaded && (
         <div style={{ height: 34, display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg2)', flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
-          <div data-coach="history" style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, color: 'var(--text3)', fontSize: 10, whiteSpace: 'nowrap' }}>
+          <div data-coach="history" style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, overflowX: 'auto', color: 'var(--text3)', fontSize: 10, whiteSpace: 'nowrap' }}>
             <span style={{ fontWeight: 900, color: 'var(--text2)' }}>갱신이력</span>
             <span>PGM {formatUpdatedHistory(historyUpdated?.pgm, historyUpdated?.pgmBy)}</span>
             <span>제안상품 {formatUpdatedHistory(historyUpdated?.proposal, historyUpdated?.proposalBy)}</span>
             <span>실적 {formatUpdatedHistory(historyUpdated?.performance, historyUpdated?.performanceBy)}</span>
             <span>선편 {formatUpdatedHistory(historyUpdated?.preSchedule, historyUpdated?.preScheduleBy)}</span>
+            <span title={cultureHistoryError || '전체 세션 공통 편성코드 DB의 마지막 갱신'}>편성코드(전역) {cultureHistoryError ? '조회 실패' : formatUpdatedHistory(cultureUpdatedAt, cultureUpdatedBy || '전역')}</span>
           </div>
           <div data-coach="versions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
             <VersionSwitcher onToast={showToast} coachPreviewVersion={coachVersion} />
@@ -441,6 +457,7 @@ export default function App() {
 
 function NavMenu({ onAction }) {
   const [hover, setHover] = useState(null)
+  const refreshingCodes = useCultureCodeMasterStore(state => state.refreshing)
   const groups = [
     { group: '초기 설정', items: [{ id: 'newSetup', label: '새 편성 시작', danger: true }] },
     { group: 'GAS 재동기화', items: [
@@ -450,6 +467,7 @@ function NavMenu({ onAction }) {
       { id: 'refreshPreSchedule', label: '선편성정보 갱신' },
       { id: 'refreshProposal',    label: '제안상품 갱신' },
       { id: 'refreshPerformance', label: '실적DB 갱신' },
+      { id: 'refreshCultureCodes', label: refreshingCodes ? '편성코드 DB 갱신 중…' : '편성코드 DB 업데이트', disabled: refreshingCodes },
     ]},
   ]
   return (
@@ -458,11 +476,11 @@ function NavMenu({ onAction }) {
         <div key={g.group}>
           <div style={{ padding: '4px 12px 6px', fontSize: 10, color: 'var(--text3)', fontWeight: 700, letterSpacing: '.5px' }}>{g.group}</div>
           {g.items.map(item => (
-            <button key={item.id} onClick={() => onAction(item.id)}
-              data-coach={item.id === 'newSetup' ? 'menu-new' : item.id === 'refreshAllGas' ? 'menu-refresh-all' : item.id === 'refreshPreSchedule' ? 'menu-refresh-pre' : item.id === 'refreshProposal' ? 'menu-refresh-proposal' : 'menu-refresh-performance'}
+            <button key={item.id} onClick={() => onAction(item.id)} disabled={item.disabled}
+              data-coach={item.id === 'newSetup' ? 'menu-new' : item.id === 'refreshAllGas' ? 'menu-refresh-all' : item.id === 'refreshPreSchedule' ? 'menu-refresh-pre' : item.id === 'refreshProposal' ? 'menu-refresh-proposal' : item.id === 'refreshCultureCodes' ? 'menu-refresh-culture-codes' : 'menu-refresh-performance'}
               onMouseEnter={() => setHover(item.id)} onMouseLeave={() => setHover(null)}
               style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 16px', background: hover === item.id ? 'var(--bg3)' : 'transparent', border: 'none', color: item.danger ? 'var(--red)' : item.warn ? 'var(--orange)' : 'var(--text)', fontSize: 12, cursor: 'pointer' }}>
-              {item.label}
+              <span style={{ opacity: item.disabled ? 0.5 : 1 }}>{item.label}</span>
             </button>
           ))}
           {gi < groups.length - 1 && <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }} />}

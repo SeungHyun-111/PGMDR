@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react'
 import { db, ref, push, set } from '../api/firebase'
 import useCultureCodeMaster from '../hooks/useCultureCodeMaster'
 import PromotionCodeInput from '../components/common/PromotionCodeInput'
+import useScheduleStore from '../store/useScheduleStore'
 
 export default function PromotionProductsTab({ promotions, loaded, loadError }) {
   const { codes, error: codeError, loaded: codesLoaded, refreshing, refresh, refreshError } = useCultureCodeMaster()
   const [refreshMessage, setRefreshMessage] = useState('')
   const refreshCodes = async () => {
     setRefreshMessage('')
-    const count = await refresh()
+    const count = await refresh(useScheduleStore.getState().userName || '')
     if (count !== null) setRefreshMessage(`편성코드 ${count.toLocaleString()}개 갱신 완료 · BO여부 반영`)
   }
   const boCodes = useMemo(() => new Set(codes.map(item => item.code.trim())), [codes])

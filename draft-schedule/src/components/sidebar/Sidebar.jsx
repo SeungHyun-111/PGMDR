@@ -1,3 +1,6 @@
+import ProposalCodeInput from './ProposalCodeInput'
+import { PROPOSAL_DEFAULTS } from '../../utils/proposalDefaults'
+import categoryTeamMap from '../../data/category-team-map.json'
 import { useState, useMemo, useRef, useEffect } from 'react'
 import useScheduleStore, { makeDefaultBlock } from '../../store/useScheduleStore'
 import ProductCard from './ProductCard'
@@ -233,7 +236,7 @@ export default function Sidebar({ isOpen, onToggle, coachExpanded = false }) {
             상품 풀 <span style={{ color: 'var(--text3)', fontWeight: 400 }}>{filteredItems.length}건</span>
           </span>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button onClick={() => { setAddForm({}); setAddModal(true) }}
+            <button onClick={() => { setAddForm({ ...PROPOSAL_DEFAULTS }); setAddModal(true) }}
               style={{ background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 4, padding: '2px 8px', fontSize: 10, cursor: 'pointer', fontWeight: 700 }}>
               + 추가
             </button>
@@ -301,7 +304,9 @@ export default function Sidebar({ isOpen, onToggle, coachExpanded = false }) {
                   <label style={{ fontSize: 10, color: 'var(--text3)', fontWeight: 600 }}>
                     {f.label}{f.required && <span style={{ color: 'var(--red)' }}> *</span>}
                   </label>
-                  {['memoCode', 'memoCode2'].includes(f.key) ? (
+                  {f.key === 'pgmCodeName' ? (
+                    <ProposalCodeInput value={addForm.pgmCodeName || ''} setForm={setAddForm} teamOptions={teamOptions} inputStyle={inp} />
+                  ) : ['memoCode', 'memoCode2'].includes(f.key) ? (
                     <MemoCodeSelect
                       value={addForm[f.key] || ''}
                       onChange={(value, meta) => setAddForm(p => ({ ...p, ...memoCodePatch(f.key, value, meta) }))}
@@ -313,12 +318,12 @@ export default function Sidebar({ isOpen, onToggle, coachExpanded = false }) {
                   ) : f.options ? (
                     <select value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))} style={inp}>
                       <option value="">선택</option>
-                      {f.options.map(o => <option key={o} value={o}>{o}</option>)}
+                      {[...new Set([...f.options, ...(f.key === 'mdCategory' ? Object.keys(categoryTeamMap) : []), addForm[f.key]].filter(Boolean))].map(o => <option key={o} value={o}>{o}</option>)}
                     </select>
                   ) : f.select === 'teams' ? (
                     <select value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))} style={inp}>
                       <option value="">선택</option>
-                      {teamOptions.map(t => <option key={t} value={t}>{t}</option>)}
+                      {[...new Set([...teamOptions, addForm.mdTeam].filter(Boolean))].map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                   ) : (
                     <input value={addForm[f.key] || ''} onChange={e => setAddForm(p => ({ ...p, [f.key]: e.target.value }))} style={inp} />
