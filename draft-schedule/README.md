@@ -35,7 +35,7 @@ scheduleBlocks / proposalItems (이미 merged)
 
 ## 개발 명령어
 
-편성코드 DB 로그인이 필요한 경우 `.env.example`을 `.env.local`로 복사하고 승인된 계정 정보를 입력합니다. `.env.local`은 Git에 포함되지 않습니다. `VITE_` 환경변수는 클라이언트 번들에 들어가므로 운영 환경에서는 별도의 인증 구조가 필요합니다.
+편성코드 DB는 기존 공유 계정으로 자동 로그인합니다. 다른 승인된 계정을 사용할 때만 `.env.example`을 `.env.local`로 복사하고 계정 정보를 입력합니다. `.env.local`은 Git에 포함되지 않습니다. `VITE_` 환경변수와 기본 계정 정보는 클라이언트 번들에 들어가므로 운영 환경에서는 별도의 인증 구조가 필요합니다.
 
 ```bash
 pnpm run dev       # Vite 개발 서버 (HMR)

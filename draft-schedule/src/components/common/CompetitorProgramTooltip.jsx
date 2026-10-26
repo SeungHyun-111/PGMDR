@@ -5,11 +5,23 @@ import { fitCalendarTooltip } from '../../utils/fitCalendarTooltip'
 export default function CompetitorProgramTooltip({ detail, id, onClose, boundaryRef }) {
   const element = useRef(null)
   useLayoutEffect(() => {
-    const position = () => fitCalendarTooltip(element.current, detail.anchor, boundaryRef?.current)
+    let pointer = detail.pointer
+    let frame
+    const position = () => {
+      const anchor = pointer ? { left: pointer.x, right: pointer.x, top: pointer.y, bottom: pointer.y } : detail.anchor
+      fitCalendarTooltip(element.current, anchor, boundaryRef?.current, 'below')
+    }
+    const followPointer = event => {
+      if (!detail.pointer) return
+      pointer = { x: event.clientX, y: event.clientY }
+      if (frame) return
+      frame = requestAnimationFrame(() => { frame = null; position() })
+    }
     position()
     const observer = new ResizeObserver(position)
     if (boundaryRef?.current) observer.observe(boundaryRef.current)
-    return () => observer.disconnect()
+    document.addEventListener('pointermove', followPointer)
+    return () => { observer.disconnect(); document.removeEventListener('pointermove', followPointer); cancelAnimationFrame(frame) }
   }, [detail, boundaryRef])
   useEffect(() => {
     const close = () => onClose(null)

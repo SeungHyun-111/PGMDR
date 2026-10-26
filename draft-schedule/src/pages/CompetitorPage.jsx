@@ -81,7 +81,7 @@ export default function CompetitorPage() {
   const timeline = useMemo(() => buildCompetitorTimeline(rows, days.map(date => date.format('YYYY-MM-DD')), company), [rows, days, company])
   const highlights = useMemo(() => summarizeCompetitorHighlights(timeline, highlightSearch, selectedOrganizations), [timeline, highlightSearch, selectedOrganizations])
   const reset = () => { setLoading(true); setError(''); setRows([]); setTooltip(null) }
-  const showTooltip = (event, detail) => setTooltip({ ...detail, company, anchor: event.currentTarget.getBoundingClientRect() })
+  const showTooltip = (event, detail) => setTooltip({ ...detail, company, anchor: event.currentTarget.getBoundingClientRect(), pointer: Number.isFinite(event.clientX) && !(event.type === 'click' && event.detail === 0) ? { x: event.clientX, y: event.clientY } : null })
   const changeWeek = value => { if (value === week) return; reset(); setWeek(value) }
   const refresh = () => { reset(); setRevision(value => value + 1) }
   const move = offset => changeWeek(dayjs(week).add(offset, 'week').format('YYYY-MM-DD'))

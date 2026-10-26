@@ -57,6 +57,15 @@ try {
   ))
   await page.goto('http://workspace-test.local/')
   await page.locator('.competitor-program').first().waitFor()
+  await page.locator('.competitor-grid-scroll').evaluate(element => { element.scrollTop = 8 * 60 * 1.584 })
+  const firstProgram = await page.locator('.competitor-program').first().boundingBox()
+  const pointer = { x: firstProgram.x + 24, y: firstProgram.y + 20 }
+  await page.mouse.move(pointer.x, pointer.y)
+  await page.locator('.competitor-program-tooltip').waitFor()
+  assert.ok((await page.locator('.competitor-program-tooltip').boundingBox()).y >= pointer.y + 8)
+  await page.mouse.move(pointer.x + 10, pointer.y + 10)
+  await page.waitForFunction(y => document.querySelector('.competitor-program-tooltip')?.getBoundingClientRect().top >= y + 8, pointer.y + 10)
+  await page.mouse.move(10, 10)
   if (visual) {
     await mkdir('artifacts/competitor-css', { recursive: true })
     for (const width of [1920, 1440, 1280]) {
