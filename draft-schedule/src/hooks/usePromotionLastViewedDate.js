@@ -1,12 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { db, ref, get, set } from '../api/firebase'
 
 // Encode every code point so names containing Firebase key separators cannot collide.
 const key = value => Array.from(value, char => char.codePointAt(0).toString(16)).join('-')
 
-export default function usePromotionLastViewedDate(userName, promotionId, active) {
+export default function usePromotionLastViewedDate(userName, promotionId, active, section = 'promotions') {
   const path = userName.trim() && promotionId
-    ? `userPreferences/${key(userName.trim())}/promotions/${key(promotionId)}/lastViewedDate`
+    ? `userPreferences/${key(userName.trim())}/${section}/${key(promotionId)}/lastViewedDate`
     : ''
   const [choices, setChoices] = useState({})
   const pending = useRef({})
@@ -25,8 +25,9 @@ export default function usePromotionLastViewedDate(userName, promotionId, active
     return () => { cancelled = true }
   }, [active, path])
 
-  function selectDate(date) {
-    if (!path || !choice) return
+  const canSelect = !!choice
+  const selectDate = useCallback(date => {
+    if (!path || !canSelect) return
     setChoices(previous => ({ ...previous, [path]: { date, error: '' } }))
     // Preserve the user's final choice even when arrow buttons are clicked rapidly.
     const write = (pending.current[path] || Promise.resolve())
@@ -40,7 +41,7 @@ export default function usePromotionLastViewedDate(userName, promotionId, active
     }).finally(() => {
       if (pending.current[path] === write) delete pending.current[path]
     })
-  }
+  }, [path, canSelect])
 
   return { date: choice?.date || '', ready: !path || !!choice, error: choice?.error || '', selectDate }
 }

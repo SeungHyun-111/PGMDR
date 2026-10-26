@@ -22,3 +22,8 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Machine-specific package configuration and generated review captures
+/.npmrc
+/artifacts/
+/*.png

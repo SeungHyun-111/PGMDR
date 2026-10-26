@@ -27,6 +27,7 @@
     "d3-array": "^3.2.4",
     "d3-shape": "^3.2.0",
     "dayjs": "^1.11.20",
+    "fflate": "^0.8.2",
     "firebase": "^12.13.0",
     "gsap": "^3.15.0",
     "motion": "^14.2.0",
@@ -51,5 +52,15 @@
     "playwright": "^1.60.0",
     "tailwindcss": "^4.3.3",
     "vite": "^8.0.12"
+  },
+  "packageManager": "pnpm@10.34.7",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "protobufjs",
+      "@firebase/util",
+      "re2",
+      "sharp"
+    ]
   }
 }

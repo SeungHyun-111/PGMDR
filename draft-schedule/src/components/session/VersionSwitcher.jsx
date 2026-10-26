@@ -210,6 +210,28 @@ export default function VersionSwitcher({ onToast, coachPreviewVersion = null })
         })}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        {displayVersionId === VERSION_SALES && (
+          <button
+            type="button"
+            onClick={undefined}
+            disabled={!!coachPreviewVersion}
+            style={{
+              background: '#f8fafc',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+              color: 'var(--text2)',
+              cursor: coachPreviewVersion ? 'default' : 'pointer',
+              fontSize: 11,
+              fontWeight: 900,
+              height: 26,
+              padding: '0 12px',
+              whiteSpace: 'nowrap',
+              boxShadow: 'inset 0 0 0 1px rgba(255,255,255,.45)',
+            }}
+          >
+            공유양식.xlsx
+          </button>
+        )}
         <button
           data-coach="version-action"
           onClick={coachPreviewVersion ? undefined : handleVersionAction}

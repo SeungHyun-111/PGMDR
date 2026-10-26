@@ -10,6 +10,7 @@ import PromotionOrganizationFilter from '../components/common/PromotionOrganizat
 import PromotionPerformanceSummary from '../components/common/PromotionPerformanceSummary'
 import PromotionVideoSummary from '../components/common/PromotionVideoSummary'
 import PromotionPreviousTooltip from '../components/common/PromotionPreviousTooltip'
+import PromotionPerformanceComment from '../components/common/PromotionPerformanceComment'
 import mdNameTeamMap from '../data/md-name-team-map.json'
 
 const CURRENT_COLUMNS = ['방송일시', '채널', '가중분', '거래형태', '편성코드명', '영상구분', '목표취급액', '목표한계이익액', '예상취급고', '예상한계이익액', '(연동)미리주문취급액', '(연동)방송중취급액', '가중분당취급액', '가중분당한계이익액', '(연동)미리주문 비중', '조직명', 'MD명']
@@ -110,6 +111,7 @@ export default function PromotionPerformanceTab({ promotions, loaded, active }) 
       {exportError && <p role="alert">{exportError}</p>}
       {selected && <PromotionPerformanceSummary promotion={statistics.promotion} outside={statistics.outside} total={statistics.total} previous={statistics.previous.average} loading={loading || !!error} previousLoading={previous.loading} previousError={previous.errors.length > 0} onRetry={previous.retry} />}
       {selected && <PromotionVideoSummary groups={statistics.videoTypes} loading={loading || !!error} previousLoading={previous.loading} selectedType={selectedVideoType} onSelectType={type => setSelectedVideoType(current => current === type ? '' : type)} />}
+      {selected && <PromotionPerformanceComment key={selectedId} promotionId={selectedId} active={active} />}
       <div className="promotion-results-description"><span>프로모션 적용 방송 <strong>{detailRows.length}건</strong>{selectedVideoType && <> / 전체 {rows.length}건 <button type="button" className="promotion-video-filter-chip" onClick={() => setSelectedVideoType('')} aria-label="영상구분 필터 해제">{selectedVideoType} ×</button></>}</span><span>P-1·P-2·P-3: 프로모션 시작 전 3개월 내 직전 3회(최근순) · 동일 거래형태 + 편성코드명 · 심야 제외 · 부족한 회차는 0</span></div>
       <div className="promotion-results-scroll">
         <table id="promotion-results-detail-table" className="promotion-results-table">

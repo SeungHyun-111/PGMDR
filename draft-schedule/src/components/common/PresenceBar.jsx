@@ -14,7 +14,8 @@ const TAB_LABELS = {
   status: '편성 현황',
   settings: '설정',
   newReview: '신상품/재녹화 리뷰',
-  help: '도움말',
+  competitor: '경쟁사',
+  // help: '도움말',
   executionPlan: '실행계획',
 }
 

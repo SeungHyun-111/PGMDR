@@ -10,13 +10,18 @@ const cultureApp = getApps().find(app => app.name === appName) || initializeApp(
   appId: '1:211383823127:web:831529f110a3fbb35ee552',
 }, appName)
 
-// Shared temporary account explicitly designated for PGMDR by its owner.
-const account = { email: '스토아@편성.net', password: '1234567' }
+const account = {
+  email: import.meta.env.VITE_CULTURE_AUTH_EMAIL || '',
+  password: import.meta.env.VITE_CULTURE_AUTH_PASSWORD || '',
+}
 const auth = getAuth(cultureApp)
 let loginPromise
 
 export function ensureCultureAuth() {
   if (loginPromise) return loginPromise
+  if (!account.email || !account.password) {
+    return Promise.reject(new Error('편성코드 DB 로그인 환경변수(VITE_CULTURE_AUTH_EMAIL, VITE_CULTURE_AUTH_PASSWORD)를 설정해주세요.'))
+  }
   loginPromise = (async () => {
     await setPersistence(auth, browserLocalPersistence)
     await auth.authStateReady()

@@ -6,7 +6,8 @@ const ScheduleStatus      = lazy(() => import('./pages/ScheduleStatus'))
 const SettingsPage        = lazy(() => import('./pages/SettingsPage'))
 const NewProductReview    = lazy(() => import('./pages/NewProductReview'))
 const PromotionPage       = lazy(() => import('./pages/PromotionPage'))
-const HelpPage            = lazy(() => import('./pages/HelpPage'))
+const CompetitorPage      = lazy(() => import('./pages/CompetitorPage'))
+// const HelpPage         = lazy(() => import('./pages/HelpPage'))
 const ExecutionPlanPage   = lazy(() => import('./pages/ExecutionPlanPage'))
 import ExportModal from './components/common/ExportModal'
 import ChatPanel from './components/common/ChatPanel'
@@ -32,7 +33,8 @@ const TABS = [
   { id: 'settings', label: '설정' },
   { id: 'newReview', label: '신상품/재녹화 리뷰' },
   { id: 'promotion', label: '프로모션' },
-  { id: 'help',     label: '설명서' },
+  { id: 'competitor', label: '경쟁사' },
+  // { id: 'help', label: '설명서' },
   { id: 'executionPlan', label: '실행계획' },
 ]
 
@@ -43,7 +45,7 @@ const COACH_STEPS = [
   { target: '[data-coach="menu-refresh-pre"]', include: '[data-coach="menu-panel"]', mode: 'menu', title: '선편성정보 갱신', description: '선편성 시트 기준으로 고정 편성 정보를 다시 불러옵니다. 이미 사용자가 넣은 상품을 덮지 않도록 분리해서 둔 갱신 버튼입니다.' },
   { target: '[data-coach="menu-refresh-proposal"]', include: '[data-coach="menu-panel"]', mode: 'menu', title: '제안상품 갱신', description: '사이드바 상품 후보를 최신 제안상품 기준으로 다시 읽습니다. 신규 제안이 들어왔거나 상품 정보가 바뀌었을 때 씁니다.' },
   { target: '[data-coach="menu-refresh-performance"]', include: '[data-coach="menu-panel"]', mode: 'menu', title: '실적DB 갱신', description: '예상 취급액과 한계이익 계산에 쓰는 실적 기준 데이터를 다시 가져옵니다. 실적 예측 숫자가 낡아 보이면 여기부터 확인하면 됩니다.' },
-  { target: '[data-coach="tabs"]', title: '화면 탭', description: '초안 편성, 실적 예측, 편성비중, 편성현황, 설정, 설명서를 오가는 자리입니다. 지금 하는 일의 성격에 맞춰 화면을 빠르게 바꿉니다.' },
+  { target: '[data-coach="tabs"]', title: '화면 탭', description: '초안 편성, 실적 예측, 편성비중, 편성현황, 설정, 경쟁사를 오가는 자리입니다. 지금 하는 일의 성격에 맞춰 화면을 빠르게 바꿉니다.' },
   { target: '[data-coach="presence"]', mode: 'presence', title: '상황판: 접속자 상태', description: '누가 같은 주차에 들어와 있는지, 어느 탭과 어느 버전을 보고 있는지 보여줍니다. 함께 편성할 때 충돌을 줄이는 작은 관제탑 역할이에요.' },
   { target: '[data-coach="current-version"]', title: '현재 버전 안내', description: '지금 내가 보고 있는 데이터 버전입니다. 담당 작성, 영업팀 공유, 편성운영 중 어디에 서 있는지 항상 먼저 확인하세요.' },
   { target: '[data-coach="session"]', title: '섹션 선택', description: '작업 주차와 풀을 전환하는 선택 영역입니다. 다른 기간이나 A/B 풀로 넘어갈 때 여기서 작업판을 바꿉니다.' },
@@ -426,7 +428,8 @@ export default function App() {
           {activeTab === 'settings' && <SettingsPage />}
           {activeTab === 'newReview' && <NewProductReview />}
           {activeTab === 'promotion' && <PromotionPage />}
-          {activeTab === 'help'     && <HelpPage />}
+          {activeTab === 'competitor' && <CompetitorPage />}
+          {/* {activeTab === 'help' && <HelpPage />} */}
           {activeTab === 'executionPlan' && <ExecutionPlanPage />}
         </Suspense>
       </div>
