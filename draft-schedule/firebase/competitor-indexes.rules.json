@@ -1,0 +1,19 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    "competitorInfo": {
+      "monthly": {
+        "$month": {
+          "data": {
+            "$company": {
+              ".indexOn": [
+                "date"
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

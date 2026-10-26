@@ -1,6 +1,8 @@
+import { readCompetitorJson } from './competitorRequestQueue.js'
+
 const FIREBASE_BASE_URL = 'https://schedule-7ec7a-default-rtdb.asia-southeast1.firebasedatabase.app'
 const COMPETITOR_ROOT = 'competitorInfo'
-const MAX_PARALLEL_READS = 30
+const MAX_PARALLEL_READS = 8
 
 export function normalizeCompetitorSearchText(value) {
   return String(value || '')
@@ -33,39 +35,28 @@ function getQueryGrams(query) {
   return [...grams]
 }
 
-async function readJson(path) {
+async function readJson(path, signal) {
   const [pathname, query] = String(path).split('?')
   const url = `${FIREBASE_BASE_URL}/${pathname}.json${query ? `?${query}` : ''}`
-  const response = await fetch(url)
-  if (!response.ok) {
-    const detail = await response.text()
-    throw new Error(`경쟁사 DB 조회 실패 (${response.status}): ${detail}`)
-  }
-  return response.json()
+  return readCompetitorJson(url, signal)
 }
 
-async function mapWithConcurrency(items, mapper) {
+async function mapWithConcurrency(items, mapper, signal, limit = MAX_PARALLEL_READS) {
   const results = new Array(items.length)
   let cursor = 0
 
   async function worker() {
     while (cursor < items.length) {
+      signal?.throwIfAborted()
       const index = cursor
       cursor += 1
       results[index] = await mapper(items[index], index)
     }
   }
 
-  const workerCount = Math.min(MAX_PARALLEL_READS, items.length)
+  const workerCount = Math.min(limit, items.length)
   await Promise.all(Array.from({ length: workerCount }, () => worker()))
   return results
-}
-
-function intersectDocumentIds(documentMaps) {
-  if (!documentMaps.length) return []
-  const [first, ...rest] = documentMaps
-  const firstIds = Object.keys(first || {})
-  return firstIds.filter((id) => rest.every((map) => map?.[id]))
 }
 
 function parseDocumentId(documentId) {
@@ -97,34 +88,42 @@ export function matchesCompetitorSearch(row, type, searchText) {
     .some((value) => normalizeCompetitorSearchText(value).includes(query))
 }
 
-export async function fetchCompetitorSearchMonths() {
-  const payload = await readJson(`${COMPETITOR_ROOT}/searchIndex?shallow=true`)
+export async function fetchCompetitorSearchMonths(signal) {
+  const payload = await readJson(`${COMPETITOR_ROOT}/searchIndex?shallow=true`, signal)
   return Object.keys(payload || {}).sort((a, b) => b.localeCompare(a))
 }
 
-export async function searchCompetitorInfo({ month, type, searchText }) {
+export async function searchCompetitorInfo({ month, type, searchText, signal }) {
   const query = normalizeCompetitorSearchText(searchText)
   if (!query) return []
   if (!month) throw new Error('검색할 월을 선택해 주세요.')
   if (!['brand', 'product'].includes(type)) throw new Error('지원하지 않는 검색 유형입니다.')
 
   const grams = getQueryGrams(query)
-  const documentMaps = await Promise.all(
-    grams.map((gram) => readJson(
-      `${COMPETITOR_ROOT}/searchIndex/${month}/grams/${type}/${encodeGram(gram)}`,
-    )),
-  )
-  const references = intersectDocumentIds(documentMaps)
+  let ids
+  for (const gram of grams) {
+    signal?.throwIfAborted()
+    const documents = await readJson(`${COMPETITOR_ROOT}/searchIndex/${month}/grams/${type}/${encodeGram(gram)}`, signal)
+    ids = ids === undefined ? Object.keys(documents || {}) : ids.filter(id => documents?.[id])
+    if (!ids.length) return []
+  }
+  const references = (ids || [])
     .map(parseDocumentId)
     .filter(Boolean)
 
   const rows = await mapWithConcurrency(references, async ({ company, rowIndex }) => {
-    const row = await readJson(`${COMPETITOR_ROOT}/monthly/${month}/data/${company}/${rowIndex}`)
+    const row = await readJson(`${COMPETITOR_ROOT}/monthly/${month}/data/${company}/${rowIndex}`, signal)
     if (!row || !matchesCompetitorSearch(row, type, query)) return null
     return { ...row, companyKey: company, sourceMonth: month, sourceRowIndex: Number(rowIndex) }
-  })
+  }, signal)
 
   return rows
     .filter(Boolean)
     .sort(compareCompetitorBroadcastDesc)
+}
+
+export async function searchCompetitorMonths({ months, type, searchText, signal }) {
+  const groups = await mapWithConcurrency(months, month => searchCompetitorInfo({ month, type, searchText, signal }), signal, 2)
+  signal?.throwIfAborted()
+  return groups.flat().sort(compareCompetitorBroadcastDesc)
 }

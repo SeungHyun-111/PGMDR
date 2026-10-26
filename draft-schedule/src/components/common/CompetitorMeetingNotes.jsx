@@ -70,25 +70,25 @@ function CompanyShare({ company, organization, summary }) {
   return <span className="meeting-company-summary" title="금주 조직 가중분 ÷ 해당 경쟁사 전체 가중분 × 100 · 직전 주 대비 편성비중 차이">{company}({ratio} <span className={changeClass}>{difference}</span>)</span>
 }
 
-export default function CompetitorMeetingNotes({ week, organizations, userName, revision = 0, draftMode = false, onSaved }) {
+export default function CompetitorMeetingNotes({ week, organizations, userName, revision = 0, draftMode = false, onSaved, currentCompany, currentRows, currentRowsReady = true }) {
   const [notes, setNotes] = useState(null)
   const [error, setError] = useState('')
   const [shareResult, setShareResult] = useState(null)
   const [selectedOrganization, setSelectedOrganization] = useState('')
   const [cachedOrganizations] = useState(() => draftMode ? cachedMeetingOrganizations(userName, week) : [])
-  const shareKey = `${week}-${revision}`
+  const shareKey = `${week}-${revision}-${currentCompany || ''}`
   const summaries = shareResult?.key === shareKey ? shareResult.summaries : null
   useEffect(() => {
-    if (!week) return
+    if (!week || !currentRowsReady) return
     const controller = new AbortController()
     Promise.all(['SSG', 'K'].map(async company => {
-      try { return [company, await fetchMeetingShares(company, week, controller.signal)] }
+      try { return [company, await fetchMeetingShares(company, week, controller.signal, { company: currentCompany, rows: currentRows })] }
       catch (error) { return [company, { error: error.message }] }
     })).then(entries => {
       if (!controller.signal.aborted) setShareResult({ key: shareKey, summaries: Object.fromEntries(entries) })
     })
     return () => controller.abort()
-  }, [week, shareKey])
+  }, [week, shareKey, currentCompany, currentRows, currentRowsReady])
   useEffect(() => {
     if (!week) return
     return subscribeCompetitorMeetings(week, setNotes, error => setError(`회의자료를 불러오지 못했습니다. ${error.message}`))

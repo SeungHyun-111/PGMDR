@@ -1,5 +1,22 @@
 # Performance query index
 
+## Competitor date index (2026-10-26)
+
+`competitor-indexes.rules.json` targets **schedule-7ec7a**, separately from the
+performance database below. Its `competitorInfo/monthly/$month/data/$company`
+rule adds `.indexOn: ["date"]` for every month and company. Existing permissions
+were preserved when deployed. Actual SSG/K date-range REST reads were verified.
+
+Competitor reads now reject missing indexes rather than scanning a whole month.
+The shared reader stores bounded daily records in IndexedDB (180 days / 24 MiB),
+validates each affected month's existing `monthly/{month}/updatedAt`, and reuses
+overlapping in-flight reads. It keeps no historical raw-row memory cache. Existing
+MSM month replacement writes are detected through that same timestamp; no MSM
+project changes are required. Manual refresh clears the data cache without
+touching meeting drafts. Cache storage failure falls back to indexed RTDB reads.
+
+## Existing performance database
+
 Merge the `performanceEntries/.indexOn` entry from `performance-indexes.rules.json`
 into the existing Realtime Database rules for project `pgmdr-87328`.
 Preserve all existing read/write permissions, validation rules, and indexes.

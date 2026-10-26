@@ -26,4 +26,5 @@ dist-ssr
 # Machine-specific package configuration and generated review captures
 /.npmrc
 /artifacts/
+/firebase/*.before.json
 /*.png

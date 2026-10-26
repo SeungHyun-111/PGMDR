@@ -1,3 +1,5 @@
+import { clearCompetitorScheduleCache } from './competitorSchedule'
+
 const SOURCE = 'https://script.google.com/macros/s/AKfycbzE147wQl7Qiz59QEB-vxEppregg32FbZRCqSHqmaK8_8OiMpPnu-S_znUeyORt59gd/exec'
 
 function fetchSource(month) {
@@ -24,12 +26,14 @@ export async function refreshCompetitorRtdb(month, onProgress) {
   onProgress('검색 인덱스 생성 및 RTDB 저장 중…')
   const worker = new Worker(new URL('./competitorRefresh.worker.js', import.meta.url), { type: 'module' })
   try {
-    return await new Promise((resolve, reject) => {
+    const counts = await new Promise((resolve, reject) => {
       worker.onmessage = ({ data }) => data.ok ? resolve(data.counts) : reject(new Error(data.error))
       worker.onerror = () => reject(new Error('데이터 갱신 처리에 실패했습니다.'))
       worker.postMessage({ month, payload })
       payload = null
     })
+    await clearCompetitorScheduleCache()
+    return counts
   } finally {
     worker.terminate()
   }

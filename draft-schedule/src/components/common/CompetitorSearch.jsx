@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { compareCompetitorBroadcastDesc, fetchCompetitorSearchMonths, getBroadcastSortValue, matchesCompetitorSearch, searchCompetitorInfo } from '../../api/competitorSearch'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { compareCompetitorBroadcastDesc, fetchCompetitorSearchMonths, getBroadcastSortValue, matchesCompetitorSearch, searchCompetitorMonths } from '../../api/competitorSearch'
 import CoachMark from './CoachMark'
 import useCompetitorVisibilityStore from '../../store/useCompetitorVisibilityStore'
 
@@ -108,30 +108,55 @@ export default function CompetitorSearch() {
   const dragRef = useRef(null)
   const dialogResizeRef = useRef(null)
   const dialogMoveRef = useRef(null)
+  const request = useRef(null)
+  const requestVersion = useRef(0)
+  const criterionSequence = useRef(0)
+  const cancelSearch = useCallback(() => {
+    requestVersion.current++
+    request.current?.abort()
+    request.current = null
+  }, [])
+  const closeSearch = useCallback(() => {
+    cancelSearch()
+    setIsOpen(false)
+    setBaseResults([])
+    setResults([])
+    setCriteria([])
+    setBrandSearch('')
+    setProductSearch('')
+    setError('')
+    setIsLoading(false)
+    setCoachOpen(false)
+  }, [cancelSearch])
+  useEffect(() => () => cancelSearch(), [cancelSearch])
+  useEffect(() => useCompetitorVisibilityStore.subscribe((state, previous) => {
+    if (state.hidden && !previous.hidden) closeSearch()
+  }), [closeSearch])
 
   useEffect(() => {
-    if (!isOpen || months.length) return
+    if (!isOpen) return
     let cancelled = false
-    fetchCompetitorSearchMonths()
+    const controller = new AbortController()
+    fetchCompetitorSearchMonths(controller.signal)
       .then((nextMonths) => {
         if (cancelled) return
         setMonths(nextMonths)
-        setMonth((current) => current || (nextMonths.length ? 'all' : ''))
+        setMonth((current) => current === 'all' || nextMonths.includes(current) ? current : (nextMonths.length ? 'all' : ''))
       })
       .catch((loadError) => {
         if (!cancelled) setError(loadError.message)
       })
-    return () => { cancelled = true }
-  }, [isOpen, months.length])
+    return () => { cancelled = true; controller.abort() }
+  }, [isOpen])
 
   useEffect(() => {
     if (!isOpen) return undefined
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setIsOpen(false)
+      if (event.key === 'Escape') closeSearch()
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [isOpen])
+  }, [isOpen, closeSearch])
 
   useEffect(() => {
     const onResize = () => {
@@ -156,14 +181,14 @@ export default function CompetitorSearch() {
     rows: results.filter((row) => row.companyKey === company),
   })).filter((group) => group.rows.length), [results])
 
-  const fetchInitialResults = async (criterion) => {
+  const fetchInitialResults = async (criterion, signal) => {
     const targetMonths = month === 'all' ? months : [month]
-    const monthlyResults = await Promise.all(targetMonths.map((targetMonth) => searchCompetitorInfo({
-      month: targetMonth,
+    return searchCompetitorMonths({
+      months: targetMonths,
       type: criterion.type,
       searchText: criterion.text,
-    })))
-    return monthlyResults.flat().sort(compareCompetitorBroadcastDesc)
+      signal,
+    })
   }
 
   const filterByCriteria = (rows, nextCriteria) => rows
@@ -173,26 +198,33 @@ export default function CompetitorSearch() {
     .sort(compareCompetitorBroadcastDesc)
 
   const applyCriteria = async (nextCriteria) => {
+    cancelSearch()
     if (!nextCriteria.length) {
       setCriteria([])
       setBaseResults([])
       setResults([])
       setError('')
+      setIsLoading(false)
       return
     }
 
     setIsLoading(true)
     setError('')
     setResults([])
+    setBaseResults([])
+    const controller = new AbortController()
+    request.current = controller
+    const version = requestVersion.current
     try {
-      const nextBaseResults = await fetchInitialResults(nextCriteria[0])
+      const nextBaseResults = await fetchInitialResults(nextCriteria[0], controller.signal)
+      if (controller.signal.aborted || version !== requestVersion.current) return
       setBaseResults(nextBaseResults)
       setCriteria(nextCriteria)
       setResults(filterByCriteria(nextBaseResults, nextCriteria))
     } catch (searchError) {
-      setError(searchError.message)
+      if (!controller.signal.aborted && version === requestVersion.current) { setError(searchError.message); controller.abort() }
     } finally {
-      setIsLoading(false)
+      if (version === requestVersion.current && request.current === controller) { setIsLoading(false); request.current = null }
     }
   }
 
@@ -204,7 +236,7 @@ export default function CompetitorSearch() {
       return
     }
 
-    const criterion = { id: `${Date.now()}_${Math.random().toString(36).slice(2)}`, type, text: searchText.trim() }
+    const criterion = { id: String(++criterionSequence.current), type, text: searchText.trim() }
     const nextCriteria = [...criteria, criterion]
     if (!criteria.length) {
       await applyCriteria(nextCriteria)
@@ -218,10 +250,17 @@ export default function CompetitorSearch() {
 
   const removeCriterion = (criterionId) => {
     const nextCriteria = criteria.filter((criterion) => criterion.id !== criterionId)
+    if (nextCriteria.length && nextCriteria[0].id === criteria[0]?.id) {
+      setCriteria(nextCriteria)
+      setResults(filterByCriteria(baseResults, nextCriteria))
+      return
+    }
     applyCriteria(nextCriteria)
   }
 
   const handleMonthChange = (nextMonth) => {
+    cancelSearch()
+    setIsLoading(false)
     setMonth(nextMonth)
     setCriteria([])
     setBaseResults([])
@@ -382,7 +421,7 @@ export default function CompetitorSearch() {
 
       {contextMenu && <div onPointerDown={() => setContextMenu(null)} onContextMenu={event => { event.preventDefault(); setContextMenu(null) }} style={{ position: 'fixed', inset: 0, zIndex: 8500 }}>
         <div role="menu" aria-label="경쟁사 검색 아이콘" style={{ position: 'absolute', left: contextMenu.x, top: contextMenu.y, padding: 5, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg2)', boxShadow: '0 6px 24px rgba(0,0,0,.2)' }} onPointerDown={event => event.stopPropagation()}>
-          <button type="button" role="menuitem" autoFocus onKeyDown={event => { if (event.key === 'Escape') setContextMenu(null) }} onClick={() => { setHidden(true); setContextMenu(null); setIsOpen(false) }} style={{ padding: '10px 14px', border: 0, borderRadius: 5, background: 'var(--bg2)', color: 'var(--text)', cursor: 'pointer', fontFamily: 'inherit' }}>경쟁사 검색 아이콘 숨기기</button>
+          <button type="button" role="menuitem" autoFocus onKeyDown={event => { if (event.key === 'Escape') setContextMenu(null) }} onClick={() => { closeSearch(); setHidden(true); setContextMenu(null) }} style={{ padding: '10px 14px', border: 0, borderRadius: 5, background: 'var(--bg2)', color: 'var(--text)', cursor: 'pointer', fontFamily: 'inherit' }}>경쟁사 검색 아이콘 숨기기</button>
         </div>
       </div>}
 
@@ -407,7 +446,7 @@ export default function CompetitorSearch() {
                 {months.map((item) => <option key={item} value={item}>{formatMonth(item)}</option>)}
               </select>
               <button type="button" onClick={() => { setCoachStep(0); setCoachOpen(true) }} aria-label="경쟁사 검색 도움말" title="검색 기능 사용 안내" style={{ width: 36, height: 36, border: '1px solid #fecdd3', borderRadius: '50%', background: '#fff1f2', color: '#be123c', cursor: 'pointer', fontSize: 14, fontWeight: 900 }}>?</button>
-              <button type="button" onClick={() => setIsOpen(false)} aria-label="닫기" style={{ width: 36, height: 36, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg2)', color: 'var(--text2)', cursor: 'pointer', fontSize: 20 }}>×</button>
+              <button type="button" onClick={closeSearch} aria-label="닫기" style={{ width: 36, height: 36, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--bg2)', color: 'var(--text2)', cursor: 'pointer', fontSize: 20 }}>×</button>
             </header>
 
             <div style={{ padding: 16, borderBottom: '1px solid var(--border)', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: 'var(--bg2)' }}>
@@ -500,6 +539,9 @@ function CompanyResult({ company, rows }) {
   const totalRevenue = rows.reduce((sum, row) => sum + Number(row.revenue || 0), 0)
   const totalPerMinute = totalMinutes > 0 ? totalRevenue / totalMinutes : 0
   const [sort, setSort] = useState({ key: 'broadcast', direction: 'desc' })
+  const [page, setPage] = useState(0)
+  const pageCount = Math.max(1, Math.ceil(rows.length / 100))
+  const currentPage = Math.min(page, pageCount - 1)
   const sortedRows = useMemo(() => {
     const column = SORT_COLUMNS.find((item) => item.key === sort.key) || SORT_COLUMNS[0]
     const direction = sort.direction === 'asc' ? 1 : -1
@@ -507,7 +549,7 @@ function CompanyResult({ company, rows }) {
       .sort((a, b) => {
         const aValue = column.value(a)
         const bValue = column.value(b)
-        let compare = 0
+        let compare
         if (typeof aValue === 'number' && typeof bValue === 'number') {
           compare = aValue - bValue
         } else {
@@ -519,6 +561,7 @@ function CompanyResult({ company, rows }) {
   }, [rows, sort])
 
   const handleSort = (key) => {
+    setPage(0)
     setSort((current) => {
       if (current.key !== key) return { key, direction: key === 'broadcast' ? 'desc' : 'asc' }
       return { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
@@ -584,7 +627,7 @@ function CompanyResult({ company, rows }) {
             </tr>
           </thead>
           <tbody>
-            {sortedRows.map((row) => (
+            {sortedRows.slice(currentPage * 100, (currentPage + 1) * 100).map((row) => (
               <tr key={`${row.sourceMonth}_${company}_${row.sourceRowIndex}`} style={{ borderTop: '1px solid var(--border)' }}>
                 <td style={cellStyle}>{row.date || '-'} {String(row.time || '').padStart(5, '0')}</td>
                 <td style={cellStyle}>{row.channel || '-'}</td>
@@ -598,6 +641,11 @@ function CompanyResult({ company, rows }) {
           </tbody>
         </table>
       </div>
+      <nav aria-label={`${meta.label} 검색 결과 페이지`} style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 10, padding: '10px 14px', color: 'var(--text2)', fontSize: 12 }}>
+        <span>전체 {integerFormatter.format(rows.length)}건 · {currentPage + 1} / {pageCount} 페이지 (100건씩)</span>
+        <button type="button" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>이전</button>
+        <button type="button" disabled={currentPage + 1 >= pageCount} onClick={() => setPage(currentPage + 1)}>다음</button>
+      </nav>
     </section>
   )
 }

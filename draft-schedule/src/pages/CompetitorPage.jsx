@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
-import { fetchScheduleMonths, fetchScheduleWeek } from '../api/competitorSchedule'
+import { clearCompetitorScheduleCache, fetchScheduleMonths, fetchScheduleWeek } from '../api/competitorSchedule'
 import './CompetitorPage.css'
 import CompetitorRefresh from '../components/common/CompetitorRefresh'
 import CompetitorProgramTooltip from '../components/common/CompetitorProgramTooltip'
@@ -70,7 +70,7 @@ export default function CompetitorPage() {
     const dates = Array.from({ length: 8 }, (_, i) => dayjs(week).add(i - 1, 'day').format('YYYY-MM-DD'))
     fetchScheduleWeek(company, dates, controller.signal).then(data => {
       if (!controller.signal.aborted) setRows(data)
-    }).catch(e => { if (!controller.signal.aborted) setError(e.message) })
+    }).catch(e => { if (!controller.signal.aborted && e.name !== 'AbortError') setError(e.message) })
       .finally(() => { if (!controller.signal.aborted) setLoading(false) })
     return () => controller.abort()
   }, [company, week, revision])
@@ -83,7 +83,7 @@ export default function CompetitorPage() {
   const reset = () => { setLoading(true); setError(''); setRows([]); setTooltip(null) }
   const showTooltip = (event, detail) => setTooltip({ ...detail, company, anchor: event.currentTarget.getBoundingClientRect(), pointer: Number.isFinite(event.clientX) && !(event.type === 'click' && event.detail === 0) ? { x: event.clientX, y: event.clientY } : null })
   const changeWeek = value => { if (value === week) return; reset(); setWeek(value) }
-  const refresh = () => { reset(); setRevision(value => value + 1) }
+  const refresh = async () => { await clearCompetitorScheduleCache(); reset(); setRevision(value => value + 1) }
   const move = offset => changeWeek(dayjs(week).add(offset, 'week').format('YYYY-MM-DD'))
   const resizeMeeting = clientY => {
     const rect = scheduleLayout.current.getBoundingClientRect()
@@ -126,7 +126,7 @@ export default function CompetitorPage() {
       <div className="competitor-toolbar-actions"><button onClick={refresh}>새로고침</button><CompetitorRefresh onComplete={month => { reset(); setWeek(monday(`${month}-01`)); setRevision(value => value + 1) }} /><label className="competitor-search-toggle"><input type="checkbox" checked={!competitorSearchHidden} onChange={event => setCompetitorSearchHidden(!event.target.checked)} />검색 토글</label><label className="competitor-search-toggle"><input type="checkbox" checked={meetingInputOpen} aria-controls="competitor-meeting-input-panel" onChange={event => { setMeetingInputOpen(event.target.checked); setTooltip(null); if (event.target.checked) setActiveView('schedule') }} />회의자료 입력</label></div>
     </header>
     {weekError && <div className="competitor-message" role="status">{weekError}</div>}
-    {activeView === 'meeting' ? <CompetitorMeetingNotes key={`${week}-${userName}`} week={week} organizations={organizations} userName={userName} revision={revision} /> : <>
+    {activeView === 'meeting' ? <CompetitorMeetingNotes key={`${week}-${userName}`} week={week} organizations={organizations} userName={userName} revision={revision} currentCompany={!error ? company : undefined} currentRows={rows} currentRowsReady={!loading} /> : <>
     {error && <div className="competitor-message" role="alert">{error} <button onClick={refresh}>다시 시도</button></div>}
     {!loading && !error && ![...timeline.values()].some(blocks => blocks.length) && <div className="competitor-message">선택한 주에 저장된 방송이 없습니다.</div>}
     <div ref={scheduleLayout} className={`competitor-schedule-layout${meetingInputOpen ? ' with-meeting' : ''}`} style={meetingInputOpen ? { gridTemplateRows: `minmax(180px, ${100 - meetingHeight}fr) 8px minmax(160px, ${meetingHeight}fr)` } : undefined}>
@@ -167,7 +167,7 @@ export default function CompetitorPage() {
         setMeetingHeight(value => event.key === 'Home' ? 20 : event.key === 'End' ? 75 : normalizedMeetingHeight(normalizedMeetingHeight(value) + (event.key === 'ArrowUp' ? 5 : -5)))
       }} />
     <aside id="competitor-meeting-input-panel" className="competitor-meeting-input-sidebar" aria-label="편성표 회의자료 입력">
-      <CompetitorMeetingNotes key={`${week}-${userName}`} week={week} organizations={organizations} userName={userName} revision={revision} draftMode onSaved={() => { setTooltip(null); setActiveView('meeting') }} />
+      <CompetitorMeetingNotes key={`${week}-${userName}`} week={week} organizations={organizations} userName={userName} revision={revision} currentCompany={!error ? company : undefined} currentRows={rows} currentRowsReady={!loading} draftMode onSaved={() => { setTooltip(null); setActiveView('meeting') }} />
     </aside></>}
     </div>
     {tooltip && <CompetitorProgramTooltip detail={tooltip} id={tooltipId} onClose={setTooltip} boundaryRef={calendarBoundary} />}

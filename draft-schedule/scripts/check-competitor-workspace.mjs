@@ -19,7 +19,7 @@ const rows = Array.from({ length: 24 }, (_, i) => ({
 const fixtures = {
   store: `export default function useStore(selector){return selector({userName:'Tester'})}`,
   date: `export default function useDate(){return {date:'2026-10-19',ready:true,error:'',selectDate:()=>{}}}`,
-  schedule: `export async function fetchScheduleMonths(){return ['202610']} export async function fetchScheduleWeek(company,dates,signal,accept){const rows=${JSON.stringify(rows)};if(accept){for(const row of rows)accept({...row,date:'2026-10-12',weightedMin:row.weightedMin/2,revenue:row.revenue/2});return []}return rows}`,
+  schedule: `export async function clearCompetitorScheduleCache(){} export async function fetchScheduleMonths(){return ['202610']} export async function fetchScheduleWeek(company,dates,signal,accept){const rows=${JSON.stringify(rows)};if(accept){for(const row of rows)accept({...row,date:'2026-10-12',weightedMin:row.weightedMin/2,revenue:row.revenue/2});return []}return rows}`,
   meetings: `export const organizationKey=value=>Array.from(value,c=>c.codePointAt(0).toString(16)).join('-');export function subscribeCompetitorMeetings(week,onData){onData({});return ()=>{}}export async function saveCompetitorMeeting(){throw Error('No production writes in workspace check')}`,
   shares: `export async function fetchMeetingShares(){return {current:{total:100,organizations:{A:100}},previous:{total:100,organizations:{A:100}}}}export function getWeeklyOrganizationShare(){return {current:100,difference:0}}`,
 }

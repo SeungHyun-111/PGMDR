@@ -8,11 +8,13 @@ self.onmessage = async ({ data: { month, payload } }) => {
       throw new Error('원본 데이터의 월 또는 채널 형식이 올바르지 않아 저장하지 않았습니다.')
     }
     const counts = Object.fromEntries(Object.entries(payload.data).map(([company, rows]) => [company, rows.length]))
+    // Use the existing shared month timestamp so MSM and this app invalidate the same cache.
+    const currentPayload = { ...payload, updatedAt: new Date().toISOString() }
     const updates = {
-      [`competitorInfo/monthly/${month}`]: payload,
-      [`competitorInfo/searchIndex/${month}`]: buildCompetitorSearchIndex(payload),
+      [`competitorInfo/monthly/${month}`]: currentPayload,
+      [`competitorInfo/searchIndex/${month}`]: buildCompetitorSearchIndex(currentPayload),
       [`metadata/competitorInfo/monthly/${month}`]: {
-        month, updatedAt: payload.updatedAt || new Date().toISOString(), counts,
+        month, updatedAt: currentPayload.updatedAt, counts,
         rowCount: Object.values(counts).reduce((sum, count) => sum + count, 0), meta: 'broadcasts',
       },
     }

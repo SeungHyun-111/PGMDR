@@ -21,9 +21,13 @@ export function getWeeklyOrganizationShare(summary, organization) {
   return { current, difference: current !== null && previous !== null ? current - previous : null }
 }
 
-export async function fetchMeetingShares(company, week, signal) {
+export async function fetchMeetingShares(company, week, signal, currentSource) {
   const dates = Array.from({ length: 14 }, (_, i) => dayjs(week).add(i - 7, 'day').format('YYYY-MM-DD'))
   const summary = createWeeklyShareAccumulator(week)
-  await fetchScheduleWeek(company, dates, signal, summary.accept)
+  const reuseCurrent = currentSource?.company === company && Array.isArray(currentSource.rows)
+  if (reuseCurrent) {
+    for (const row of currentSource.rows) if (row.date >= week && row.date <= dates.at(-1)) summary.accept(row)
+  }
+  await fetchScheduleWeek(company, reuseCurrent ? dates.slice(0, 7) : dates, signal, summary.accept)
   return { current: summary.current, previous: summary.previous }
 }
