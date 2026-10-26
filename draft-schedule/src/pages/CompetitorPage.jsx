@@ -78,7 +78,7 @@ export default function CompetitorPage() {
   const organizations = useMemo(() => [...new Set(rows.map(organization))].sort((a, b) => a.localeCompare(b, 'ko')), [rows])
   const weekRows = useMemo(() => rows.filter(row => row.date >= week), [rows, week])
   // Organization selection only changes emphasis; every broadcast keeps its position.
-  const timeline = useMemo(() => buildCompetitorTimeline(rows, days.map(date => date.format('YYYY-MM-DD')), company), [rows, days, company])
+  const timeline = useMemo(() => activeView === 'schedule' ? buildCompetitorTimeline(rows, days.map(date => date.format('YYYY-MM-DD')), company) : new Map(), [activeView, rows, days, company])
   const highlights = useMemo(() => summarizeCompetitorHighlights(timeline, highlightSearch, selectedOrganizations), [timeline, highlightSearch, selectedOrganizations])
   const reset = () => { setLoading(true); setError(''); setRows([]); setTooltip(null) }
   const showTooltip = (event, detail) => setTooltip({ ...detail, company, anchor: event.currentTarget.getBoundingClientRect(), pointer: Number.isFinite(event.clientX) && !(event.type === 'click' && event.detail === 0) ? { x: event.clientX, y: event.clientY } : null })
@@ -167,7 +167,7 @@ export default function CompetitorPage() {
         setMeetingHeight(value => event.key === 'Home' ? 20 : event.key === 'End' ? 75 : normalizedMeetingHeight(normalizedMeetingHeight(value) + (event.key === 'ArrowUp' ? 5 : -5)))
       }} />
     <aside id="competitor-meeting-input-panel" className="competitor-meeting-input-sidebar" aria-label="편성표 회의자료 입력">
-      <CompetitorMeetingNotes key={`${week}-${userName}`} week={week} organizations={organizations} userName={userName} revision={revision} currentCompany={!error ? company : undefined} currentRows={rows} currentRowsReady={!loading} draftMode onSaved={() => { setTooltip(null); setActiveView('meeting') }} />
+      <CompetitorMeetingNotes key={`${week}-${userName}`} week={week} organizations={organizations} userName={userName} revision={revision} currentCompany={!error ? company : undefined} currentRows={rows} currentRowsReady={!loading} draftMode onSaved={() => setTooltip(null)} />
     </aside></>}
     </div>
     {tooltip && <CompetitorProgramTooltip detail={tooltip} id={tooltipId} onClose={setTooltip} boundaryRef={calendarBoundary} />}
