@@ -3,6 +3,7 @@ import dayjs from 'dayjs'
 import { organizationKey, saveCompetitorMeeting, subscribeCompetitorMeetings } from '../../api/competitorMeetings'
 import { fetchMeetingShares, getWeeklyOrganizationShare } from '../../api/competitorMeetingShares'
 import { cachedMeetingOrganizations, meetingDraftKey, readMeetingDraft } from '../../utils/competitorMeetingDraft'
+import useLocalStorageState from '../../hooks/useLocalStorageState'
 
 function OrganizationEditor({ week, organization, company, note, userName, draftMode, onSaved }) {
   const draftKey = meetingDraftKey(userName, week, organization, company)
@@ -74,7 +75,8 @@ export default function CompetitorMeetingNotes({ week, organizations, userName, 
   const [notes, setNotes] = useState(null)
   const [error, setError] = useState('')
   const [shareResult, setShareResult] = useState(null)
-  const [selectedOrganization, setSelectedOrganization] = useState('')
+  const [storedOrganization, setSelectedOrganization] = useLocalStorageState(`pgmdr:competitor-meeting-organization:v1:${encodeURIComponent(userName || '')}`, '')
+  const selectedOrganization = typeof storedOrganization === 'string' ? storedOrganization : ''
   const [cachedOrganizations] = useState(() => draftMode ? cachedMeetingOrganizations(userName, week) : [])
   const shareKey = `${week}-${revision}-${currentCompany || ''}`
   const summaries = shareResult?.key === shareKey ? shareResult.summaries : null
@@ -93,7 +95,7 @@ export default function CompetitorMeetingNotes({ week, organizations, userName, 
     if (!week) return
     return subscribeCompetitorMeetings(week, setNotes, error => setError(`회의자료를 불러오지 못했습니다. ${error.message}`))
   }, [week])
-  const names = useMemo(() => [...new Set([...organizations, ...cachedOrganizations, ...Object.values(notes || {}).map(note => note.organization).filter(Boolean), ...Object.values(summaries || {}).flatMap(summary => [...Object.keys(summary.current?.organizations || {}), ...Object.keys(summary.previous?.organizations || {})])])].sort((a, b) => a.localeCompare(b, 'ko')), [organizations, cachedOrganizations, notes, summaries])
+  const names = useMemo(() => [...new Set([...organizations, ...cachedOrganizations, ...(draftMode && selectedOrganization ? [selectedOrganization] : []), ...Object.values(notes || {}).map(note => note.organization).filter(Boolean), ...Object.values(summaries || {}).flatMap(summary => [...Object.keys(summary.current?.organizations || {}), ...Object.keys(summary.previous?.organizations || {})])])].sort((a, b) => a.localeCompare(b, 'ko')), [organizations, cachedOrganizations, draftMode, selectedOrganization, notes, summaries])
   const selected = names.includes(selectedOrganization) ? selectedOrganization : names[0] || ''
   const visibleNames = draftMode ? names.filter(name => name === selected) : names
   return <section className="competitor-meeting-panel" aria-label="조직별 회의자료 작성">
