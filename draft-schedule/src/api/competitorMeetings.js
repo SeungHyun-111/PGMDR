@@ -4,7 +4,8 @@ import { getDatabase, onValue, ref, update, serverTimestamp } from 'firebase/dat
 const databaseURL = 'https://schedule-7ec7a-default-rtdb.asia-southeast1.firebasedatabase.app'
 const appName = 'pgmdr-competitor'
 const app = getApps().find(app => app.name === appName) || initializeApp({ projectId: 'schedule-7ec7a', databaseURL }, appName)
-const db = getDatabase(app)
+export const competitorDb = getDatabase(app)
+const db = competitorDb
 export const organizationKey = name => Array.from(name, char => char.codePointAt(0).toString(16)).join('-')
 const weekPath = week => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(week)) throw new Error('유효한 주차를 선택해주세요.')

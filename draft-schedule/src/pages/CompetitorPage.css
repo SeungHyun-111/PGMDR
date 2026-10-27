@@ -48,3 +48,14 @@
 @media(max-width:1100px){.competitor-toolbar-left{gap:5px}.competitor-toolbar-actions{gap:5px}.competitor-toolbar{grid-template-columns:minmax(0,1fr) auto}.competitor-toolbar-left h2{flex-basis:100%}.competitor-toolbar-actions{align-self:end}.competitor-meeting-heading>span:last-child{display:none}}@media(max-width:800px){.competitor-toolbar{display:flex}.competitor-toolbar-left h2{flex-basis:auto}.competitor-toolbar-center{justify-content:flex-start}.competitor-brand-summary-controls{gap:8px}}
 /* Keep split-channel cards readable on smaller desktop viewports. */
 .competitor-timeline{min-width:1560px}.competitor-program-main{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+
+.weekly-work-table { width: 100%; min-width: 660px; table-layout: fixed; border-collapse: collapse; color: #172b3a; }
+.weekly-work-table th, .weekly-work-table td { border: 1px solid #71828d; padding: 8px; vertical-align: middle; }
+.weekly-work-table thead th { background: #cbdcf5; padding: 12px 8px; font-weight: 600; }
+.weekly-work-table td { background: #fff; }
+.weekly-work-table .weekly-work-owner, .weekly-work-current > th, .weekly-work-current > td { background: #d3e2e5; }
+.weekly-work-editor textarea { display: block; width: 100%; min-height: 95px; resize: vertical; border: 1px solid transparent; border-radius: 4px; background: transparent; color: inherit; padding: 8px; font: inherit; line-height: 1.6; box-sizing: border-box; }
+.weekly-work-editor textarea:focus { outline: 2px solid #5d89c8; background: #fff; }
+.weekly-work-save { display: flex; gap: 8px; align-items: center; justify-content: flex-end; font-size: 12px; min-height: 28px; }
+.weekly-work-save button { border: 1px solid #9bacbd; border-radius: 4px; padding: 3px 10px; background: #fff; color: #253f57; cursor: pointer; }
+.weekly-work-save button:disabled { opacity: .45; cursor: default; }

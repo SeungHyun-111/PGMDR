@@ -10,6 +10,7 @@ import usePromotionLastViewedDate from '../hooks/usePromotionLastViewedDate'
 import CompetitorOrganizationFilter from '../components/common/CompetitorOrganizationFilter'
 import useCompetitorVisibilityStore from '../store/useCompetitorVisibilityStore'
 import CompetitorMeetingNotes from '../components/common/CompetitorMeetingNotes'
+import WeeklyWork from '../components/common/WeeklyWork'
 import { summarizeCompetitorHighlights } from '../utils/competitorHighlight'
 import CompetitorBrandSummary from '../components/common/CompetitorBrandSummary'
 import useLocalStorageState from '../hooks/useLocalStorageState'
@@ -109,7 +110,7 @@ export default function CompetitorPage() {
       </div>
       <div className="competitor-toolbar-center">
         <div className="competitor-week"><button disabled={!week} onClick={() => move(-1)} aria-label="이전 주">‹</button><label className="competitor-week-picker"><span>{week ? `${dayjs(week).format('YYYY년 M월 D일')} 주차` : '주차 선택'}</span><input type="date" aria-label="조회 주차" value={week} onChange={e => { if (e.target.value) changeWeek(monday(e.target.value)) }} /></label><button disabled={!week} onClick={() => move(1)} aria-label="다음 주">›</button></div>
-        <div className="competitor-view-tabs" role="group" aria-label="경쟁사 화면 선택">{[['schedule', '편성표'], ['meeting', '회의자료']].map(([view, label]) => <button key={view} aria-pressed={activeView === view} onClick={() => { setTooltip(null); setActiveView(view) }}>{label}</button>)}</div>
+        <div className="competitor-view-tabs" role="group" aria-label="경쟁사 화면 선택">{[['schedule', '편성표'], ['meeting', '회의자료'], ['weeklyWork', '주간업무']].map(([view, label]) => <button key={view} aria-pressed={activeView === view} onClick={() => { setTooltip(null); setActiveView(view) }}>{label}</button>)}</div>
         <div className="competitor-highlight-search" role="search" aria-label="편성표 하이라이트 검색">
           <input type="search" aria-label="편성표 하이라이트 검색어" placeholder="브랜드·상품·카테고리·조직 검색" value={highlightSearch}
             onFocus={() => setActiveView('schedule')}
@@ -126,7 +127,7 @@ export default function CompetitorPage() {
       <div className="competitor-toolbar-actions"><button onClick={refresh}>새로고침</button><CompetitorRefresh onComplete={month => { reset(); setWeek(monday(`${month}-01`)); setRevision(value => value + 1) }} /><label className="competitor-search-toggle"><input type="checkbox" checked={!competitorSearchHidden} onChange={event => setCompetitorSearchHidden(!event.target.checked)} />검색 토글</label><label className="competitor-search-toggle"><input type="checkbox" checked={meetingInputOpen} aria-controls="competitor-meeting-input-panel" onChange={event => { setMeetingInputOpen(event.target.checked); setTooltip(null); if (event.target.checked) setActiveView('schedule') }} />회의자료 입력</label></div>
     </header>
     {weekError && <div className="competitor-message" role="status">{weekError}</div>}
-    {activeView === 'meeting' ? <CompetitorMeetingNotes key={`${week}-${userName}`} week={week} organizations={organizations} userName={userName} revision={revision} currentCompany={!error ? company : undefined} currentRows={rows} currentRowsReady={!loading} /> : <>
+    {activeView === 'weeklyWork' ? <WeeklyWork key={`${week}-${userName}`} week={week} userName={userName} /> : activeView === 'meeting' ? <CompetitorMeetingNotes key={`${week}-${userName}`} week={week} organizations={organizations} userName={userName} revision={revision} currentCompany={!error ? company : undefined} currentRows={rows} currentRowsReady={!loading} /> : <>
     {error && <div className="competitor-message" role="alert">{error} <button onClick={refresh}>다시 시도</button></div>}
     {!loading && !error && ![...timeline.values()].some(blocks => blocks.length) && <div className="competitor-message">선택한 주에 저장된 방송이 없습니다.</div>}
     <div ref={scheduleLayout} className={`competitor-schedule-layout${meetingInputOpen ? ' with-meeting' : ''}`} style={meetingInputOpen ? { gridTemplateRows: `minmax(180px, ${100 - meetingHeight}fr) 8px minmax(160px, ${meetingHeight}fr)` } : undefined}>
