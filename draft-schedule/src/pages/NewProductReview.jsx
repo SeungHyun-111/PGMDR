@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { db, ref, set, onValue } from '../api/firebase'
 import useScheduleStore from '../store/useScheduleStore'
 import usePerformanceRange from '../hooks/usePerformanceRange'
@@ -34,6 +34,17 @@ function formatDateLabel(dateKey, fallbackDay = '') {
   return `${date.getMonth() + 1}월 ${date.getDate()}일 ${day}`
 }
 
+function getPreviousTwoWeeks() {
+  const monday = new Date()
+  monday.setHours(0, 0, 0, 0)
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
+  const start = new Date(monday)
+  start.setDate(start.getDate() - 14)
+  const end = new Date(monday)
+  end.setDate(end.getDate() - 1)
+  return { start: toDateKey(start), end: toDateKey(end) }
+}
+
 function formatNumber(value) {
   const number = Number(value || 0)
   return Number.isFinite(number) ? Math.round(number).toLocaleString() : '-'
@@ -63,6 +74,7 @@ export default function NewProductReview() {
   const [endDate, setEndDate] = useState(defaultRange.end)
   const [teamFilter, setTeamFilter] = useState('전체')
   const [reviewInputs, setReviewInputs] = useState({})
+  const [mailModalOpen, setMailModalOpen] = useState(false)
   const userName = useScheduleStore(state => state.userName)
   const { rows: performanceRows, loading: isLoadingPerformanceKeys, error: performanceError } = usePerformanceRange(startDate, endDate)
 
@@ -150,6 +162,7 @@ export default function NewProductReview() {
         <button type="button" onClick={() => { setStartDate(defaultRange.start); setEndDate(defaultRange.end); setTeamFilter('전체') }} style={buttonStyle}>
           이번주
         </button>
+        <button type="button" onClick={() => setMailModalOpen(true)} style={buttonStyle}>메일작성</button>
         <span style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--text3)' }}>
           {isLoadingPerformanceKeys ? '불러오는 중...' : `미입력 ${incompleteRows.length.toLocaleString()}건 · 입력 ${completeRows.length.toLocaleString()}건`}
         </span>
@@ -160,7 +173,102 @@ export default function NewProductReview() {
         <ReviewTable title="미입력" rows={incompleteRows} onSave={saveReview} />
         <ReviewTable title="입력" rows={completeRows} onSave={saveReview} />
       </div>
+      {mailModalOpen && <MailTargetModal initialTeam={teamFilter} reviewInputs={reviewInputs} reviewInputsByPrefix={reviewInputsByPrefix} onClose={() => setMailModalOpen(false)} />}
     </main>
+  )
+}
+
+function MailTargetModal({ initialTeam, reviewInputs, reviewInputsByPrefix, onClose }) {
+  const dialogRef = useRef(null)
+  const [defaultRange] = useState(getPreviousTwoWeeks)
+  const [start, setStart] = useState(defaultRange.start)
+  const [end, setEnd] = useState(defaultRange.end)
+  const [team, setTeam] = useState(initialTeam)
+  const [excludedIds, setExcludedIds] = useState(() => new Set())
+  const [mailStatus, setMailStatus] = useState('')
+  const [preparingMail, setPreparingMail] = useState(false)
+  const validRange = !!start && !!end && start <= end
+  const { rows, loading, error } = usePerformanceRange(start, end, validRange)
+
+  useEffect(() => { dialogRef.current.showModal() }, [])
+
+  const candidates = useMemo(() => Object.values(rows || {})
+    .filter(row => REVIEW_TYPES.has(row?.newProductType) && row.broadcastDate >= start && row.broadcastDate <= end)
+    .map(row => ({ ...row, teamName: getTeamName(row) || '미지정', reviewState: reviewInputs[getEntryId(row)] || reviewInputsByPrefix[getEntryPrefix(row)] || {} }))
+    .sort((a, b) => Number(a.broadcastTimestamp || 0) - Number(b.broadcastTimestamp || 0) || String(a.pgmCodeName || '').localeCompare(String(b.pgmCodeName || ''), 'ko')),
+  [rows, start, end, reviewInputs, reviewInputsByPrefix])
+  const teams = [...new Set([initialTeam, team, ...candidates.map(row => row.teamName)])].filter(name => name && name !== '전체').sort((a, b) => a.localeCompare(b, 'ko'))
+  const targets = validRange ? candidates.filter(row => (team === '전체' || row.teamName === team) && !row.reviewState.completed) : []
+  const selectedCount = targets.filter(row => !excludedIds.has(getEntryId(row))).length
+  const allSelected = targets.length > 0 && selectedCount === targets.length
+  const selectionDisabled = !validRange || loading || !!error || !targets.length
+  const toggleTarget = (id, checked) => setExcludedIds(previous => {
+    const next = new Set(previous)
+    if (checked) next.delete(id)
+    else next.add(id)
+    return next
+  })
+  const toggleAll = checked => setExcludedIds(previous => {
+    const next = new Set(previous)
+    targets.forEach(row => {
+      if (checked) next.delete(getEntryId(row))
+      else next.add(getEntryId(row))
+    })
+    return next
+  })
+  const columns = ['구분', 'PGM명', '조직', '방송일', '시간', '다원', '입력여부']
+  const openMail = async () => {
+    if (selectionDisabled || !selectedCount || preparingMail) return
+    setPreparingMail(true)
+    setMailStatus('')
+    try {
+      const selectedRows = targets.filter(row => !excludedIds.has(getEntryId(row)))
+      const response = await fetch('/api/local-outlook/draft', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rows: selectedRows }),
+      })
+      if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('Outlook 직접 연동은 현재 PC의 로컬 PGMDR 서버에서 지원합니다.')
+      const result = await response.json()
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Outlook 연결에 실패했습니다.')
+      setMailStatus(result.warning || '수신자, 제목과 본문이 채워진 Outlook 작성창을 열었습니다.')
+    } catch (error) {
+      setMailStatus(error.message || 'Outlook 작성창을 열지 못했습니다.')
+    } finally {
+      setPreparingMail(false)
+    }
+  }
+
+  return (
+    <dialog ref={dialogRef} aria-labelledby="mail-target-title" onCancel={onClose} onClick={event => { if (event.target === event.currentTarget) { const rect = event.currentTarget.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) onClose() } }} style={{ width: 'min(960px, calc(100vw - 40px))', maxHeight: '85vh', position: 'fixed', inset: 0, margin: 'auto', padding: 0, border: '1px solid var(--border)', borderRadius: 12, background: 'var(--bg2)', color: 'var(--text)', boxShadow: '0 20px 70px #0005' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid var(--border)' }}>
+        <h2 id="mail-target-title" style={{ margin: 0, fontSize: 16 }}>메일작성 · 대상 PGM 선택</h2>
+        <button type="button" onClick={onClose} style={buttonStyle}>닫기</button>
+      </div>
+      <div style={{ padding: 20 }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, fontSize: 12 }}>
+          <label>조직 <select value={team} onChange={e => setTeam(e.target.value)} style={filterInputStyle}><option>전체</option>{teams.map(name => <option key={name}>{name}</option>)}</select></label>
+          <label>시작일 <input type="date" value={start} onChange={e => setStart(e.target.value)} style={filterInputStyle} /></label>
+          <label>종료일 <input type="date" value={end} onChange={e => setEnd(e.target.value)} style={filterInputStyle} /></label>
+        </div>
+        {!validRange && <p role="alert" style={{ color: 'var(--red)', fontSize: 12 }}>시작일과 종료일을 확인해주세요. 시작일은 종료일보다 늦을 수 없습니다.</p>}
+        {error && <p role="alert" style={{ color: 'var(--red)', fontSize: 12 }}>{String(error)}</p>}
+        <p aria-live="polite" style={{ fontSize: 12, color: 'var(--text2)', margin: '18px 0 8px' }}>미입력 대상 PGM · {validRange && loading ? '불러오는 중…' : error || !validRange ? '조회 대기' : `${targets.length.toLocaleString()}건 중 ${selectedCount.toLocaleString()}건 선택`}</p>
+        <div style={{ overflow: 'auto', maxHeight: '48vh', border: '1px solid var(--border)' }}>
+          <table style={{ ...tableStyle, width: '100%', minWidth: 720 }}>
+            <thead><tr><th scope="col" style={{ ...thStyle, width: 42, textAlign: 'center' }}><input type="checkbox" aria-label="대상 PGM 전체 선택/해제" checked={allSelected} disabled={selectionDisabled} ref={element => { if (element) element.indeterminate = selectedCount > 0 && !allSelected }} onChange={event => toggleAll(event.target.checked)} /></th>{columns.map((label, index) => <th key={label} scope="col" style={{ ...thStyle, width: index === 1 ? '32%' : undefined }}>{label}</th>)}</tr></thead>
+            <tbody>
+              {validRange && !loading && !error && targets.map(row => <tr key={getEntryId(row)}><td style={{ ...tdStyle, textAlign: 'center' }}><input type="checkbox" aria-label={`${row.pgmCodeName || 'PGM'} ${row.broadcastDate} ${row.broadcastTime || ''} 선택`} checked={!excludedIds.has(getEntryId(row))} onChange={event => toggleTarget(getEntryId(row), event.target.checked)} /></td>{[row.newProductType, row.pgmCodeName || '-', row.teamName, formatDateLabel(row.broadcastDate, row.dayOfWeek), row.broadcastTime || '-', row.multiChannel || '-', '미입력'].map((value, index) => <td key={index} title={String(value)} style={tdStyle}>{value}</td>)}</tr>)}
+              {(!validRange || loading || error || !targets.length) && <tr><td colSpan={columns.length + 1} style={{ padding: 28, textAlign: 'center', color: 'var(--text3)' }}>{!validRange ? '조회할 기간을 선택해주세요.' : loading ? '대상 PGM을 불러오는 중입니다.' : error ? '대상 PGM을 불러오지 못했습니다.' : '선택한 조건에 해당하는 PGM이 없습니다.'}</td></tr>}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
+          <span style={{ fontSize: 12, color: 'var(--text3)' }}>선택한 PGM으로 메일 제목과 본문을 자동 작성합니다.</span>
+          <button type="button" disabled={selectionDisabled || !selectedCount || preparingMail} onClick={openMail} style={{ ...buttonStyle, background: 'var(--accent)', color: '#fff', opacity: selectionDisabled || !selectedCount || preparingMail ? 0.5 : 1 }}>{preparingMail ? 'Outlook 연결 중…' : 'Outlook 메일창 열기'}</button>
+        </div>
+        {mailStatus && <p role="status" style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 0 }}>{mailStatus}</p>}
+      </div>
+    </dialog>
   )
 }
 
