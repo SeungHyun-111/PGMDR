@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { db, ref, onValue, set, update } from '../api/firebase'
 import useScheduleStore from '../store/useScheduleStore'
+import useLocalStorageState from '../hooks/useLocalStorageState'
+import UrbanUtilityHeader from '../components/common/UrbanUtilityHeader'
 
 const DEFAULT_TEAMS = ['뷰티팀', '문화서비스팀', '식품팀', '헬스푸드팀', '패션트렌드팀', '리빙팀', '가전팀']
 const SECTIONS = [
@@ -40,6 +42,7 @@ const OCTOBER_EXECUTION_PLAN = {
 }
 
 export default function ExecutionPlanPage() {
+  const [urban, setUrban] = useLocalStorageState('pgmdr.ui.executionPlan.urban', true)
   const { userName } = useScheduleStore()
   const [plan, setPlan] = useState(() => buildEmptyPlan())
 
@@ -91,7 +94,8 @@ export default function ExecutionPlanPage() {
   }
 
   return (
-    <div style={{ height: '100%', overflow: 'auto', background: 'var(--bg)', padding: 20 }}>
+    <div className={`utility-page execution-page forecast-page${urban ? ' is-urban' : ''}`} style={{ height: '100%', overflow: 'auto', background: urban ? undefined : 'var(--bg)', padding: 20 }}>
+      <UrbanUtilityHeader title="실행계획" subtitle="조직별 월간 편성비중과 분당 목표 · 입력 후 다른 칸으로 이동하면 저장됩니다." urban={urban} setUrban={setUrban} />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, minWidth: 1320 }}>
         {SECTIONS.map(section => (
           <PlanTable
@@ -110,7 +114,7 @@ export default function ExecutionPlanPage() {
 
 function PlanTable({ section, teams, values, onCellLocal, onCellSave }) {
   return (
-    <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', width: 1280 }}>
+    <div className="execution-plan-card" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden', width: 1280 }}>
       <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed', fontSize: 12 }}>
           <colgroup>
           <col style={{ width: 190 }} />
@@ -142,6 +146,7 @@ function PlanTable({ section, teams, values, onCellLocal, onCellSave }) {
                 return (
                   <td key={`${section.key}-${team.id}-${month}`} style={{ ...bodyCellStyle, padding: 0 }}>
                     <input
+                      aria-label={`${section.label} ${team.name} ${month}월`}
                       value={value}
                       onChange={e => onCellLocal(section.key, team.id, month, e.target.value)}
                       onBlur={e => onCellSave(section.key, team.id, month, e.target.value)}

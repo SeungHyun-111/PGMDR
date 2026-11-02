@@ -13,6 +13,9 @@ import useLocalStorageState from '../hooks/useLocalStorageState'
 import { getCompetitionItems } from '../utils/competition'
 import { buildTeamStatusRows } from '../domain/status/teamStatus'
 import CoachMark from '../components/common/CoachMark'
+import './PerformanceForecastUrban.css'
+import './ScheduleStatusUrban.css'
+import UrbanTeamDashboard from '../components/status/UrbanTeamDashboard'
 
 const TEAM_COLORS = ['#818cf8','#34d399','#fb923c','#60a5fa','#f472b6','#a78bfa','#4ade80','#f87171','#fbbf24','#2dd4bf']
 const MIN_TEAM_COL_WIDTH = 44
@@ -226,7 +229,7 @@ function exportTeamDetailRows(rows, selectedTeam) {
   XLSX.writeFile(wb, `편성현황_팀별상세_${teamName}_${new Date().toISOString().slice(0, 10)}.xlsx`)
 }
 
-function TeamStatusTab({ scheduledRows, competingRows = [], unscheduledRows, perfMap, manualInputs, performanceHistoryByKey, uiScope }) {
+function TeamStatusTab({ scheduledRows, competingRows = [], unscheduledRows, perfMap, manualInputs, performanceHistoryByKey, uiScope, urban }) {
   const [selectedTeam, setSelectedTeam] = useLocalStorageState(`pgmdr.ui.${uiScope}.status.team.selectedTeam`, '전체')
   const [sort, setSort] = useLocalStorageState(`pgmdr.ui.${uiScope}.status.team.sort`, { key: '_default', dir: 'asc' })
   const [colWidths, setColWidths] = useLocalStorageState(`pgmdr.ui.${uiScope}.status.team.colWidths`, () =>
@@ -351,6 +354,7 @@ function TeamStatusTab({ scheduledRows, competingRows = [], unscheduledRows, per
             return (
               <button
                 key={team}
+                aria-pressed={active}
                 onClick={() => setSelectedTeam(team)}
                 style={{
                   height: 28,
@@ -371,6 +375,7 @@ function TeamStatusTab({ scheduledRows, competingRows = [], unscheduledRows, per
         </div>
       </div>
 
+      {urban && <UrbanTeamDashboard summary={summary} rows={visibleRows} team={selectedTeam} />}
       <div data-coach="status-team-summary" style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 10, overflow: 'hidden' }}>
         <div style={{ padding: '8px 12px', borderBottom: '1px solid var(--border)', background: 'var(--bg3)', fontSize: 11, fontWeight: 700, color: 'var(--text2)' }}>
           팀 요약 · {selectedTeam}
@@ -603,7 +608,7 @@ function GradeDonutChart({ items, selectedGrade, onGradeSelect, valueMode = 'cou
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+    <div className="status-grade-visualization" style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
 
       {/* ── 왼쪽: 도넛 원형 차트 ── */}
       <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -696,6 +701,7 @@ function GradeDonutChart({ items, selectedGrade, onGradeSelect, valueMode = 'cou
 
 // ── 메인 페이지 ───────────────────────────────────────────────────────────
 export default function ScheduleStatus() {
+  const [urban, setUrban] = useLocalStorageState('pgmdr.ui.status.urban', true)
   const { scheduleBlocks, proposalItems, startDate, poolType, perfMap, performanceHistoryByKey, manualInputs, currentVersionId } = useScheduleStore()
   const categoryMap = useCategoryMap(proposalItems)
   const uiScope = `${startDate || 'no-session'}_${poolType || 'A'}_${currentVersionId || 'draft'}`
@@ -785,14 +791,16 @@ export default function ScheduleStatus() {
   const closeStatusCoach = () => setStatusCoachOpen(false)
 
   return (
-    <div data-coach="status-page" style={{ padding: 16, height: '100%', overflowY: 'auto' }}>
+    <div className={`status-page forecast-page${urban ? ' is-urban' : ''}`} data-coach="status-page" style={{ padding: 16, height: '100%', overflowY: 'auto' }}>
+      {urban && <div className="status-urban-heading"><div><span>SCHEDULE OVERVIEW</span><h1>편성현황</h1></div><span>{startDate} · {poolType} 풀</span></div>}
       {/* 탭 + 등급 필터 초기화 */}
       <div data-coach="status-tabs" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-        <button style={btnStyle(tab === 'all')}          onClick={() => setTab('all')}>전체 {enrichedBlocks.length + enrichedItems.length}</button>
-        <button style={btnStyle(tab === 'scheduled')}    onClick={() => setTab('scheduled')}>편성완료 {enrichedBlocks.length + competingBlocks.length}</button>
-        <button style={btnStyle(tab === 'unscheduled')}  onClick={() => setTab('unscheduled')}>미편성 {proposalItems.length}</button>
-        <button style={btnStyle(tab === 'team')}         onClick={() => setTab('team')}>팀별</button>
-        <button style={btnStyle(tab === 'logs')}         onClick={() => setTab('logs')}>변경이력 {logs.length}</button>
+        <button aria-pressed={tab === 'all'} style={btnStyle(tab === 'all')} onClick={() => setTab('all')}>전체 {enrichedBlocks.length + enrichedItems.length}</button>
+        <button aria-pressed={tab === 'scheduled'} style={btnStyle(tab === 'scheduled')} onClick={() => setTab('scheduled')}>편성완료 {enrichedBlocks.length + competingBlocks.length}</button>
+        <button aria-pressed={tab === 'unscheduled'} style={btnStyle(tab === 'unscheduled')} onClick={() => setTab('unscheduled')}>미편성 {proposalItems.length}</button>
+        <button aria-pressed={tab === 'team'} style={btnStyle(tab === 'team')} onClick={() => setTab('team')}>팀별</button>
+        <button aria-pressed={tab === 'logs'} style={btnStyle(tab === 'logs')} onClick={() => setTab('logs')}>변경이력 {logs.length}</button>
+        <div className="forecast-mode-switch status-mode-switch" aria-label="편성현황 테마">{[true, false].map(value => <button key={String(value)} type="button" aria-pressed={urban === value} onClick={() => setUrban(value)}>{value ? 'Urban' : '기본'}</button>)}</div>
         <button
           data-coach="status-help-button"
           onClick={openStatusCoach}
@@ -873,7 +881,7 @@ export default function ScheduleStatus() {
       )}
       {tab === 'scheduled'   && <div data-coach="status-scheduled-table"><StatusScheduled   rows={filteredBlocks} competing={competingBlocks} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} /></div>}
       {tab === 'unscheduled' && <div data-coach="status-unscheduled-table"><StatusUnscheduled rows={filteredItems}  perfMap={perfMap} manualInputs={manualInputs} /></div>}
-      {tab === 'team'        && <TeamStatusTab scheduledRows={filteredBlocks} competingRows={competingBlocks} unscheduledRows={filteredItems} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} uiScope={uiScope} />}
+      {tab === 'team'        && <TeamStatusTab scheduledRows={filteredBlocks} competingRows={competingBlocks} unscheduledRows={filteredItems} perfMap={perfMap} performanceHistoryByKey={performanceHistoryByKey} manualInputs={manualInputs} uiScope={uiScope} urban={urban} />}
       {tab === 'logs'        && <div data-coach="status-logs"><StatusLogs logs={logs} startDate={startDate} poolType={poolType} versionId={currentVersionId} /></div>}
       {statusCoachOpen && (
         <CoachMark steps={STATUS_COACH_STEPS} stepIndex={statusCoachStep} onStepChange={setStatusCoachStep} onClose={closeStatusCoach} />

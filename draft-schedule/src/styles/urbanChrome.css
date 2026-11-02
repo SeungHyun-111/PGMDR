@@ -1,0 +1,23 @@
+/* Follow the mounted page's actual mode, including same-tab mode switches.
+   No global theme mutation: other pages and dialogs retain their own palette. */
+.workspace-shell:has(.forecast-page.is-urban) > :is(.workspace-nav,.workspace-history) {
+  --bg:#162a42; --bg2:#233950; --bg3:rgba(193,219,255,.1);
+  --border:rgba(222,239,255,.23); --border2:rgba(222,239,255,.18);
+  --text:#f5f9ff; --text2:#dce9fa; --text3:#b8cde5; --accent:#b2d3ff;
+  color:var(--text); color-scheme:dark;
+  background:linear-gradient(110deg,rgba(17,36,59,.88),rgba(29,51,78,.78)),url('/backgrounds/urban-city-lounge.png') center 58% / cover fixed !important;
+  border-bottom-color:rgba(228,242,255,.24) !important;
+  box-shadow:inset 0 1px 0 #ffffff12,0 3px 14px #08182b22 !important;
+}
+.workspace-shell:has(.forecast-page.is-urban) > .workspace-nav { height:50px !important; }
+.workspace-shell:has(.forecast-page.is-urban) > .workspace-nav > [aria-label="SK스토아 편성팀"] { display:none !important; }
+.workspace-shell:has(.forecast-page.is-urban) > .workspace-nav [data-coach=tabs] { align-items:center; gap:3px; }
+.workspace-shell:has(.forecast-page.is-urban) > .workspace-nav [data-coach=tabs]>button { height:32px !important; border:1px solid transparent !important; border-radius:10px; padding:0 12px !important; color:#d5e5f9 !important; transition:background .18s,color .18s; }
+.workspace-shell:has(.forecast-page.is-urban) > .workspace-nav [data-coach=tabs]>button:hover { background:#d9ecff12 !important; color:#fff !important; }
+.workspace-shell:has(.forecast-page.is-urban) > .workspace-nav [data-coach=tabs]>button[aria-current=page] { background:linear-gradient(135deg,#cce6ff33,#93bded15) !important; border-color:#cce6ff55 !important; color:#fff !important; box-shadow:inset 0 1px 0 #ffffff26; }
+.workspace-shell:has(.forecast-page.is-urban) > .workspace-nav [data-coach=utilities]>:is(button,[data-coach=profile]) { border-radius:9px !important; background:#c7e0ff10 !important; border-color:#d4eaff38 !important; color:#e9f3ff !important; }
+.workspace-shell:has(.forecast-page.is-urban) > .workspace-nav [data-coach=current-version] { background:#efbb7b15 !important; border-color:#ffd4a14d !important; color:#ffdbad !important; }
+.workspace-shell:has(.forecast-page.is-urban) > .workspace-nav [data-coach=session] button { background:#d3e7ff12 !important; border-color:#d9ecff40 !important; color:#e5f1ff !important; border-radius:9px !important; }
+.workspace-shell:has(.forecast-page.is-urban) > .workspace-history { height:38px !important; }
+.workspace-shell:has(.forecast-page.is-urban) > .workspace-history [data-coach=versions] button { border-radius:8px !important; box-shadow:none !important; }
+.workspace-shell:has(.forecast-page.is-urban) > :is(.workspace-nav,.workspace-history) button:focus-visible { outline:2px solid #c6e1ff; outline-offset:2px; }

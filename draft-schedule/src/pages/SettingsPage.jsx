@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import useMemoCodes from '../hooks/useMemoCodes'
 import useCompetitorVisibilityStore from '../store/useCompetitorVisibilityStore'
+import useLocalStorageState from '../hooks/useLocalStorageState'
+import UrbanUtilityHeader from '../components/common/UrbanUtilityHeader'
 
 const DEFAULT_WIDTHS = { no: 54, code: 92, name: 280, use: 74, owner: 120, actions: 118 }
 const COLUMNS = [
@@ -14,6 +16,7 @@ const COLUMNS = [
 const emptyForm = { code: '', name: '', use: 'Y', owner: '' }
 
 export default function SettingsPage() {
+  const [urban, setUrban] = useLocalStorageState('pgmdr.ui.settings.urban', true)
   const competitorHidden = useCompetitorVisibilityStore(state => state.hidden)
   const setCompetitorHidden = useCompetitorVisibilityStore(state => state.setHidden)
   const { memoCodes: rows, loading, error, saveMemoCodes } = useMemoCodes()
@@ -120,12 +123,13 @@ export default function SettingsPage() {
   const tableWidth = Object.values(widths).reduce((sum, width) => sum + width, 0)
 
   return (
-    <div style={{ height: '100%', overflow: 'auto', background: 'var(--bg)', padding: 16 }}>
+    <div className={`utility-page settings-page forecast-page${urban ? ' is-urban' : ''}`} style={{ height: '100%', overflow: 'auto', background: urban ? undefined : 'var(--bg)', padding: 16 }}>
+      <UrbanUtilityHeader title="설정" subtitle="메모코드와 화면 표시 설정을 관리합니다." urban={urban} setUrban={setUrban} />
       <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16, color: 'var(--text)', fontSize: 13, cursor: 'pointer' }}>
         <input type="checkbox" checked={!competitorHidden} onChange={event => setCompetitorHidden(!event.target.checked)} />
         경쟁사 검색 아이콘 표시
       </label>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+      <div className="settings-toolbar" style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <div>
           <div style={{ fontSize: 15, fontWeight: 900, color: 'var(--text)' }}>설정</div>
           <div style={{ fontSize: 11, color: 'var(--text3)', marginTop: 3 }}>

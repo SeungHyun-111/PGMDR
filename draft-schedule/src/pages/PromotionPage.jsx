@@ -5,6 +5,9 @@ import PromotionDateInput from './PromotionDateInput'
 import PromotionProductsTab from './PromotionProductsTab'
 import PromotionPerformanceTab from './PromotionPerformanceTab'
 import PromotionPgmSelectionTab from './PromotionPgmSelectionTab'
+import useLocalStorageState from '../hooks/useLocalStorageState'
+import './PerformanceForecastUrban.css'
+import './PromotionPageUrban.css'
 import usePromotionAssignmentStore, { subscribePromotionAssignments, migrateLegacyPromotionAssignments } from '../store/usePromotionAssignmentStore'
 
 const PROMOTIONS_PATH = 'global/promotions'
@@ -19,6 +22,7 @@ const inputStyle = {
 const buttonStyle = { padding: '8px 14px', border: '1px solid var(--border)', borderRadius: 6, background: 'var(--bg2)', color: 'var(--text)', fontSize: 12, fontWeight: 700, cursor: 'pointer' }
 
 export default function PromotionPage() {
+  const [urban, setUrban] = useLocalStorageState('pgmdr.ui.promotion.urban', true)
   const [activeTab, setActiveTab] = useState('performance')
   const [today, setToday] = useState(getKoreaToday)
   const [promotions, setPromotions] = useState({})
@@ -72,7 +76,8 @@ export default function PromotionPage() {
     .sort(([, a], [, b]) => statusOrder(a) - statusOrder(b) || a.startDate.localeCompare(b.startDate) || a.endDate.localeCompare(b.endDate))
 
   return (
-    <div className={`promotion-page${activeTab === 'pgmSelection' ? ' is-pgm-selection' : activeTab === 'performance' ? ' is-promotion-results' : ''}`} aria-label="프로모션" style={{ height: '100%', overflow: 'auto', background: 'var(--bg)' }}>
+    <div className={`promotion-page forecast-page${urban ? ' is-urban' : ''}${activeTab === 'pgmSelection' ? ' is-pgm-selection' : activeTab === 'performance' ? ' is-promotion-results' : ''}`} aria-label="프로모션" style={{ height: '100%', overflow: 'auto', background: urban ? undefined : 'var(--bg)' }}>
+      <div className="promotion-theme-toolbar"><span>PROMOTION WORKSPACE</span><div className="forecast-mode-switch" aria-label="프로모션 테마">{[true, false].map(value => <button key={String(value)} type="button" aria-pressed={urban === value} onClick={() => setUrban(value)}>{value ? 'Urban' : '기본'}</button>)}</div></div>
       <section className="promotion-ongoing" aria-label="이번 달 프로모션">
         <div className="promotion-ongoing-heading">
           <h2>{Number(today.slice(5, 7))}월 프로모션 <span>{monthlyPromotions.length}</span></h2>
@@ -122,7 +127,7 @@ export default function PromotionPage() {
         <PromotionProductsTab promotions={rows} loaded={loaded} loadError={error} />
       </section>
       <section hidden={activeTab !== 'performance'} id="promotion-performance-panel" role="tabpanel" aria-labelledby="promotion-performance-tab" style={{ padding: 24 }}>
-        <PromotionPerformanceTab promotions={rows} loaded={loaded} active={activeTab === 'performance'} />
+        <PromotionPerformanceTab promotions={rows} loaded={loaded} active={activeTab === 'performance'} urban={urban} />
       </section>
       <section hidden={activeTab !== 'pgmSelection'} id="promotion-pgmSelection-panel" role="tabpanel" aria-labelledby="promotion-pgmSelection-tab" style={{ padding: 24 }}>
         <PromotionPgmSelectionTab promotions={rows} loaded={loaded} active={activeTab === 'pgmSelection'} />

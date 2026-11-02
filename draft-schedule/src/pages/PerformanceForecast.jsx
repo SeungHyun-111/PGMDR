@@ -23,6 +23,8 @@ import useLocalStorageState from '../hooks/useLocalStorageState'
 import CoachMark from '../components/common/CoachMark'
 import { ChartCard, HeroCard, StatCard } from '../components/forecast/ForecastCards'
 import { ChartTip, DailyTeamTip } from '../components/forecast/ForecastTooltips'
+import UrbanForecastDashboard from '../components/forecast/UrbanForecastDashboard'
+import './PerformanceForecastUrban.css'
 
 const FORECAST_COACH_STEPS = [
   { target: '[data-coach="forecast-page"]', title: '시뮬레이션 화면', description: '현재 편성된 블록을 기준으로 예상 취급고와 한계이익을 계산하는 화면입니다. 단순 합계가 아니라 가중분, 직전 실적, 수기 입력, 목표값을 함께 반영합니다.' },
@@ -194,6 +196,7 @@ export default function PerformanceForecast() {
   const categoryMap = useCategoryMap(proposalItems)
   const uiScope = `${startDate || 'no-session'}_${poolType || 'A'}_${currentVersionId || 'draft'}`
   const [groupBy, setGroupBy]           = useLocalStorageState(`pgmdr.ui.${uiScope}.forecast.groupBy`, 'team')
+  const [urban, setUrban] = useLocalStorageState('pgmdr.ui.forecast.urban', true)
   const [simSpm, setSimSpm]             = useState('')
   const [simPpm, setSimPpm]             = useState('')
   const [excludePgmTeam, setExcludePgmTeam] = useLocalStorageState(`pgmdr.ui.${uiScope}.forecast.excludePgmTeam`, false)
@@ -439,12 +442,13 @@ export default function PerformanceForecast() {
   const td = { padding: '6px 10px', fontSize: 11, borderBottom: '1px solid var(--border)', whiteSpace: 'nowrap', color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis' }
 
   return (
-    <div data-coach="forecast-page" style={{ height: '100%', overflowY: 'auto' }}>
-    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className={`forecast-page${urban ? ' is-urban' : ''}`} data-coach="forecast-page" style={{ height: '100%', overflowY: 'auto' }}>
+    <div className="forecast-content" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 20 }}>
 
       {/* ── 상단 컨트롤 ──────────────────────────────────────── */}
       <div data-coach="forecast-header" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
         <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>시뮬레이션</span>
+        <div className="forecast-mode-switch" aria-label="시뮬레이션 디자인">{[true,false].map(value=><button key={String(value)} type="button" aria-pressed={urban===value} onClick={()=>setUrban(value)}>{value?'Urban':'기본'}</button>)}</div>
         <button
           data-coach="forecast-help-button"
           onClick={openForecastCoach}
@@ -470,6 +474,10 @@ export default function PerformanceForecast() {
       <div data-coach="forecast-formula" style={{ padding: '8px 12px', background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 11, color: 'var(--text2)', fontWeight: 600 }}>
         시뮬레이션 평균 기준: 미입력 포함(실적 = 0, 가중분 = 총 편성)
       </div>
+      {urban ? <UrbanForecastDashboard summary={summary} companyTotal={companyTotal} dailyData={dailyData} dailyTeamData={dailyTeamData}
+        groups={enrichedGroupData} groupBy={groupBy} groupToggle={groupToggle} selectedDate={selectedDate} setSelectedDate={setSelectedDate}
+        avgDailySalesMin={avgDailySalesMin} avgDailyProfitMin={avgDailyProfitMin} pgmTeamRows={pgmTeamRows} simSpm={simSpm} simPpm={simPpm}
+        onSalesChange={value=>{setSimSpm(value);saveSimDebounced(value,simPpm)}} onProfitChange={value=>{setSimPpm(value);saveSimDebounced(simSpm,value)}}/> : <>
       {(() => {
         const salesAchieve  = companyTotal?.salesPerMin  > 0 ? summary.salesPerMin  / companyTotal.salesPerMin  * 100 : null
         const profitAchieve = companyTotal?.profitPerMin > 0 ? summary.profitPerMin / companyTotal.profitPerMin * 100 : null
@@ -825,6 +833,7 @@ export default function PerformanceForecast() {
       </div>
 
 
+      </>}
       {/* ── 미입력 실적 ───────────────────────────────────────── */}
       <div data-coach="forecast-missing-table" style={{ background: 'rgba(220,38,38,.05)', border: '1px solid rgba(220,38,38,.3)', borderRadius: 10, overflow: 'hidden' }}>
         <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid rgba(220,38,38,.2)' }}>

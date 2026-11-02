@@ -1,0 +1,35 @@
+.review-page.is-urban { --border2:rgba(227,241,255,.19); padding:24px clamp(16px,2.4vw,38px); gap:18px; box-sizing:border-box; overflow-y:auto !important; }
+.review-hero { display:flex; align-items:center; justify-content:space-between; gap:20px; flex-shrink:0; }
+.review-hero>div>span { font-size:9px; letter-spacing:.24em; color:#d1e3fa; font-weight:650; }
+.review-hero h1 { margin:8px 0; font-size:27px; font-weight:650; letter-spacing:-1px; }
+.review-hero p { margin:0; font-size:11px; color:#d7e6f8; }
+.review-page.is-urban .review-toolbar { flex-wrap:wrap; padding:12px 16px !important; border:1px solid #e7f4ff40 !important; border-radius:16px; background:rgba(35,57,85,.14) !important; box-shadow:inset 0 1px 0 #fff2; }
+.review-page.is-urban .review-toolbar>strong { display:none; }
+.review-page.is-urban .review-toolbar :is(input,select,button):not(.forecast-mode-switch button) { border-radius:9px !important; height:32px !important; }
+.review-page.is-urban select option { background:#23374f; color:#f7faff; }
+.review-page.is-urban .review-toolbar>button:last-of-type { background:linear-gradient(135deg,#e9f5ff,#b6d4fb) !important; color:#233c5e !important; border-color:#d7eaff !important; }
+.review-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; flex-shrink:0; }
+.review-metric { padding:17px 22px; }
+.review-metric>span { font-size:11px; color:#e0edff; }
+.review-metric>strong { display:block; font-size:32px; font-weight:650; letter-spacing:-1px; margin:8px 0; font-variant-numeric:tabular-nums; }
+.review-metric small { margin-left:7px; font-size:11px; font-weight:500; color:#d3e4fa; }
+.review-metric p { margin:0; font-size:10px; color:#d4e4f7; }
+.review-page.is-urban .review-content { overflow:visible !important; padding:0 !important; gap:18px !important; flex:1 0 auto !important; }
+.review-page.is-urban .review-table-panel { min-height:210px !important; flex:1 0 auto !important; }
+.review-page.is-urban .review-table-title { height:48px !important; padding:0 20px; gap:10px !important; }
+.review-page.is-urban .review-table-title strong { font-size:14px !important; font-weight:650; }
+.review-page.is-urban .review-table-title>span { padding:3px 9px; border:1px solid #d7eaff30; border-radius:999px; background:#b0d7ff12; }
+.review-page.is-urban .review-table-scroll { background:transparent !important; border:0 !important; border-top:1px solid #e0eeff26 !important; max-height:46vh; min-height:140px !important; border-radius:0 0 19px 19px; }
+.review-page.is-urban table { background:transparent !important; }
+.review-page.is-urban th { background:#243c57 !important; border:0 !important; border-bottom:1px solid #e4f1ff38 !important; color:#d6e7fc !important; height:38px !important; font-weight:600 !important; box-shadow:none !important; font-size:11px; }
+.review-page.is-urban td { border:0 !important; border-bottom:1px solid #e8f3ff17 !important; height:40px !important; }
+.review-page.is-urban tbody tr { background:rgba(26,47,73,.12) !important; }
+.review-page.is-urban tbody tr:nth-child(even) { background:rgba(199,224,255,.04) !important; }
+.review-page.is-urban tbody tr:hover { background:rgba(170,209,255,.12) !important; }
+.review-page.is-urban textarea { border-radius:7px; min-height:32px !important; background:#10253c15 !important; }
+.review-page.is-urban textarea:focus { outline:1px solid #baddff !important; background:#18314b90 !important; }
+.review-page.is-urban input[type=checkbox] { accent-color:#9ecaff; }
+.review-page.is-urban dialog { background:linear-gradient(130deg,#21374ff5,#16283df7) !important; border-color:#e0efff50 !important; border-radius:19px !important; box-shadow:0 25px 90px #0008 !important; }
+.review-page.is-urban dialog::backdrop { background:#07162666; }
+@media(max-width:850px) { .review-page.is-urban { padding:18px 14px; gap:14px; } .review-hero h1 {font-size:22px;} .review-metrics {gap:10px;} .review-metric {padding:15px;} .review-metric>strong {font-size:27px;} .review-toolbar>span:last-child {width:100%; margin-left:0 !important;} }
+@media(max-width:540px) { .review-hero p {font-size:10px;} .review-metric {padding:12px;} .review-metric p {font-size:9px; line-height:1.5;} .review-metric>strong {font-size:24px;} .review-page.is-urban .review-toolbar {gap:8px !important;} }

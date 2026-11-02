@@ -1,0 +1,41 @@
+.status-page { box-sizing:border-box; }
+.status-mode-switch { margin-left:auto; }
+.urban-team-dashboard { display:grid; gap:18px; }
+.urban-team-dashboard .urban-metric {min-height:125px;}
+.urban-team-dashboard .urban-number {font-size:clamp(22px,2vw,32px);}
+.urban-team-composition {display:grid;grid-template-columns:minmax(170px,1fr) minmax(160px,1fr);align-items:center;gap:20px;}
+.urban-team-legend {display:grid;gap:16px;}
+.urban-team-legend>div {display:grid;grid-template-columns:8px 1fr auto 48px;gap:9px;align-items:center;font-size:11px;}
+.urban-team-legend i {width:7px;height:7px;border-radius:50%;}
+.urban-team-legend b {font-weight:600;}
+.urban-team-legend small {text-align:right;color:#caddf4;}
+@media(max-width:540px) {.urban-team-composition {grid-template-columns:1fr;gap:0;}.urban-team-legend {padding-bottom:12px;}}
+.status-page.is-urban { --bg:rgba(20,41,64,.35); --border2:#d9eaff55; --yellow:#ffe099; --ca:#9bc6ff24; --ca-t:#c0ddff; --ip:#efbf9f24; --ip-t:#ffddc3; --all:#cbdfff18; --all-t:#e4f1ff; padding:24px clamp(16px,2.4vw,38px) !important; }
+.status-urban-heading { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; gap:20px; }
+.status-urban-heading>div>span { font-size:9px; letter-spacing:.24em; color:#cfe2fa; }
+.status-urban-heading h1 { margin:7px 0 0; font-size:27px; font-weight:650; letter-spacing:-1px; }
+.status-urban-heading>span { font-size:11px; color:#d8e9fc; border:1px solid #dcecff40; padding:9px 14px; border-radius:999px; background:#bfdcff0d; }
+.status-page.is-urban [data-coach=status-tabs] { padding:12px 15px; border:1px solid #dfedff40; border-radius:15px; background:#18304b26; box-shadow:inset 0 1px 0 #ffffff20; gap:7px !important; }
+.status-page.is-urban [data-coach=status-tabs]>button:not([data-coach=status-help-button]),.status-page.is-urban [data-coach=status-team-picker] button { border-radius:9px !important; background:#bfdcff10 !important; border-color:#dbeaff35 !important; color:#dcecff !important; }
+.status-page.is-urban [data-coach=status-tabs]>button[aria-pressed=true],.status-page.is-urban [data-coach=status-team-picker] button[aria-pressed=true] { background:linear-gradient(135deg,#e9f6ff,#b5d5ff) !important; color:#213d60 !important; border-color:#dfedff !important; }
+.status-page.is-urban [data-coach=status-help-button] { background:#b6d5ff12 !important; border-color:#dcecff40 !important; color:#e8f3ff !important; }
+.status-page.is-urban :is([data-coach=status-grade-chart],[data-coach=status-team-picker],[data-coach=status-team-summary],[data-coach=status-team-detail],[data-coach=status-scheduled-table]>div,[data-coach=status-unscheduled-table]>div) { border-radius:17px !important; border-color:#e1efff48 !important; background:linear-gradient(120deg,#cde4ff12,#d8ebff04),#18304b26 !important; box-shadow:inset 0 1px 0 #ffffff26,0 6px 20px #08192a15; }
+.status-page.is-urban [data-coach=status-grade-chart] { backdrop-filter:blur(2px); animation:status-urban-enter .55s both; }
+.status-page.is-urban [data-coach=status-grade-chart] .recharts-pie-label-text { fill:#d5e5f9; }
+.status-page.is-urban [data-coach=status-grade-chart] text[fill="#888"] { fill:#d5e5f9; }
+.status-page.is-urban [data-coach=status-grade-chart] text[fill="#6b7280"] { fill:#c1cfdf; }
+.status-page.is-urban .status-grade-visualization>div:nth-child(2) { background:#d8ebff26 !important; }
+.status-page.is-urban .status-table-scroll { border-radius:0 0 16px 16px; }
+.status-page.is-urban .status-log-workspace>div:first-child { border-radius:13px !important; border-color:#dcecff40 !important; background:#b5d5ff0d !important; flex-wrap:wrap; }
+.status-page.is-urban .status-log-workspace>div:first-child>button { background:#c6e0ff20 !important; color:#e8f4ff !important; border:1px solid #dcecff40 !important; border-radius:8px !important; }
+.status-page.is-urban [data-coach=status-scheduled-table] td:last-child>span { background:color-mix(in srgb,currentColor 12%,transparent) !important; }
+.status-page.is-urban table { color:#edf5ff; }
+.status-page.is-urban table thead th { background:#28445f !important; border-color:#dbeaff30 !important; }
+.status-page.is-urban table tbody tr:hover { background:#b5d5ff12 !important; }
+.status-page.is-urban :is(input,select) { color-scheme:dark; border-color:#d7eaff40 !important; border-radius:8px !important; }
+.status-page.is-urban input::placeholder { color:#d7e7fa; opacity:1; }
+.status-page.is-urban select option { background:#243d56; color:#f2f7ff; }
+.status-page.is-urban button:focus-visible { outline:2px solid #b9daff; outline-offset:3px; }
+@keyframes status-urban-enter { from {opacity:0;transform:translateY(-15px)} to {opacity:1;transform:none} }
+@media(max-width:900px) { .status-grade-visualization {flex-wrap:wrap;gap:12px !important;} .status-grade-visualization>div:nth-child(2) {display:none;} .status-grade-visualization>div:last-child {flex-basis:100% !important;} }
+@media(prefers-reduced-motion:reduce) { .status-page.is-urban [data-coach=status-grade-chart] {animation:none;} }

@@ -233,7 +233,7 @@ export default function StatusLogs({ logs, startDate, poolType, versionId }) {
   }
 
   return (
-    <div style={{ height: 'calc(100vh - 190px)', minHeight: 520, display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div className="status-log-workspace" style={{ height: 'calc(100vh - 190px)', minHeight: 520, display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 8, padding: '8px 10px' }}>
         <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text2)', flexShrink: 0 }}>기존상품 검색</span>
         <input

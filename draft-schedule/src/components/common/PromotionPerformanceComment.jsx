@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import useScheduleStore from '../../store/useScheduleStore'
 import { savePromotionComment, subscribePromotionComment } from '../../api/promotionPerformanceComments'
+import CommentTerminal from './CommentTerminal'
 
 export default function PromotionPerformanceComment({ promotionId, active }) {
   const userName = useScheduleStore(state => state.userName)
@@ -21,10 +22,14 @@ export default function PromotionPerformanceComment({ promotionId, active }) {
     if (mounted.current) setStatus('저장 중…')
     savePromotionComment(promotionId, edit.text, edit.userName).then(() => {
       if (!mounted.current || edit.version !== version.current) return
+      setRemote(current => ({ ...current, text: edit.text }))
       setDraft(null)
       setStatus('저장됨')
     }).catch(() => {
-      if (mounted.current && edit.version === version.current) setStatus('저장 실패 · 다시 저장해주세요.')
+      if (mounted.current && edit.version === version.current) {
+        pending.current = edit
+        setStatus('저장 실패')
+      }
     })
   }
   const flushRef = useRef(flush)
@@ -39,15 +44,9 @@ export default function PromotionPerformanceComment({ promotionId, active }) {
     return () => { unsubscribe(); flushRef.current() }
   }, [promotionId, active, retry])
   return <section className="promotion-performance-comment" aria-label="담당자 코멘트">
-    <header><label htmlFor={`promotion-comment-${promotionId}`}>담당자 코멘트</label><span role={status.startsWith('저장 실패') ? 'alert' : 'status'}>{status || (remote === null && !loadError ? '불러오는 중…' : '')}</span><button type="button" disabled={!active || remote === null || !!loadError || status === '저장 중…'} onClick={() => {
-      pending.current = { text: draft ?? remote?.text ?? '', userName, version: ++version.current }
-      flush()
-    }}>저장</button></header>
-    {loadError && <p role="alert">{loadError} <button type="button" onClick={() => setRetry(value => value + 1)}>다시 시도</button></p>}
-    <textarea id={`promotion-comment-${promotionId}`} aria-label="담당자 코멘트 내용" placeholder="담당자 코멘트를 작성해주세요." disabled={!active || remote === null || !!loadError} value={draft ?? remote?.text ?? ''} onChange={event => {
-      const text = event.target.value
+    <CommentTerminal id={`promotion-comment-${promotionId}`} status={loadError || status || (remote === null ? '불러오는 중…' : '자동 저장')} failed={!!loadError || status === '저장 실패'} onRetry={() => loadError ? setRetry(value => value + 1) : flush()} disabled={!active || remote === null || !!loadError} value={draft ?? remote?.text ?? ''} onChange={text => {
       setDraft(text)
-      setStatus('')
+      setStatus('저장 대기…')
       pending.current = { text, userName, version: ++version.current }
       clearTimeout(timer.current)
       timer.current = setTimeout(() => flushRef.current(), 600)

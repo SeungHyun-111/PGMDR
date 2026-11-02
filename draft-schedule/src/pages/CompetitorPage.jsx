@@ -14,6 +14,8 @@ import WeeklyWork from '../components/common/WeeklyWork'
 import { summarizeCompetitorHighlights } from '../utils/competitorHighlight'
 import CompetitorBrandSummary from '../components/common/CompetitorBrandSummary'
 import useLocalStorageState from '../hooks/useLocalStorageState'
+import './PerformanceForecastUrban.css'
+import './CompetitorPageUrban.css'
 
 const DAYS = ['월', '화', '수', '목', '금', '토', '일']
 const HOURS = Array.from({ length: 24 }, (_, hour) => hour)
@@ -26,6 +28,7 @@ const monday = value => {
 }
 
 export default function CompetitorPage() {
+  const [urban, setUrban] = useLocalStorageState('pgmdr.ui.competitor.urban', true)
   const competitorSearchHidden = useCompetitorVisibilityStore(state => state.hidden)
   const setCompetitorSearchHidden = useCompetitorVisibilityStore(state => state.setHidden)
   const [company, setCompany] = useState('SSG')
@@ -91,7 +94,7 @@ export default function CompetitorPage() {
     if (rect.height) setMeetingHeight(Math.min(75, Math.max(20, (rect.bottom - clientY) / rect.height * 100)))
     setTooltip(null)
   }
-  return <section className="competitor-page">
+  return <section className={`competitor-page forecast-page${urban ? ' is-urban' : ''}`}>
     <header className="competitor-toolbar">
       <div className="competitor-toolbar-left">
       <h2>경쟁사 주간 편성표</h2>
@@ -124,7 +127,7 @@ export default function CompetitorPage() {
           </div>}
         </div>
       </div>
-      <div className="competitor-toolbar-actions"><button onClick={refresh}>새로고침</button><CompetitorRefresh onComplete={month => { reset(); setWeek(monday(`${month}-01`)); setRevision(value => value + 1) }} /><label className="competitor-search-toggle"><input type="checkbox" checked={!competitorSearchHidden} onChange={event => setCompetitorSearchHidden(!event.target.checked)} />검색 토글</label><label className="competitor-search-toggle"><input type="checkbox" checked={meetingInputOpen} aria-controls="competitor-meeting-input-panel" onChange={event => { setMeetingInputOpen(event.target.checked); setTooltip(null); if (event.target.checked) setActiveView('schedule') }} />회의자료 입력</label></div>
+      <div className="competitor-toolbar-actions"><button onClick={refresh}>새로고침</button><div className="forecast-mode-switch" aria-label="경쟁사 테마">{[true, false].map(value => <button key={String(value)} type="button" aria-pressed={urban === value} onClick={() => setUrban(value)}>{value ? 'Urban' : '기본'}</button>)}</div><CompetitorRefresh onComplete={month => { reset(); setWeek(monday(`${month}-01`)); setRevision(value => value + 1) }} /><label className="competitor-search-toggle"><input type="checkbox" checked={!competitorSearchHidden} onChange={event => setCompetitorSearchHidden(!event.target.checked)} />검색 토글</label><label className="competitor-search-toggle"><input type="checkbox" checked={meetingInputOpen} aria-controls="competitor-meeting-input-panel" onChange={event => { setMeetingInputOpen(event.target.checked); setTooltip(null); if (event.target.checked) setActiveView('schedule') }} />회의자료 입력</label></div>
     </header>
     {weekError && <div className="competitor-message" role="status">{weekError}</div>}
     {activeView === 'weeklyWork' ? <WeeklyWork key={`${week}-${userName}`} week={week} userName={userName} /> : activeView === 'meeting' ? <CompetitorMeetingNotes key={`${week}-${userName}`} week={week} organizations={organizations} userName={userName} revision={revision} currentCompany={!error ? company : undefined} currentRows={rows} currentRowsReady={!loading} /> : <>

@@ -24,18 +24,19 @@ import { refreshKmaWeatherIfStale } from './api/weather'
 import useCultureCodeMasterStore, { ensureCultureCodeSubscription, ensureCultureHistorySubscription } from './store/useCultureCodeMasterStore'
 import { ensureCultureAuth } from './api/cultureFirebase'
 import PixelDriftText from './components/effects/PixelDriftText'
+import './styles/urbanChrome.css'
 
 const TABS = [
   { id: 'draft',    label: '초안 편성' },
-  { id: 'forecast', label: '시뮬레이션' },
   { id: 'ratio',    label: '편성비중' },
+  { id: 'forecast', label: '시뮬레이션' },
   { id: 'status',   label: '편성현황' },
-  { id: 'settings', label: '설정' },
   { id: 'newReview', label: '신상품/재녹화 리뷰' },
   { id: 'promotion', label: '프로모션' },
   { id: 'competitor', label: '경쟁사' },
   // { id: 'help', label: '설명서' },
   { id: 'executionPlan', label: '실행계획' },
+  { id: 'settings', label: '설정' },
 ]
 
 const COACH_STEPS = [
@@ -248,7 +249,7 @@ export default function App() {
     : { bg: '#eff6ff', border: '#93c5fd', color: '#1d4ed8' }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
+    <div className="workspace-shell" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       {/* 사용자 이름 팝업 */}
       {showUserPopup && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
@@ -270,7 +271,7 @@ export default function App() {
       )}
 
       {/* 네비 */}
-      <nav style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', background: 'var(--bg2)', height: 44, padding: '0 16px', flexShrink: 0, zIndex: 100, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
+      <nav className="workspace-nav" style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', background: 'var(--bg2)', height: 44, padding: '0 16px', flexShrink: 0, zIndex: 100, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
 
         <div ref={menuRef} data-coach="workspace" style={{ position: 'relative', marginRight: 24, flexShrink: 0, whiteSpace: 'nowrap' }}>
           <button onClick={() => setMenuOpen(v => !v)}
@@ -282,7 +283,7 @@ export default function App() {
 
         <div data-coach="tabs" style={{ display: 'flex', height: '100%', minWidth: 0, flexShrink: 1, overflowX: 'auto' }}>
           {TABS.map(tab => (
-            <button key={tab.id} onClick={() => setActiveTab(tab.id)} style={{
+            <button key={tab.id} aria-current={activeTab === tab.id ? 'page' : undefined} onClick={() => setActiveTab(tab.id)} style={{
               padding: '0 16px', height: '100%', background: 'transparent', border: 'none', flexShrink: 0, whiteSpace: 'nowrap',
               borderBottom: activeTab === tab.id ? '2px solid var(--accent)' : '2px solid transparent',
               color: tab.id === 'executionPlan' ? '#dc2626' : activeTab === tab.id ? 'var(--accent)' : 'var(--text2)',
@@ -403,7 +404,7 @@ export default function App() {
       </nav>
 
       {isLoaded && (
-        <div style={{ height: 34, display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg2)', flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
+        <div className="workspace-history" style={{ height: 34, display: 'flex', alignItems: 'center', gap: 12, padding: '0 16px', borderBottom: '1px solid var(--border)', background: 'var(--bg2)', flexShrink: 0, boxShadow: '0 1px 3px rgba(0,0,0,.04)' }}>
           <div data-coach="history" style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, overflowX: 'auto', color: 'var(--text3)', fontSize: 10, whiteSpace: 'nowrap' }}>
             <span style={{ fontWeight: 900, color: 'var(--text2)' }}>갱신이력</span>
             <span>PGM {formatUpdatedHistory(historyUpdated?.pgm, historyUpdated?.pgmBy)}</span>

@@ -1,0 +1,62 @@
+.promotion-theme-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:16px; padding:10px 20px; flex-shrink:0; }
+.promotion-theme-toolbar>span { margin-right:auto; font-size:9px; letter-spacing:.24em; color:var(--text3); font-weight:650; }
+.promotion-page.is-urban { --bg:rgba(18,38,60,.3); --border2:#e1efff30; --ca-t:#afd3ff; padding:16px clamp(16px,2vw,32px); box-sizing:border-box; }
+.promotion-page.is-urban .promotion-theme-toolbar { padding:0 2px 14px; }
+.promotion-page.is-urban :is(.promotion-ongoing,.promotion-product-selector,.promotion-performance-toolbar,.promotion-products-heading,.promotion-reservation-form,.promotion-reservation-list,.promotion-comparison-card,.promotion-video-summary,.promotion-performance-comment,.promotion-coverage) { background:linear-gradient(120deg,#cde4ff12,#d8ebff06),#18304b30; border:1px solid #e0efff48; border-radius:16px; box-shadow:inset 0 1px 0 #ffffff24,0 6px 20px #08192a15; }
+.promotion-page.is-urban .promotion-ongoing { margin:0 0 14px; padding:16px 20px; }
+.promotion-page.is-urban .promotion-ongoing-item { background:#aacfff0d; border-color:#d9ebff30; border-radius:10px; }
+.promotion-page.is-urban .promotion-ongoing-badge { background:#a0e1cb1c; color:#b8f3df; border-color:#b8f3df40; }
+.promotion-page.is-urban .promotion-ongoing-badge.is-upcoming { background:#abcfff20; color:#d0e5ff; }
+.promotion-page.is-urban .promotion-ongoing-badge.is-ended { background:#d1dded12; color:#c5d2e4; }
+.promotion-page.is-urban>[role=tablist] { padding:5px !important; gap:5px; margin-bottom:14px; border:1px solid #dbeaff38 !important; border-radius:13px; background:#18304b28 !important; overflow-x:auto; flex-shrink:0; }
+.promotion-page.is-urban>[role=tablist]>button { border:1px solid transparent !important; border-radius:9px; padding:10px 16px !important; color:#d8e8fc !important; white-space:nowrap; }
+.promotion-page.is-urban>[role=tablist]>button[aria-selected=true] { background:linear-gradient(135deg,#d2e7ff2b,#b6d4ff13) !important; border-color:#d9ecff55 !important; color:#fff !important; }
+.promotion-page.is-urban>[role=tabpanel] { padding:0 !important; min-width:0; }
+.promotion-page.is-urban :is(input:not([type=checkbox]),select,textarea,button,summary) { color-scheme:dark; }
+.promotion-page.is-urban :is(input:not([type=checkbox]),select,textarea):not(.cm-content) { background-color:#15314d33; border-color:#d8ebff40; color:#f1f7ff; border-radius:8px; }
+.promotion-page.is-urban :is(input,textarea)::placeholder { color:#fff; opacity:.85; }
+.promotion-page.is-urban select option { background:#223b55; color:#f1f7ff; }
+.promotion-page.is-urban input[type=checkbox] { accent-color:#acd0ff; }
+.promotion-page.is-urban button { border-radius:8px; }
+.promotion-page.is-urban :is(.promotion-product-selector,.promotion-performance-toolbar) { padding:14px 16px; gap:12px; margin-bottom:16px; }
+.promotion-page.is-urban :is(.promotion-product-selector,.promotion-performance-toolbar,.promotion-product-actions) button { background:#b7d5ff14; border:1px solid #d8ebff40; color:#eaf4ff; }
+.promotion-page.is-urban :is(.promotion-excel-download,.promotion-apply-button) { background:linear-gradient(135deg,#e5f3ff,#b7d5fc) !important; color:#233d5d !important; }
+.promotion-page.is-urban .promotion-org-options { background:#213a54f5; border-color:#d8ebff50; color:#edf6ff; border-radius:12px; box-shadow:0 12px 35px #07172855; }
+.promotion-page.is-urban :is(.promotion-products-table-wrap,.promotion-results-scroll,.promotion-performance-table-wrap,.promotion-reservation-list-wrap) { border:1px solid #dbeaff40; border-radius:13px; background:#1b344b18; }
+.promotion-page.is-urban table { color:#edf5ff; }
+.promotion-page.is-urban table :is(th,td) { border-color:#e1efff26 !important; }
+.promotion-page.is-urban table thead th { background:#27435e !important; color:#edf6ff !important; }
+.promotion-page.is-urban table tbody :is(th,td) { background:rgba(28,50,73,.18) !important; color:inherit; }
+.promotion-page.is-urban table tbody tr:nth-child(even)>:is(th,td) { background:#bddbff09 !important; }
+.promotion-page.is-urban table tbody tr:hover>:is(th,td) { background:#b3d6ff18 !important; }
+.promotion-page.is-urban .promotion-results-table thead .promotion-average-group { background:#3d5d62 !important; }
+.promotion-page.is-urban .promotion-results-table thead .promotion-baseline-group { background:#445365 !important; }
+.promotion-page.is-urban .promotion-results-table :is(.promotion-average-start,.promotion-baseline-start) { border-left:2px solid #c2dfff66 !important; }
+.promotion-page.is-urban table .promotion-results-totals>:is(th,td) { background:#34536fe8 !important; }
+.promotion-page.is-urban :is(.promotion-comparison-difference,.promotion-video-selectable.is-selected)>:is(th,td) { background:#a6ceff1c !important; }
+.promotion-page.is-urban .promotion-change-value.is-positive { color:#ffb4aa; }
+.promotion-page.is-urban .promotion-change-value.is-negative { color:#a8d0ff; }
+.promotion-page.is-urban .promotion-comparison-card h3 { font-weight:650; }
+.promotion-page.is-urban .promotion-statistics-note { color:#ccddf2; }
+.promotion-page.is-urban .promotion-performance-comment { padding:16px; }
+.promotion-page.is-urban .promotion-performance-comment .comment-terminal { background:linear-gradient(120deg,#142940a6,#101f35c2); }
+.promotion-urban-dashboard { display:grid; gap:18px; margin-bottom:18px; }
+.promotion-chart-tooltip>strong { display:block; margin-bottom:10px; font-weight:650; }
+.promotion-chart-tooltip-row { display:flex; align-items:center; justify-content:space-between; gap:20px; margin-top:8px; }
+.promotion-chart-tooltip-row>span { display:flex; align-items:center; gap:6px; color:#d6e6fa; }
+.promotion-chart-tooltip-row i { width:7px; height:7px; border-radius:50%; }
+.promotion-chart-tooltip b { font-weight:600; font-variant-numeric:tabular-nums; }
+.promotion-chart-tooltip-difference { margin-top:12px; padding-top:10px; border-top:1px solid #dfedff30; }
+.promotion-chart-tooltip-difference>small { display:block; margin-bottom:8px; color:#bbd1ed; font-size:10px; }
+.promotion-chart-tooltip-difference>div { display:flex; justify-content:space-between; gap:20px; margin-top:7px; }
+.promotion-urban-dashboard .urban-metric { min-height:125px; }
+.promotion-urban-dashboard .urban-number { font-size:clamp(20px,1.8vw,31px); }
+.promotion-urban-dashboard .urban-chart-key i.is-target { background:#efbf9e; }
+.promotion-page.is-urban .promotion-ongoing { animation:promotion-urban-enter .55s both; }
+.promotion-page.is-urban>[role=tablist] { animation:promotion-urban-enter .55s .08s both; }
+@keyframes promotion-urban-enter { from {opacity:0;transform:translateY(-16px)} to {opacity:1;transform:none} }
+body:has(.promotion-page.is-urban) :is(.promotion-formula-tooltip,.promotion-code-list,.promotion-calendar,.promotion-previous-performance) { --bg:#1c334d; --bg2:#243e58; --bg3:#accfff18; --text:#f2f7ff; --text2:#d8e9ff; --text3:#bdcfe5; --border:#dbedff40; --accent:#b5d5ff; background:linear-gradient(125deg,#34516bf7,#1b334df7); color:#edf6ff; border:1px solid #dbedff55; border-radius:13px; box-shadow:0 14px 45px #07172866; }
+body:has(.promotion-page.is-urban) .promotion-code-list .is-active { background:#afcfff26; }
+body:has(.promotion-page.is-urban) .promotion-calendar { --adp-background-color:#213a54; --adp-color:#edf6ff; --adp-color-secondary:#bed2e9; --adp-cell-background-color-hover:#a9ceff26; --adp-cell-background-color-selected:#b6d5ff; --adp-cell-color-selected:#203954; --adp-border-color:#dcecff40; }
+@media(max-width:850px) { .promotion-page.is-urban {padding:14px;} .promotion-page.is-urban .promotion-product-selector {flex-wrap:wrap;} }
+@media(prefers-reduced-motion:reduce) { .promotion-page.is-urban :is(.promotion-ongoing,[role=tablist]) {animation:none;} }

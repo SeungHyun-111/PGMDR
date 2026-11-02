@@ -12,6 +12,7 @@ import PromotionVideoSummary from '../components/common/PromotionVideoSummary'
 import PromotionPreviousTooltip from '../components/common/PromotionPreviousTooltip'
 import PromotionPerformanceComment from '../components/common/PromotionPerformanceComment'
 import mdNameTeamMap from '../data/md-name-team-map.json'
+import UrbanPromotionDashboard from '../components/common/UrbanPromotionDashboard'
 
 const CURRENT_COLUMNS = ['방송일시', '채널', '가중분', '거래형태', '편성코드명', '영상구분', '목표취급액', '목표한계이익액', '예상취급고', '예상한계이익액', '(연동)미리주문취급액', '(연동)방송중취급액', '가중분당취급액', '가중분당한계이익액', '(연동)미리주문 비중', '조직명', 'MD명']
 const AVERAGE_COLUMNS = ['가중분당취급액', '가중분당한계이익액', '(연동)미리주문 비중']
@@ -26,7 +27,7 @@ const number = value => Number.isFinite(Number(value)) ? Math.trunc(Number(value
 const koreaToday = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date())
 const getOrganization = row => String(row.mdTeam || row.orgName || mdNameTeamMap[row.mdName] || '미분류').trim()
 
-export default function PromotionPerformanceTab({ promotions, loaded, active }) {
+export default function PromotionPerformanceTab({ promotions, loaded, active, urban }) {
   const exportRoot = useRef(null)
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState('')
@@ -109,6 +110,7 @@ export default function PromotionPerformanceTab({ promotions, loaded, active }) 
         </div>
       </div>
       {exportError && <p role="alert">{exportError}</p>}
+      {urban && active && selected && <UrbanPromotionDashboard rows={rows} statistics={statistics} loading={loading || !!error} />}
       {selected && <PromotionPerformanceSummary promotion={statistics.promotion} outside={statistics.outside} total={statistics.total} previous={statistics.previous.average} loading={loading || !!error} previousLoading={previous.loading} previousError={previous.errors.length > 0} onRetry={previous.retry} />}
       {selected && <PromotionVideoSummary groups={statistics.videoTypes} loading={loading || !!error} previousLoading={previous.loading} selectedType={selectedVideoType} onSelectType={type => setSelectedVideoType(current => current === type ? '' : type)} />}
       {selected && <PromotionPerformanceComment key={selectedId} promotionId={selectedId} active={active} />}

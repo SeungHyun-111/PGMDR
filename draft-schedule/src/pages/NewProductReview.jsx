@@ -5,6 +5,10 @@ import usePerformanceRange from '../hooks/usePerformanceRange'
 import { encodeKey } from '../utils/firebaseKey'
 import mdNameTeamMap from '../data/md-name-team-map.json'
 import { buildReviewRequestBody, buildReviewRequestMailto } from '../utils/reviewRequestMail'
+import useLocalStorageState from '../hooks/useLocalStorageState'
+import UrbanSurface from '../components/forecast/UrbanSurface'
+import './PerformanceForecastUrban.css'
+import './NewProductReviewUrban.css'
 
 const REVIEW_TYPES = new Set(['신상품', '재녹화'])
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
@@ -70,6 +74,7 @@ function getTeamName(row) {
 }
 
 export default function NewProductReview() {
+  const [urban, setUrban] = useLocalStorageState('pgmdr.ui.review.urban', true)
   const defaultRange = useMemo(() => getDefaultWeekRange(), [])
   const [startDate, setStartDate] = useState(defaultRange.start)
   const [endDate, setEndDate] = useState(defaultRange.end)
@@ -151,13 +156,15 @@ export default function NewProductReview() {
   }
 
   return (
-    <main style={{ height: '100%', background: 'var(--bg)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-      <div style={toolbarStyle}>
+    <main className={`review-page forecast-page${urban ? ' is-urban' : ''}`} style={{ height: '100%', background: urban ? undefined : 'var(--bg)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+      {urban && <header className="review-hero"><div><span>PRODUCT PERFORMANCE REVIEW</span><h1>신상품 / 재녹화 리뷰</h1><p>방송 실적을 살펴보고, 다음 편성을 위한 리뷰를 남기세요.</p></div><span className="urban-period">{startDate} — {endDate}</span></header>}
+      <div className="review-toolbar" style={toolbarStyle}>
+        <div className="forecast-mode-switch" aria-label="리뷰 테마">{[true, false].map(value => <button key={String(value)} type="button" aria-pressed={urban === value} onClick={() => setUrban(value)}>{value ? 'Urban' : '기본'}</button>)}</div>
         <strong style={{ fontSize: 13, color: 'var(--text)' }}>신상품/재녹화 리뷰</strong>
-        <input type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={filterInputStyle} />
+        <input aria-label="조회 시작일" type="date" value={startDate} onChange={e => setStartDate(e.target.value)} style={filterInputStyle} />
         <span style={{ color: 'var(--text3)', fontSize: 12 }}>~</span>
-        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={filterInputStyle} />
-        <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)} style={filterInputStyle}>
+        <input aria-label="조회 종료일" type="date" value={endDate} onChange={e => setEndDate(e.target.value)} style={filterInputStyle} />
+        <select aria-label="조회 팀" value={teamFilter} onChange={e => setTeamFilter(e.target.value)} style={filterInputStyle}>
           {teamOptions.map(team => <option key={team} value={team}>{team}</option>)}
         </select>
         <button type="button" onClick={() => { setStartDate(defaultRange.start); setEndDate(defaultRange.end); setTeamFilter('전체') }} style={buttonStyle}>
@@ -170,9 +177,12 @@ export default function NewProductReview() {
       </div>
 
       {performanceError && <p role="alert" style={{ color: 'var(--red)', padding: '0 16px', fontSize: 12 }}>{performanceError}</p>}
-      <div style={contentStyle}>
-        <ReviewTable title="미입력" rows={incompleteRows} onSave={saveReview} />
-        <ReviewTable title="입력" rows={completeRows} onSave={saveReview} />
+      {urban && <div className="review-metrics">
+        {[['전체 대상', baseRows.length, '조회 기간 · 선택 조직 기준', 'blue'], ['리뷰 대기', incompleteRows.length, '아직 완료하지 않은 방송', 'warm'], ['리뷰 완료', completeRows.length, `완료율 ${baseRows.length ? Math.round(completeRows.length / baseRows.length * 100) : 0}%`, 'done']].map(([label, count, caption, tone], index) => <UrbanSurface key={label} order={index} className={`review-metric urban-metric--${tone}`}><span>{label}</span><strong>{isLoadingPerformanceKeys ? '—' : count.toLocaleString()}<small>건</small></strong><p>{caption}</p></UrbanSurface>)}
+      </div>}
+      <div className="review-content" style={contentStyle}>
+        <ReviewTable title="미입력" rows={incompleteRows} onSave={saveReview} urban={urban} order={3} />
+        <ReviewTable title="입력" rows={completeRows} onSave={saveReview} urban={urban} order={4} />
       </div>
       {mailModalOpen && <MailTargetModal initialTeam={teamFilter} reviewInputs={reviewInputs} reviewInputsByPrefix={reviewInputsByPrefix} onClose={() => setMailModalOpen(false)} />}
     </main>
@@ -294,14 +304,15 @@ function MailTargetModal({ initialTeam, reviewInputs, reviewInputsByPrefix, onCl
   )
 }
 
-function ReviewTable({ title, rows, onSave }) {
+function ReviewTable({ title, rows, onSave, urban, order }) {
+  const Surface = urban ? UrbanSurface : 'section'
   return (
-    <section style={tableSectionStyle}>
-      <div style={tableTitleStyle}>
+    <Surface className="review-table-panel" {...(urban ? { order } : {})} style={tableSectionStyle}>
+      <div className="review-table-title" style={tableTitleStyle}>
         <strong style={{ fontSize: 12, color: 'var(--text)' }}>{title}</strong>
         <span style={{ fontSize: 11, color: 'var(--text3)' }}>{rows.length.toLocaleString()}건</span>
       </div>
-      <div style={tableScrollStyle}>
+      <div className="review-table-scroll" style={tableScrollStyle}>
         <table style={tableStyle}>
           <thead>
             <tr>
@@ -326,7 +337,7 @@ function ReviewTable({ title, rows, onSave }) {
           </tbody>
         </table>
       </div>
-    </section>
+    </Surface>
   )
 }
 
@@ -353,6 +364,7 @@ function ReviewRow({ row, index, onSave }) {
       <td style={{ ...tdStyle, textAlign: 'right', fontVariantNumeric: 'tabular-nums' }}>{formatNumber(row.profitPerWeightedMin)}</td>
       <td style={{ ...tdStyle, ...reviewTdStyle }}>
         <textarea
+          aria-label={`${row.pgmCodeName || 'PGM'} 리뷰`}
           value={reviewText}
           onChange={e => onSave(row, { review: e.target.value })}
           rows={reviewRows}
