@@ -4,6 +4,7 @@ import useScheduleStore from '../store/useScheduleStore'
 import usePerformanceRange from '../hooks/usePerformanceRange'
 import { encodeKey } from '../utils/firebaseKey'
 import mdNameTeamMap from '../data/md-name-team-map.json'
+import { buildReviewRequestBody, buildReviewRequestMailto } from '../utils/reviewRequestMail'
 
 const REVIEW_TYPES = new Set(['신상품', '재녹화'])
 const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토']
@@ -217,20 +218,40 @@ function MailTargetModal({ initialTeam, reviewInputs, reviewInputsByPrefix, onCl
     return next
   })
   const columns = ['구분', 'PGM명', '조직', '방송일', '시간', '다원', '입력여부']
+  const copyMailBody = async selectedRows => {
+    if (!navigator.clipboard?.write || typeof ClipboardItem === 'undefined') throw new Error('HTML 표 복사를 지원하는 Chrome 또는 Edge에서 접속해주세요.')
+    const { html, text } = buildReviewRequestBody(selectedRows)
+    try {
+      await navigator.clipboard.write([new ClipboardItem({
+        'text/html': new Blob([html], { type: 'text/html' }),
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+      })])
+    } catch {
+      throw new Error('본문 복사에 실패했습니다. 브라우저의 클립보드 권한을 확인해주세요.')
+    }
+  }
+  const recopyMailBody = async () => {
+    if (selectionDisabled || !selectedCount || preparingMail) return
+    setPreparingMail(true)
+    try {
+      await copyMailBody(targets.filter(row => !excludedIds.has(getEntryId(row))))
+      setMailStatus(`본문 ${selectedCount.toLocaleString()}건 복사 완료. 기존 클립보드 내용을 교체했습니다. Outlook 본문 영역을 클릭한 뒤 Ctrl+V를 눌러주세요.`)
+    } catch (error) {
+      setMailStatus(error.message)
+    } finally {
+      setPreparingMail(false)
+    }
+  }
   const openMail = async () => {
     if (selectionDisabled || !selectedCount || preparingMail) return
     setPreparingMail(true)
     setMailStatus('')
     try {
       const selectedRows = targets.filter(row => !excludedIds.has(getEntryId(row)))
-      const response = await fetch('/api/local-outlook/draft', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rows: selectedRows }),
-      })
-      if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('Outlook 직접 연동은 현재 PC의 로컬 PGMDR 서버에서 지원합니다.')
-      const result = await response.json()
-      if (!response.ok || !result.ok) throw new Error(result.error || 'Outlook 연결에 실패했습니다.')
-      setMailStatus(result.warning || '수신자, 제목과 본문이 채워진 Outlook 작성창을 열었습니다.')
+      const mailto = buildReviewRequestMailto(selectedRows)
+      await copyMailBody(selectedRows)
+      setMailStatus(`본문 ${selectedRows.length.toLocaleString()}건 복사 완료. 메일창의 수신자 이름을 확인하고, 본문에서 Ctrl+V를 눌러주세요. 붙여넣기가 안 되면 '본문 다시 복사'를 눌러주세요. 메일창이 안 뜨면 브라우저의 앱 열기 확인창을 확인해주세요.`)
+      window.location.assign(mailto)
     } catch (error) {
       setMailStatus(error.message || 'Outlook 작성창을 열지 못했습니다.')
     } finally {
@@ -263,7 +284,8 @@ function MailTargetModal({ initialTeam, reviewInputs, reviewInputsByPrefix, onCl
           </table>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
-          <span style={{ fontSize: 12, color: 'var(--text3)' }}>선택한 PGM으로 메일 제목과 본문을 자동 작성합니다.</span>
+          <span style={{ fontSize: 12, color: 'var(--text3)' }}>수신자·제목은 자동 설정됩니다. 본문에서 Ctrl+V를 눌러주세요.</span>
+          <button type="button" disabled={selectionDisabled || !selectedCount || preparingMail} onClick={recopyMailBody} style={buttonStyle}>본문 다시 복사</button>
           <button type="button" disabled={selectionDisabled || !selectedCount || preparingMail} onClick={openMail} style={{ ...buttonStyle, background: 'var(--accent)', color: '#fff', opacity: selectionDisabled || !selectedCount || preparingMail ? 0.5 : 1 }}>{preparingMail ? 'Outlook 연결 중…' : 'Outlook 메일창 열기'}</button>
         </div>
         {mailStatus && <p role="status" style={{ fontSize: 12, color: 'var(--text2)', marginBottom: 0 }}>{mailStatus}</p>}

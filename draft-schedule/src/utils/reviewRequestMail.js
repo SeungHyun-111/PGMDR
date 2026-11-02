@@ -17,6 +17,11 @@ export function getReviewRecipients(rows) {
   return teams.map(team => REVIEW_TEAM_RECIPIENTS[team])
 }
 
+export function buildReviewRequestMailto(rows) {
+  const recipients = getReviewRecipients(rows).map(name => encodeURIComponent(name)).join(';')
+  return `mailto:${recipients}?subject=${encodeURIComponent(REVIEW_REQUEST_SUBJECT)}`
+}
+
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char])
 const number = value => value == null || value === '' || !Number.isFinite(Number(value)) ? '-' : Math.round(Number(value)).toLocaleString('ko-KR')
 
