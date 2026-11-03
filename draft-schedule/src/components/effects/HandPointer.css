@@ -1,0 +1,19 @@
+.hand-pointer { position:fixed; left:0; top:0; width:0; height:0; pointer-events:none; z-index:20000; display:none; }
+.hand-pointer>span { position:absolute; width:22px; height:22px; left:-11px; top:-11px; border:2px solid #ecad4e; border-radius:50%; box-shadow:0 0 0 2px #131c2b88,0 0 15px #f8b74866; background:#ffc96922; }
+.hand-pointer>span:after { content:''; position:absolute; width:4px; height:4px; background:#fff4d5; border-radius:50%; left:9px; top:9px; }
+.hand-pointer[data-pressed=true]>span { background:#ffc969aa; transform:scale(.7); }
+.hand-pointer[data-mode=scroll]>span { border-color:#77d9ed; border-radius:5px; }
+.hand-pointer small { position:absolute; top:18px; left:16px; white-space:nowrap; font:10px Consolas,monospace; padding:3px 6px; border-radius:3px; background:#142031dd; color:#ffe2ad; }
+.hand-pointer>span,.hand-pointer small { display:none; }
+[data-hand-hover] { outline:2px solid #6FA8FF !important; outline-offset:2px; }
+[data-hand-dragging] { outline:2px solid #4D8DFF !important; box-shadow:0 0 18px #4D8DFF66 !important; opacity:.65; }
+[data-hand-drop] { outline:2px dashed #6FA8FF !important; outline-offset:-2px; }
+.hand-gesture-help { position:fixed; right:22px; bottom:8px; z-index:8200; font-size:11px; color:var(--text2); }
+.hand-gesture-help button { padding:5px 8px; background:var(--bg2); color:inherit; border:1px solid var(--border); border-radius:4px; cursor:pointer; font:inherit; }
+.hand-gesture-help>div { position:absolute; bottom:34px; right:0; width:245px; padding:12px; line-height:2; background:var(--bg2); border:1px solid var(--border); border-radius:6px; box-shadow:0 6px 24px #0002; }
+.hand-sensitivity { position:fixed; top:100px; left:50%; transform:translateX(-50%); width:300px; max-width:calc(100vw - 48px); z-index:20010; padding:20px; background:#122238ee; border:1px solid #6fa8ff66; border-radius:10px; box-shadow:0 12px 45px #07132555; color:#a6c8ed; text-align:center; pointer-events:none; font:11px/1.8 'Cascadia Code',Consolas,monospace; }
+.hand-sensitivity>span { letter-spacing:1px; }.hand-sensitivity strong { display:block; color:#87beff; font-size:38px; font-variant-numeric:tabular-nums; line-height:1.6; }.hand-sensitivity strong small { font-size:22px; margin-left:5px; color:#b6a5f5; }
+.hand-sensitivity meter,.hand-sensitivity progress { display:block; width:100%; height:12px; accent-color:#6fa8ff; margin:8px 0; }.hand-sensitivity meter::-webkit-meter-bar { background:#233c59; border:0; }.hand-sensitivity meter::-webkit-meter-optimum-value { background:linear-gradient(90deg,#5f92dd,#8dc7ff); }.hand-sensitivity p { margin:12px 0 0; color:#bdd0e7; }
+.cursor-tuning-launch { position:fixed; right:125px; bottom:8px; z-index:8200; padding:5px 8px; font-size:11px; background:var(--bg2); color:var(--text2); border:1px solid var(--border); border-radius:4px; cursor:pointer; }
+.cursor-tuning { position:fixed; right:22px; bottom:44px; width:300px; max-width:calc(100vw - 48px); max-height:calc(100dvh - 115px); overflow:auto; z-index:20020; padding:16px; border:1px solid #6fa8ff66; border-radius:8px; background:var(--bg2); color:var(--text2); box-shadow:0 12px 40px #0004; font:11px/1.6 'Cascadia Code',Consolas,monospace; }
+.cursor-tuning header,.cursor-tuning label>span { display:flex; justify-content:space-between; align-items:center; gap:10px; }.cursor-tuning header { color:var(--ca-t); }.cursor-tuning label { display:block; margin:12px 0; }.cursor-tuning input { width:100%; accent-color:#6fa8ff; }.cursor-tuning output { color:var(--ca-t); font-weight:700; font-variant-numeric:tabular-nums; }.cursor-tuning p { color:var(--text2); font-size:10px; }.cursor-tuning button { padding:4px 8px; border:1px solid var(--border); background:var(--bg3); color:var(--text2); border-radius:4px; cursor:pointer; }

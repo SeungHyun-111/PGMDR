@@ -87,7 +87,7 @@ const SORT_COLUMNS = [
   { key: 'perMinute', label: '분당 매출액', align: 'right', value: getPerMinuteRevenue },
 ]
 
-export default function CompetitorSearch() {
+export default function CompetitorSearch({ hudActive = false }) {
   const hidden = useCompetitorVisibilityStore(state => state.hidden)
   const setHidden = useCompetitorVisibilityStore(state => state.setHidden)
   const [contextMenu, setContextMenu] = useState(null)
@@ -270,7 +270,7 @@ export default function CompetitorSearch() {
 
   const handleButtonPointerDown = (event) => {
     if (event.button !== 0) return
-    event.currentTarget.setPointerCapture(event.pointerId)
+    if (event.isTrusted) event.currentTarget.setPointerCapture(event.pointerId)
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -312,7 +312,7 @@ export default function CompetitorSearch() {
 
   const handleDialogResizeStart = (event, corner) => {
     event.preventDefault()
-    event.currentTarget.setPointerCapture(event.pointerId)
+    if (event.isTrusted) event.currentTarget.setPointerCapture(event.pointerId)
     dialogResizeRef.current = {
       pointerId: event.pointerId,
       corner,
@@ -361,7 +361,7 @@ export default function CompetitorSearch() {
 
   const handleDialogMoveStart = (event) => {
     if (event.button !== 0 || event.target.closest('button, select, input')) return
-    event.currentTarget.setPointerCapture(event.pointerId)
+    if (event.isTrusted) event.currentTarget.setPointerCapture(event.pointerId)
     dialogMoveRef.current = {
       pointerId: event.pointerId,
       startX: event.clientX,
@@ -391,7 +391,7 @@ export default function CompetitorSearch() {
 
   return (
     <>
-      {!hidden && <button
+      {!hidden && !hudActive && <button
         type="button"
         data-testid="competitor-search-trigger"
         data-coach="competitor-search"

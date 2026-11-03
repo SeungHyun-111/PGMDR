@@ -24,6 +24,10 @@ import { refreshKmaWeatherIfStale } from './api/weather'
 import useCultureCodeMasterStore, { ensureCultureCodeSubscription, ensureCultureHistorySubscription } from './store/useCultureCodeMasterStore'
 import { ensureCultureAuth } from './api/cultureFirebase'
 import PixelDriftText from './components/effects/PixelDriftText'
+import useHandControl from './hooks/useHandControl'
+import HandControlStatus from './components/effects/HandControlStatus'
+import HandPointer from './components/effects/HandPointer'
+import HandPresence from './components/effects/HandPresence'
 import './styles/urbanChrome.css'
 
 const TABS = [
@@ -79,6 +83,22 @@ export default function App() {
   const cultureUpdatedBy = useCultureCodeMasterStore(state => state.updatedBy)
   const cultureHistoryError = useCultureCodeMasterStore(state => state.historyError)
   const [activeTab, setActiveTab]     = useState('draft')
+  const handControl = useHandControl()
+  const hudOpen = handControl.active
+  useEffect(() => {
+    if (!hudOpen) return
+    const close = event => { if (event.key === 'Escape') handControl.suspend() }
+    document.addEventListener('keydown', close)
+    return () => document.removeEventListener('keydown', close)
+  }, [hudOpen, handControl.suspend])
+  const [cameraPrompt, setCameraPrompt] = useState(false)
+  const [rememberCamera, setRememberCamera] = useState(true)
+  const [gestureFeedback, setGestureFeedback] = useState(null)
+  useEffect(() => {
+    if (!gestureFeedback) return
+    const timeout = setTimeout(() => setGestureFeedback(null), 2200)
+    return () => clearTimeout(timeout)
+  }, [gestureFeedback])
   const [menuOpen, setMenuOpen]       = useState(false)
   const [setupPopup, setSetupPopup]   = useState(false)
   const [exportModal, setExportModal] = useState(false)
@@ -196,7 +216,10 @@ export default function App() {
 
   const handleMenuAction = async (action) => {
     setMenuOpen(false)
-    if (action === 'newSetup') {
+    if (action === 'particleHud') {
+      if (handControl.status === 'off') setCameraPrompt(true)
+      else handControl.stop()
+    } else if (action === 'newSetup') {
       setSetupPopup(true)
     } else if (action === 'refreshAllGas') {
       if (!window.confirm('GAS에서 전체 데이터를 재동기화합니다.\n사용자 편성 블록은 유지되며, 선편성·디폴트 블록은 최신 데이터로 덮어씁니다.\n계속하시겠습니까?')) return
@@ -278,7 +301,7 @@ export default function App() {
             style={{ background: 'transparent', border: 'none', fontSize: 15, fontWeight: 700, color: 'var(--accent)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5 }}>
             편성 작업판 <span style={{ fontSize: 10, color: 'var(--text3)' }}>▼</span>
           </button>
-          {menuOpen && <NavMenu onAction={handleMenuAction} />}
+          {menuOpen && <NavMenu onAction={handleMenuAction} handStatus={handControl.status} />}
         </div>
 
         <div data-coach="tabs" style={{ display: 'flex', height: '100%', minWidth: 0, flexShrink: 1, overflowX: 'auto' }}>
@@ -413,6 +436,7 @@ export default function App() {
             <span>선편 {formatUpdatedHistory(historyUpdated?.preSchedule, historyUpdated?.preScheduleBy)}</span>
             <span title={cultureHistoryError || '전체 세션 공통 편성코드 DB의 마지막 갱신'}>편성코드(전역) {cultureHistoryError ? '조회 실패' : formatUpdatedHistory(cultureUpdatedAt, cultureUpdatedBy || '전역')}</span>
           </div>
+          <HandControlStatus control={handControl} feedback={gestureFeedback} onStart={() => setCameraPrompt(true)} />
           <div data-coach="versions" style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
             <VersionSwitcher onToast={showToast} coachPreviewVersion={coachVersion} />
           </div>
@@ -454,15 +478,34 @@ export default function App() {
       {coachOpen && (
         <CoachMark steps={COACH_STEPS} stepIndex={coachStep} onStepChange={setCoachStep} onClose={closeCoach} />
       )}
-      <CompetitorSearch />
+      <CompetitorSearch hudActive={hudOpen} />
+      <HandPresence enabled={hudOpen} input={handControl.handInput} visualPointer={handControl.visualPointer} />
+      <HandPointer enabled={hudOpen} input={handControl.handInput} visualPointer={handControl.visualPointer} onFeedback={message => setGestureFeedback({ message })} onNavigate={direction => {
+        if (document.querySelector('[aria-modal="true"]')) { setGestureFeedback({ message: '페이지 전환 전 열린 창을 닫아주세요' }); return }
+        const index = TABS.findIndex(tab => tab.id === activeTab)
+        const next = TABS[(index + direction + TABS.length) % TABS.length]
+        setActiveTab(next.id)
+        setGestureFeedback({ message: `메뉴 이동 · ${next.label}` })
+      }} />
+      {cameraPrompt && <div style={{ position: 'fixed', inset: 0, zIndex: 9500, display: 'grid', placeItems: 'center', background: '#0007', padding: 20 }}>
+        <section role="dialog" aria-modal="true" aria-labelledby="camera-consent-title" style={{ width: 390, maxWidth: '100%', padding: 24, borderRadius: 10, background: 'var(--bg2)', color: 'var(--text)' }}>
+          <h3 id="camera-consent-title" style={{ marginTop: 0 }}>손동작 제어 켜기</h3>
+          <p style={{ fontSize: 13, lineHeight: 1.8 }}>영상은 이 브라우저 안에서 실시간 분석하며 녹화·저장·전송하지 않습니다. 마이크는 사용하지 않습니다.</p>
+          <p style={{ fontSize: 12, lineHeight: 1.8 }}>손바닥을 5초 보여주면 시작합니다. 손동작이 1분간 없으면 대기로 돌아가며, 다시 시작할 수 있도록 카메라는 켜져 있습니다. ‘끄기’를 누르면 카메라도 종료됩니다.</p>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '16px 0', fontSize: 12, cursor: 'pointer' }}><input type="checkbox" checked={rememberCamera} onChange={event => setRememberCamera(event.target.checked)} />다음 접속부터 자동 대기</label>
+          <p style={{ fontSize: 11, color: 'var(--text3)', lineHeight: 1.7 }}>선택하면 다음 접속·새로고침 시 카메라가 자동으로 켜집니다. ‘끄기’를 누르면 자동 대기도 해제됩니다. 자동 대기·감도·커서 튜닝 설정만 저장하며 영상과 손 좌표는 저장하지 않습니다.</p>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}><button autoFocus onClick={() => setCameraPrompt(false)}>취소</button><button onClick={() => { setCameraPrompt(false); handControl.start(); handControl.setAutoWaitPreference(rememberCamera) }}>카메라 허용하고 켜기</button></div>
+        </section>
+      </div>}
     </div>
   )
 }
 
-function NavMenu({ onAction }) {
+function NavMenu({ onAction, handStatus }) {
   const [hover, setHover] = useState(null)
   const refreshingCodes = useCultureCodeMasterStore(state => state.refreshing)
   const groups = [
+    { group: 'HUD', items: [{ id: 'particleHud', label: handStatus === 'off' ? '손동작 제어 켜기' : '손동작 제어 끄기' }] },
     { group: '초기 설정', items: [{ id: 'newSetup', label: '새 편성 시작', danger: true }] },
     { group: 'GAS 재동기화', items: [
       { id: 'refreshAllGas', label: 'GAS 전체 재동기화', warn: true },

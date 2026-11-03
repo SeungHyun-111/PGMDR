@@ -1,0 +1,21 @@
+.hand-terminal { flex:1 1 380px; min-width:180px; height:25px; display:flex; align-items:center; gap:7px; padding:0 8px; border:1px solid var(--border); border-radius:3px; background:var(--bg3); color:var(--text2); font:10px/1.4 'Cascadia Code','D2Coding','SFMono-Regular',Consolas,monospace; }
+.hand-terminal__prompt { flex-shrink:0; color:var(--ip-t,#7c6be0); font-weight:700; }
+.hand-terminal__output { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.hand-terminal__output b { font-weight:700; color:var(--green,#25846d); }
+.hand-terminal[data-state=ERROR] .hand-terminal__output { color:var(--red,#dc5260); }
+.hand-terminal[data-state=ERROR] b { color:inherit; }
+.hand-terminal[data-state=HOLD] b,.hand-terminal[data-state=INIT] b { color:var(--yellow,#b17c29); }
+.hand-terminal[data-state=WAIT] b { color:var(--ca-t,#5286c9); }
+.hand-terminal[data-state=OFF] b { color:var(--text3); }
+.hand-terminal__token--count { color:var(--red,#dc2626); font-weight:900; font-size:12px; font-variant-numeric:tabular-nums; }
+.hand-terminal__token--number,.hand-terminal__token--action { color:var(--ca-t,#5286c9); font-weight:600; }
+.hand-terminal__token--success { color:var(--green,#25846d); font-weight:600; }
+.hand-terminal__token--waiting { color:var(--yellow,#b17c29); }
+.hand-terminal__token--danger { color:var(--red,#dc5260); font-weight:600; }
+.hand-terminal__token--operator { color:var(--ip-t,#7c6be0); }
+.hand-terminal button { margin-left:auto; flex-shrink:0; padding:1px 5px; border:0; border-left:1px solid var(--border); background:transparent; color:var(--text2); font:inherit; cursor:pointer; }
+.hand-terminal button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.workspace-history [data-coach=history] { flex:0 1 auto; }
+.workspace-history [data-coach=versions] { flex-shrink:0; }
+@media(max-width:1300px) { .workspace-history [data-coach=history] { max-width:44%; } }
+@media(max-width:700px) { .workspace-history [data-coach=history] { max-width:22%; }.hand-terminal { min-width:110px; } }

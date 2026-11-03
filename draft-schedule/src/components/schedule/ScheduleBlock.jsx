@@ -183,6 +183,7 @@ function ScheduleBlock({ block, height, saveBlock, removeBlock: removeBlockRaw, 
       onMouseLeave={handleMouseLeave}
     >
       <div
+        data-hand-target="schedule-block"
         draggable={!readOnly && !isCompeting}
         onDragStart={handleDragStart}
         onContextMenu={e => {
