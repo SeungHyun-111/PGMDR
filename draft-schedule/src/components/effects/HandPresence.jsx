@@ -36,7 +36,7 @@ export default function HandPresence({ enabled, input, visualPointer }) {
       previousPalm = palm
       const speed = Math.hypot(vx,vy), index = points[8], thumb = points[4]
       const pinch = detected ? Math.max(0, Math.min(1, (1 - hand.pinch) / .75)) : 0
-      const pinched = detected && hand.pinch < .3
+      const pinched = detected && !!hand.pressed
       if (pinched !== pinchBefore && detected) pulseAt = now
       pinchBefore = pinched
       ctx.save(); ctx.globalAlpha = opacity

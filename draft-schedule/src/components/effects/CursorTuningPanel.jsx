@@ -2,7 +2,7 @@ import { DEFAULT_CURSOR_TUNING } from '../../utils/cursorTuning'
 
 const SLIDERS = [
   ['sensitivity','감도',.25,3,.05],['deadZone','미세 떨림 제거',0,.012,.0005],
-  ['minCutoff','기본 반응성',.3,4,.1],['beta','빠른 동작 반응',0,15,.5],['maxDelta','최대 이동 / 60fps',15,90,5],
+  ['minCutoff','기본 반응성',.3,4,.1],['beta','빠른 동작 반응',0,15,.5],['maxDelta','최대 이동 / 60fps',15,90,5],['pinchEnter','집기 인식 여유',.2,.65,.01],
 ]
 export default function CursorTuningPanel({ value,onChange,onClose }) {
   return <section className="cursor-tuning" aria-label="커서 튜닝">

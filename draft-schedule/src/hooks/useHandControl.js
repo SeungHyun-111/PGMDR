@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { advanceHandSession, createHandSession } from '../utils/handControlState'
 import { readRecognizedHands } from '../utils/recognizedHands'
 import { createPinchPress, updatePinchPress } from '../utils/pinchPointer'
+import {createActiveHand,selectActiveHand} from '../utils/activeHand'
+import {readCursorTuning} from '../utils/cursorTuning'
 
 const AUTO_WAIT_KEY = 'pgmdr-hand-auto-wait'
 function readAutoWait() {
@@ -47,7 +49,7 @@ export default function useHandControl() {
     release()
   }, [release, setAutoWaitPreference])
   const suspend = useCallback(() => {
-    if (run.current) run.current.session = createHandSession()
+    if (run.current) {run.current.session = createHandSession();run.current.handLock=createActiveHand();run.current.pinchState=createPinchPress()}
     handInput.current.active = false
     setPhase('HUD 종료 · 손바닥을 5초 보여주면 다시 시작')
     setView({ active: false, countdown: null, remaining: null })
@@ -60,7 +62,7 @@ export default function useHandControl() {
       setError('카메라는 HTTPS 또는 localhost 주소에서 사용할 수 있습니다.')
       return
     }
-    const current = { session: createHandSession(), stream: null, recognizer: null, video: null, timer: null }
+    const current = { session: createHandSession(), handLock:createActiveHand(), pinchConfig:readCursorTuning(), stream: null, recognizer: null, video: null, timer: null }
     run.current = current
     setStatus('loading')
     setPhase('카메라 권한 요청 중 · 브라우저에서 허용해주세요')
@@ -93,39 +95,56 @@ export default function useHandControl() {
       setStatus('ready')
       setPhase('대기 · 손바닥을 카메라에 5초 보여주세요')
       let lastVideoTime = -1
-      let lastSample = null, sampledAt = 0
+      let lastFrame = null, sampledAt = 0
       const tick = () => {
         if (run.current !== current) return
         try {
           const now = performance.now()
-          let sample = null
+          let frame = null
           if (!document.hidden && video.readyState >= 2 && lastVideoTime !== video.currentTime) {
             lastVideoTime = video.currentTime
             const result = recognizer.recognizeForVideo(video, now)
-            sample = readRecognizedHands(result)
-            if (sample) sample.sampleTime = now
-            lastSample = sample
+            frame = readRecognizedHands(result,now-sampledAt<250?lastFrame:null)
+            if (frame) frame.sampleTime = now
+            lastFrame = frame
             sampledAt = now
           } else if (!document.hidden && now - sampledAt < 250) {
-            sample = lastSample
+            frame = lastFrame
           }
+          const selection=selectActiveHand(current.handLock,frame,now)
+          if(selection.changed||selection.released){current.session=createHandSession();current.pinchState=createPinchPress()}
+          const sample=selection.sample
           const wasActive = current.session.active
-          const next = advanceHandSession(current.session, sample && !wasActive ? {...sample,openPalm:sample.anyOpenPalm} : sample, now)
-          if (wasActive && !next.active) setPhase('60초간 손동작 없음 · HUD 종료, 재시작 대기')
-          next.detected = !!sample
+          const next = advanceHandSession(current.session, sample, now)
+          if (wasActive && !next.active) {setPhase('60초간 손동작 없음 · HUD 종료, 재시작 대기');current.handLock=createActiveHand()}
+          if(selection.released)setPhase('활성 손 추적 끊김 · 손바닥 5초로 다시 활성화하세요')
+          next.detected = !!frame
+          next.activeHand=next.active||next.countdown?selection.side:null
+          next.tracking=next.active?selection.tracking:next.countdown?'ACTIVATING':selection.tracking
+          next.handCount=frame?.samples.length||0
+          next.leftGesture=frame?.hands.left?.isFist?'FIST':frame?.hands.left?.gesture||'MISSING'
+          next.rightGesture=frame?.hands.right?.gesture||'MISSING'
+          next.pinchRatio=sample?Math.round(sample.pinch*100)/100:null
           current.pinchState ??= createPinchPress()
-          const pressed=updatePinchPress(current.pinchState,sample?.pinch??2,now,next.active&&!!sample,sample?.side||'unknown')
+          const pressed=updatePinchPress(current.pinchState,sample?.pinch??2,now,next.active&&!!sample,sample?.side||'unknown',current.pinchConfig)
+          next.pinchState=pressed?'PRESSED':current.pinchState.pending===true?'CONTACT':'OPEN'
+          next.pinchEnter=current.pinchConfig.pinchEnter
+          next.pinchExit=current.pinchConfig.pinchExit
           handInput.current = { x: sample ? 1 - sample.x * 2 : 0, y: sample ? sample.y * 2 - 1 : 0, active: next.active && !!sample, pressed, gesture: sample?.gesture, openPalm: sample?.openPalm, pointerX: sample?.pointerX, pointerY: sample?.pointerY }
           handInput.current.points = sample?.points
           handInput.current.detected = !!sample
           handInput.current.pinch = sample?.pinch ?? 2
           handInput.current.gestureScore = sample?.gestureScore
-          handInput.current.hands = sample?.hands || {left:null,right:null}
-          handInput.current.sampleTime = sample?.sampleTime
-          handInput.current.source = sample?.side || 'unknown'
+          handInput.current.hands = {...(frame?.hands||{left:null,right:null}),...(sample?{[sample.side==='Left'?'left':'right']:sample}:{})}
+          handInput.current.sessionActive = next.active
+          handInput.current.sampleTime = frame?.sampleTime
+          handInput.current.source = selection.side || 'unknown'
           handInput.current.palmX = sample?.palmX
           handInput.current.palmY = sample?.palmY
-          setView(previous => previous.active === next.active && previous.countdown === next.countdown && previous.remaining === next.remaining && previous.detected === next.detected ? previous : next)
+          handInput.current.pinchX = sample?.pinchX
+          handInput.current.pinchY = sample?.pinchY
+          handInput.current.indexPointing = !!sample?.indexPointing
+          setView(previous => Object.keys(next).every(key=>previous[key]===next[key]) ? previous : next)
           current.timer = setTimeout(tick, 1000 / 15)
         } catch {
           release(); setError('손 인식이 중단됐습니다. 손동작 제어를 다시 켜주세요.')
@@ -144,6 +163,12 @@ export default function useHandControl() {
     const timer = setTimeout(() => { if (readAutoWait()) start() }, 0)
     return () => clearTimeout(timer)
   }, [start])
+
+  useEffect(() => {
+    const tune=()=>{if(run.current){run.current.pinchConfig=readCursorTuning();run.current.pinchState=createPinchPress()}}
+    window.addEventListener('pgmdr-cursor-tuning',tune)
+    return ()=>window.removeEventListener('pgmdr-cursor-tuning',tune)
+  },[])
 
   useEffect(() => {
     const leave = () => release()

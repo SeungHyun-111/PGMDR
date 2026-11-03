@@ -19,7 +19,7 @@ function findScrollTarget(element) {
 export default function HandPointer({ enabled, input, visualPointer, onNavigate, onFeedback }) {
   const pointer = useRef(null)
   const callbacks = useRef({ onNavigate, onFeedback })
-  const [help, setHelp] = useState(false)
+  const [help, setHelp] = useState(true)
   const [sensitivityView, setSensitivityView] = useState(null)
   const [tuningValue,setTuningValue] = useState(()=>({...readCursorTuning(),sensitivity:readSensitivity()}))
   const controls = useRef(tuningValue)
@@ -27,7 +27,7 @@ export default function HandPointer({ enabled, input, visualPointer, onNavigate,
   const changeTuning = value => {
     const normalized={...normalizeCursorTuning(value),sensitivity:Math.max(.25,Math.min(3,value.sensitivity))}
     controls.current=normalized;setTuningValue(normalized)
-    try {localStorage.setItem(CURSOR_TUNING_KEY,JSON.stringify(normalized));localStorage.setItem(SENSITIVITY_KEY,String(normalized.sensitivity))}
+    try {localStorage.setItem(CURSOR_TUNING_KEY,JSON.stringify(normalized));localStorage.setItem(SENSITIVITY_KEY,String(normalized.sensitivity));window.dispatchEvent(new Event('pgmdr-cursor-tuning'))}
     catch {callbacks.current.onFeedback('커서 튜닝 적용 · 저장 불가, 이번 접속에만 유지')}
   }
   useEffect(() => { callbacks.current = { onNavigate, onFeedback } }, [onNavigate, onFeedback])
@@ -76,10 +76,10 @@ export default function HandPointer({ enabled, input, visualPointer, onNavigate,
         return
       }
       const pinchPlan=planPinchPointer(pinchPointer,hand,now,{mouseDown:mouse.isDown,heldSince:mouse.heldSince})
-      const intentionalAim = hand.gesture === 'Pointing_Up' || hand.gesture === 'Victory' || hand.pressed || mouse.isDown || pinchPlan.mode!=='free'
+      const intentionalAim = hand.indexPointing || hand.gesture === 'Pointing_Up' || hand.gesture === 'Victory' || hand.pressed || mouse.isDown || pinchPlan.mode!=='free'
       if (hand.active && intentionalAim) lastAimAt = now
       const aiming = hand.active && (intentionalAim || (!hand.openPalm && hand.gesture === 'None' && now - lastAimAt < 250))
-      if (!aiming) { if (visualPointer) visualPointer.current = null; resetPointerMotion(motion) }
+      if (!aiming) { if (visualPointer) visualPointer.current = hand.active ? {x,y,hovered:false,interaction:'PAUSED'} : null; resetPointerMotion(motion) }
       if (pointer.current) pointer.current.style.display = aiming ? 'block' : 'none'
       if (!hand.active) { mouse.cancel(); updateHandCommands(state, hand, now); clearTarget(); return }
       if (aiming) {
@@ -93,7 +93,9 @@ export default function HandPointer({ enabled, input, visualPointer, onNavigate,
         if (hovered !== target) { clearTarget(); target = hovered; target?.setAttribute('data-hand-hover', '') }
         if (visualPointer) visualPointer.current.hovered = !!target
       } else clearTarget()
-      mouse.update({ active: hand.active && !motion.rejectedJump, pressed: !!hand.pressed && (mouse.isDown || hand.gesture !== 'Closed_Fist'), x, y, now, hit: document.elementFromPoint(x,y) })
+      // Contact distance owns presses; a model fist label must not veto a pinch.
+      // Left-hand sensitivity mode is intercepted before the mouse controller.
+      mouse.update({ active: hand.active && !motion.rejectedJump, pressed: !!hand.pressed, x, y, now, hit: document.elementFromPoint(x,y) })
       if (visualPointer?.current) visualPointer.current.interaction = mouse.isDragging ? 'DRAG' : mouse.isDown ? 'HOLD' : null
       if (lastSample === hand) return
       lastSample = hand

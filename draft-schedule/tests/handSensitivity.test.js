@@ -50,7 +50,7 @@ test('right-hand geometry stays attached to its role when detection order change
  const points=x=>Array.from({length:21},(_,i)=>({x:x+i*.001,y:.5-i*.002,z:0}))
  const result=(sides)=>({landmarks:sides.map(s=>points(s==='Left'?.7:.3)),gestures:sides.map(s=>[{categoryName:s==='Left'?'Closed_Fist':'Pointing_Up',score:.95}]),handedness:sides.map(s=>[{categoryName:s,score:.95}])})
  for(const sides of [['Left','Right'],['Right','Left']]){
-  const s=readRecognizedHands(result(sides));assert.equal(s.side,'Right');assert.equal(s.hands.left.gesture,'Closed_Fist');assert.equal(s.hands.right.gesture,'Pointing_Up')
+  const s=readRecognizedHands(result(sides));assert.equal(s.hands.right.side,'Right');assert.equal(s.hands.left.gesture,'Closed_Fist');assert.equal(s.hands.right.gesture,'Pointing_Up')
  }
 })
 test('sensitivity multiplier still affects cursor movement',()=>{

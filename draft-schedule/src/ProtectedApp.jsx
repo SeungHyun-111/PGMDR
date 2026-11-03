@@ -480,13 +480,13 @@ export default function App() {
       )}
       <CompetitorSearch hudActive={hudOpen} />
       <HandPresence enabled={hudOpen} input={handControl.handInput} visualPointer={handControl.visualPointer} />
-      <HandPointer enabled={hudOpen} input={handControl.handInput} visualPointer={handControl.visualPointer} onFeedback={message => setGestureFeedback({ message })} onNavigate={direction => {
+      {hudOpen && <HandPointer enabled input={handControl.handInput} visualPointer={handControl.visualPointer} onFeedback={message => setGestureFeedback({ message })} onNavigate={direction => {
         if (document.querySelector('[aria-modal="true"]')) { setGestureFeedback({ message: '페이지 전환 전 열린 창을 닫아주세요' }); return }
         const index = TABS.findIndex(tab => tab.id === activeTab)
         const next = TABS[(index + direction + TABS.length) % TABS.length]
         setActiveTab(next.id)
         setGestureFeedback({ message: `메뉴 이동 · ${next.label}` })
-      }} />
+      }} />}
       {cameraPrompt && <div style={{ position: 'fixed', inset: 0, zIndex: 9500, display: 'grid', placeItems: 'center', background: '#0007', padding: 20 }}>
         <section role="dialog" aria-modal="true" aria-labelledby="camera-consent-title" style={{ width: 390, maxWidth: '100%', padding: 24, borderRadius: 10, background: 'var(--bg2)', color: 'var(--text)' }}>
           <h3 id="camera-consent-title" style={{ marginTop: 0 }}>손동작 제어 켜기</h3>

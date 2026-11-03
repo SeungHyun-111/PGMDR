@@ -12,8 +12,9 @@ export function cancelSensitivity(state,saved) {
   Object.assign(state,createSensitivityState(saved),{awaitRelease:true})
 }
 export function updateSensitivity(state,hand,now,saved,mouseBusy=false) {
-  const left=hand.active?hand.hands?.left:null,right=hand.active?hand.hands?.right:null
-  const fist=left?.gesture==='Closed_Fist'&&(left.gestureScore??1)>=.7
+  const sessionActive=hand.sessionActive??hand.active
+  const left=sessionActive?hand.hands?.left:null,right=sessionActive?hand.hands?.right:null
+  const fist=!!left?.isFist||(left?.gesture==='Closed_Fist'&&(left.gestureScore??1)>=.55)
   const open=!!left?.openPalm&&left.gesture!=='Closed_Fist'
   const info={leftState:!left?'missing':fist?'fist':open?'open':'uncertain',rightDetected:!!right}
   if(state.awaitRelease){
