@@ -5,55 +5,77 @@ import PixelDriftText from './components/effects/PixelDriftText'
 import PulsatingBorder from './components/effects/PulsatingBorder'
 import Stardust from './components/effects/Stardust'
 
+import { onAuthStateChanged } from 'firebase/auth'
+import { auth, login } from './api/auth'
+import { accountName } from './utils/accountAccess'
+
 const ProtectedApp = lazy(() => import('./ProtectedApp'))
-const PASSWORD_HASH =
-  import.meta.env.VITE_APP_PASSWORD_HASH ||
-  '3d8b4ecff8e80bc47eacf6a5ab5b0ce5c9158e24b851dd0b01289dabbe9eb637'
-
-
-async function sha256(value) {
-  const data = new TextEncoder().encode(value)
-  const hash = await crypto.subtle.digest('SHA-256', data)
-  return Array.from(new Uint8Array(hash))
-    .map(byte => byte.toString(16).padStart(2, '0'))
-    .join('')
-}
 
 export default function App() {
-  const [unlocked, setUnlocked] = useState(() => sessionStorage.getItem('pgmdr-unlocked') === '1')
+  const [user, setUser] = useState(null)
+  const [checking, setChecking] = useState(true)
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    if (!unlocked) return
-    sessionStorage.setItem('pgmdr-unlocked', '1')
-  }, [unlocked])
+    let active = true
+    let revision = 0
+    sessionStorage.removeItem('pgmdr-unlocked')
+    const unsubscribe = onAuthStateChanged(auth, async next => {
+      const currentRevision = ++revision
+      setUser(null)
+      setChecking(true)
+      try {
+        const name = accountName(next)
+        if (name) {
+          const { default: store } = await import('./store/useScheduleStore')
+          if (!active || currentRevision !== revision) return
+          store.setState({ userName: name })
+          localStorage.removeItem('userName')
+          setUser(next)
+        } else if (next) {
+          setError('이 사이트의 접속 권한이 없는 계정입니다.')
+        }
+      } catch {
+        if (active) setError('로그인 정보를 불러오지 못했습니다. 새로고침해주세요.')
+      } finally {
+        if (active && currentRevision === revision) setChecking(false)
+      }
+    }, () => {
+      if (!active) return
+      setUser(null)
+      setChecking(false)
+      setError('인증 연결을 확인하고 새로고침해주세요.')
+    })
+    return () => { active = false; unsubscribe() }
+  }, [])
 
   const handleSubmit = async event => {
     event.preventDefault()
-    if (!password.trim()) return
+    if (busy || !email.trim() || !password) return
     setBusy(true)
     setError('')
     try {
-      const digest = await sha256(password)
-      if (digest === PASSWORD_HASH) {
-        setUnlocked(true)
-        setPassword('')
-      } else {
-        setError('비밀번호를 확인해주세요.')
-      }
-    } catch {
-      setError('브라우저 보안 환경에서 다시 시도해주세요.')
+      await login(email, password)
+      setPassword('')
+    } catch (error) {
+      setError(error.code === 'auth/too-many-requests'
+        ? '로그인 시도가 많습니다. 잠시 후 다시 시도해주세요.'
+        : error.code === 'auth/network-request-failed'
+        ? '네트워크 연결을 확인해주세요.'
+        : error.code ? '계정 또는 비밀번호를 확인해주세요.' : error.message)
     } finally {
       setBusy(false)
     }
   }
 
-  if (unlocked) {
+  if (checking) return <LoadingScreen />
+  if (user && accountName(user)) {
     return (
       <Suspense fallback={<LoadingScreen />}>
-        <ProtectedApp />
+        <ProtectedApp key={user.uid} />
       </Suspense>
     )
   }
@@ -255,7 +277,7 @@ export default function App() {
           }}
         >
           <PixelDriftText
-            text="공유 비밀번호 입력 후 편성 작업판으로 입장합니다."
+            text="개인 계정으로 로그인 후 편성 작업판으로 입장합니다."
             colors={['#fffdf5']}
             particleSize={5}
             particleCount={50}
@@ -278,6 +300,7 @@ export default function App() {
             position: 'relative',
             display: 'flex',
             gap: 10,
+            flexDirection: 'column',
             width: 'min(360px, 100%)',
             padding: 6,
             border: '1px solid rgba(185,255,0,.08)',
@@ -305,10 +328,24 @@ export default function App() {
           />
           <input
             autoFocus
+            type="text"
+            inputMode="email"
+            autoComplete="username"
+            aria-label="계정 이메일"
+            required
+            value={email}
+            onChange={event => setEmail(event.target.value)}
+            placeholder="이름@스토아.com"
+            style={{ position: 'relative', minWidth: 0, height: 42, boxSizing: 'border-box', border: 'none', borderRadius: 7, padding: '0 13px', background: 'rgba(4, 18, 4, .6)', color: '#f4ffe8', fontSize: 14 }}
+          />
+          <input
+            autoComplete="current-password"
+            aria-label="비밀번호"
+            required
             type="password"
             value={password}
             onChange={event => setPassword(event.target.value)}
-            placeholder="Password"
+            placeholder="비밀번호"
             style={{
               minWidth: 0,
               flex: 1,
@@ -341,7 +378,7 @@ export default function App() {
               boxShadow: '0 0 18px rgba(185,255,0,.22)',
             }}
           >
-            {busy ? '확인 중' : '입장'}
+            {busy ? '확인 중' : '로그인'}
           </button>
         </form>
         <div

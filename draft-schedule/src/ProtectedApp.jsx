@@ -1,3 +1,4 @@
+import { logout } from './api/auth'
 import { useState, useRef, useEffect, lazy, Suspense } from 'react'
 import DraftSchedule from './pages/DraftSchedule'
 const PerformanceForecast = lazy(() => import('./pages/PerformanceForecast'))
@@ -121,7 +122,7 @@ export default function App() {
     isLoaded, startDate, endDate, poolType,
     isLoadingProposals, isLoadingPerformance, isLoadingPreSchedule, isLoadingGasAll,
     refreshPerformance, refreshProposals, refreshPreSchedule, refreshAllGasData,
-    lastUpdated, performanceMeta, userName, setUserName, currentVersionId
+    lastUpdated, performanceMeta, userName, currentVersionId
   } = useScheduleStore()
   const { pendingUndo, requestUndo, cancelUndo, confirmUndo } = useScheduleStore()
 
@@ -177,9 +178,6 @@ export default function App() {
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [requestUndo])
-
-  const [showUserPopup, setShowUserPopup] = useState(!userName)
-  const [userNameInput, setUserNameInput] = useState('')
 
   useEffect(() => {
     if (!coachOpen) return
@@ -239,12 +237,6 @@ export default function App() {
     }
   }
 
-  const handleUserConfirm = () => {
-    if (!userNameInput.trim()) return alert('이름을 입력해주세요.')
-    setUserName(userNameInput.trim())
-    setShowUserPopup(false)
-  }
-
   const formatUpdated = (ts) => {
     if (!ts) return '-'
     const d = new Date(ts)
@@ -273,26 +265,6 @@ export default function App() {
 
   return (
     <div className="workspace-shell" style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
-      {/* 사용자 이름 팝업 */}
-      {showUserPopup && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999 }}>
-          <div style={{ background: 'var(--bg2)', border: '1px solid var(--border)', borderRadius: 12, padding: '32px 40px', minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <div style={{ fontSize: 16, fontWeight: 700 }}>편성 작업판</div>
-            <div style={{ fontSize: 12, color: 'var(--text2)' }}>작업 로그에 표시될 이름을 입력해주세요.</div>
-            <input autoFocus value={userNameInput}
-              onChange={e => setUserNameInput(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && handleUserConfirm()}
-              placeholder="이름 입력..."
-              style={{ background: 'var(--bg3)', border: '1px solid var(--border)', color: 'var(--text)', padding: '9px 12px', borderRadius: 6, fontSize: 13 }}
-            />
-            <button onClick={handleUserConfirm}
-              style={{ padding: '10px 0', background: 'var(--accent)', border: 'none', color: '#fff', borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>
-              시작
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* 네비 */}
       <nav className="workspace-nav" style={{ display: 'flex', alignItems: 'center', borderBottom: '1px solid var(--border)', background: 'var(--bg2)', height: 44, padding: '0 16px', flexShrink: 0, zIndex: 100, boxShadow: '0 1px 4px rgba(0,0,0,.06)' }}>
 
@@ -410,10 +382,15 @@ export default function App() {
             </button>
           )}
 
-          <div data-coach="profile" onClick={() => setShowUserPopup(true)}
-            style={{ fontSize: 11, color: 'var(--text2)', cursor: 'pointer', padding: '3px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg3)' }}>
+          <div data-coach="profile" title="로그인 계정 이름"
+            style={{ fontSize: 11, color: 'var(--text2)', padding: '3px 8px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--bg3)' }}>
             👤 {userName || '미설정'}
           </div>
+
+          <button onClick={() => logout().catch(() => showToast('로그아웃에 실패했습니다. 다시 시도해주세요.', 'error'))}
+            style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', fontSize: 11, color: 'var(--text2)', cursor: 'pointer' }}>
+            로그아웃
+          </button>
 
           <button data-coach="theme" onClick={toggleTheme}
             style={{ background: 'var(--bg3)', border: '1px solid var(--border)', borderRadius: 6, padding: '4px 8px', fontSize: 11, color: 'var(--text2)', cursor: 'pointer' }}>

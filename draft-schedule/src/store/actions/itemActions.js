@@ -348,10 +348,7 @@ export function createItemActions(setState, getState) {
       })
     },
 
-    setUserName(name) {
-      localStorage.setItem('userName', name)
-      setState({ userName: name })
-    },
+
   }
 }
 

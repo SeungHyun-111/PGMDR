@@ -23,7 +23,7 @@ const useScheduleStore = create((setState, getState) => ({
   currentVersionId: localStorage.getItem('currentVersionId') || VERSION_DRAFT,
   versionMeta: {},
   isPublishingSales: false,
-  userName:  localStorage.getItem('userName') || '',
+  userName: '',
 
   pgmSlots:           [],
   allProposalItems:   [],
