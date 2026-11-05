@@ -4,11 +4,14 @@ import XLSX from 'xlsx-js-style'
 import { createPromotionWorkbook, exportCellValue } from '../src/utils/export/promotionPerformanceExport.js'
 
 test('exports amounts and shares as numbers, dates and percentage points as text', () => {
-  assert.deepEqual(exportCellValue('1,234'), { t: 'n', v: 1234, z: '#,##0' })
+  assert.deepEqual(exportCellValue('1,234'), { t: 'n', v: 1234, z: '#,##0.0' })
   assert.equal(exportCellValue('12.3%').t, 'n')
   assert.ok(Math.abs(exportCellValue('12.3%').v - 0.123) < 1e-12)
   assert.equal(exportCellValue('12.3%').z, '0.0%')
-  assert.equal(exportCellValue('85%').z, '0%')
+  assert.equal(exportCellValue('85%').z, '0.0%')
+  assert.equal(exportCellValue('1,234.6').v, 1234.6)
+  assert.equal(exportCellValue('-1,234.6').v, -1234.6)
+  assert.equal(exportCellValue('12.6%').v, 0.126)
   assert.equal(exportCellValue('2026-10-01 10:00').t, 's')
   assert.equal(exportCellValue('+2.1%p').v, '+2.1%p')
   assert.equal(exportCellValue('—').v, '—')

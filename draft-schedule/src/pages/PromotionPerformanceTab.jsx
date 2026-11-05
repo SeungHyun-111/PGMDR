@@ -23,7 +23,7 @@ const CURRENT_WIDTHS = [150, 70, 70, 80, 240, 90, 120, 130, 120, 130, 155, 145, 
 const BASELINE_WIDTHS = [150, 120, 130, 120, 130, 155, 145, 70]
 const BASELINE_START = CURRENT_COLUMNS.length + AVERAGE_COLUMNS.length
 const TOTAL_COLUMNS = BASELINE_START + BASELINE_GROUPS.length * BASELINE_COLUMNS.length
-const number = value => Number.isFinite(Number(value)) ? Math.trunc(Number(value)).toLocaleString('ko-KR') : '0'
+const number = value => Number.isFinite(Number(value)) ? Number(Number(value)).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) : '0'
 const koreaToday = () => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Seoul' }).format(new Date())
 const getOrganization = row => String(row.mdTeam || row.orgName || mdNameTeamMap[row.mdName] || '미분류').trim()
 

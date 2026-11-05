@@ -4,7 +4,7 @@ import PromotionFormulaTooltip from './PromotionFormulaTooltip'
 import { formatPercentagePointDifference, formatPreorderShare, summarizePerformance } from '../../utils/promotionStatistics'
 const PromotionHistoryTooltipChart = lazy(() => import('./PromotionHistoryTooltipChart'))
 
-const number = value => Math.trunc(Number(value) || 0).toLocaleString('ko-KR')
+const number = value => Number(Number(value) || 0).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 const broadcastInfo = entry => {
   if (!entry) return '실적 없음'
   const digits = String(entry.broadcastDate || '').replace(/\D/g, '').slice(0, 8)
@@ -13,7 +13,7 @@ const broadcastInfo = entry => {
 }
 const amountDifference = (current, average) => {
   if (!Number.isFinite(current) || !Number.isFinite(average)) return '—'
-  const difference = Math.trunc(current - average)
+  const difference = current - average
   return `${difference > 0 ? '+' : ''}${number(difference)}`
 }
 

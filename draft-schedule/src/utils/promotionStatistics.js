@@ -24,15 +24,13 @@ export function percentChange(current, baseline) {
 
 export function formatPreorderShare(value) {
   if (!Number.isFinite(value)) return '—'
-  const scaled = value * 1000
-  const truncated = Math.trunc(scaled + Math.sign(scaled) * 1e-9) / 10
-  return `${truncated.toFixed(1)}%`
+  return `${(value * 100).toFixed(1)}%`
 }
 
 export function formatPercentagePointDifference(current, baseline) {
   if (!Number.isFinite(current) || !Number.isFinite(baseline)) return '—'
   const difference = (current - baseline) * 100
-  const value = Math.trunc(difference * 10 + Math.sign(difference) * 1e-9) / 10
+  const value = Number(difference.toFixed(1))
   return `${value > 0 ? '+' : ''}${value.toFixed(1)}%p`
 }
 

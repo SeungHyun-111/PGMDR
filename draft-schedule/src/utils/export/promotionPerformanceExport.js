@@ -6,8 +6,8 @@ const groupIndex = column => column < 17 ? 0 : column < 20 ? 1 : column < 28 ? 2
 
 export function exportCellValue(text) {
   const cleaned = text.trim().replaceAll(',', '')
-  if (/^[+-]?\d+(\.\d+)?%$/.test(cleaned)) return { t: 'n', v: Number.parseFloat(cleaned) / 100, z: cleaned.includes('.') ? '0.0%' : '0%' }
-  if (/^[+-]?\d+(\.\d+)?$/.test(cleaned)) return { t: 'n', v: Number(cleaned), z: '#,##0' }
+  if (/^[+-]?\d+(\.\d+)?%$/.test(cleaned)) return { t: 'n', v: Number(Number.parseFloat(cleaned).toFixed(1)) / 100, z: '0.0%' }
+  if (/^[+-]?\d+(\.\d+)?$/.test(cleaned)) return { t: 'n', v: Number(Number(cleaned).toFixed(1)), z: '#,##0.0' }
   return { t: 's', v: text.trim() }
 }
 

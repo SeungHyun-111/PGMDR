@@ -12,7 +12,7 @@ import { formatPreorderShare } from '../../utils/promotionStatistics'
 import '../ui/charts/charts.css'
 
 const colors = { sales: '#3b82f6', profit: '#8b5cf6', preorder: '#10b981' }
-const won = value => `${Math.trunc(value).toLocaleString('ko-KR')}원`
+const won = value => `${Number(value).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}원`
 
 export default function PromotionHistoryTooltipChart({ row, previous }) {
   const data = useMemo(() => buildPromotionHistoryChart(row, previous), [row, previous])
@@ -26,8 +26,8 @@ export default function PromotionHistoryTooltipChart({ row, previous }) {
       <Line dataKey="avgProfitPerMin" stroke={colors.profit} strokeWidth={1.5} dashFromIndex={0} dashArray="5 4" curve={curveLinear} />
       <Line dataKey="preorderRatio" yAxisId="right" stroke={colors.preorder} strokeWidth={2.5} showMarkers curve={curveLinear} />
       <Line dataKey="avgPreorderRatio" yAxisId="right" stroke={colors.preorder} strokeWidth={1.5} dashFromIndex={0} dashArray="5 4" curve={curveLinear} />
-      <YAxis yAxisId="left" numTicks={4} labelPadding={36} formatValue={value => `${Math.trunc(value / 10000).toLocaleString('ko-KR')}만`} />
-      <YAxis yAxisId="right" orientation="right" numTicks={4} labelPadding={36} formatValue={value => `${Math.trunc(value)}%`} />
+      <YAxis yAxisId="left" numTicks={4} labelPadding={36} formatValue={value => `${Number(value / 10000).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}만`} />
+      <YAxis yAxisId="right" orientation="right" numTicks={4} labelPadding={36} formatValue={value => `${Number(value).toFixed(1)}%`} />
       <XAxis numTicks={4} formatValue={date => data[date.getDate() - 1]?.label || ''} />
       <ChartTooltip showCrosshair={false} showDatePill={false} showDots={false} content={({ point }) => <div className="promotion-history-chart-hover">
         <strong>{point.label} {point.missing ? '(실적 없음 · 0)' : `(${point.broadcastDate} ${point.channel})`}</strong>

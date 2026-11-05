@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { filterPerformanceRows, percentChange, formatPercentagePointDifference, summarizePerformance, summarizePreviousSlots, summarizeVideoTypes } from '../src/utils/promotionStatistics.js'
+import { filterPerformanceRows, percentChange, formatPreorderShare, formatPercentagePointDifference, summarizePerformance, summarizePreviousSlots, summarizeVideoTypes } from '../src/utils/promotionStatistics.js'
 
 test('summary uses aggregate amounts and weighted minutes, not arithmetic mean of row ratios', () => {
   const result = summarizePerformance([
@@ -97,4 +97,20 @@ test('video breakdown groups by current video type and reuses corresponding prod
   assert.equal(percentChange(groups[2].current.salesPerMin, groups[2].previous.salesPerMin), 1)
   assert.equal(groups[0].missingHistory, true)
   assert.equal(groups[1].missingHistory, false)
+})
+
+test('rounds shares and percentage point changes once at display time', () => {
+  assert.equal(formatPreorderShare(0.1249), '12.5%')
+  assert.equal(formatPreorderShare(0.1251), '12.5%')
+  assert.equal(formatPreorderShare(0.12), '12.0%')
+  assert.equal(formatPreorderShare(0.1256), '12.6%')
+  assert.equal(formatPreorderShare(-0.126), '-12.6%')
+  assert.equal(formatPreorderShare(null), '—')
+  assert.equal(formatPercentagePointDifference(0.156, 0.1), '+5.6%p')
+  assert.equal(formatPercentagePointDifference(0.1, 0.156), '-5.6%p')
+  assert.equal(formatPercentagePointDifference(0.101, 0.1), '+0.1%p')
+  const result = summarizePerformance([{ weightedMin: 1.6, expectedSales: 10.6 }, { weightedMin: 1.6, expectedSales: 10.6 }])
+  assert.equal(result.expectedSales, 21.2)
+  assert.equal(result.weightedMin, 3.2)
+  assert.equal(result.salesPerMin, 21.2 / 3.2)
 })

@@ -4,7 +4,7 @@ import PreviousPerformance from './PreviousPerformance'
 import PromotionAssignmentSelect from './PromotionAssignmentSelect'
 import usePromotionAssignmentStore from '../../store/usePromotionAssignmentStore'
 
-const formatNumber = value => value === null || value === undefined || value === '' ? '—' : Math.trunc(Number(value)).toLocaleString('ko-KR')
+const formatNumber = value => value === null || value === undefined || value === '' ? '—' : Number(Number(value)).toLocaleString('ko-KR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })
 
 export default memo(function PromotionBroadcastRow({ entryId, row, promotions, sourcePath, promotionStart, isTarget = false, selectedPromotionId = '', showDate = false }) {
   const [expanded, setExpanded] = useState(false)
